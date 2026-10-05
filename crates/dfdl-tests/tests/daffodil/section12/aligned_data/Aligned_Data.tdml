@@ -1,0 +1,4616 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+  defaultRoundTrip="true">
+
+ 
+  <tdml:defineSchema name="s1">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="e" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:leadingSkip="3" />
+    <xs:element name="e2" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:leadingSkip="3000000" />
+    
+    <xs:element name="e3" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:fillByte="10" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="ISO-8859-1" />
+
+    <xs:element name="e4" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:fillByte="%#ra1;%#ra2;" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="ISO-8859-1" />
+
+    <xs:element name="e5">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="encoding" type="xs:string" dfdl:lengthKind="delimited"/>
+          <xs:element name="e3" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:fillByte="年" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="{ ../ex:encoding }" dfdl:bitOrder="leastSignificantBitFirst" dfdl:byteOrder="littleEndian"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e6" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:fillByte="%NL;" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="ISO-8859-1" />
+
+    <xs:element name="e7" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:fillByte="%ES;" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="ISO-8859-1" />
+
+    <xs:element name="e8" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:fillByte="年" dfdl:lengthKind="explicit" dfdl:length="3"
+      dfdl:encoding="X-DFDL-US-ASCII-7-BIT-PACKED" dfdl:bitOrder="leastSignificantBitFirst" dfdl:byteOrder="littleEndian"/>
+
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="alignmentSchema">
+    
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary" encoding="utf-8" alignmentUnits="bits" alignment="4" leadingSkip="0"
+      occursCountKind='parsed'/>
+    
+    <xs:element name="string32be" type="xs:string" dfdl:encoding="utf-32be" dfdl:lengthKind="explicit" dfdl:length="4" dfdl:lengthUnits="bytes"
+      dfdl:alignment="2" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0"/>
+
+
+    <xs:simpleType name="uByte2Bits" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="2" dfdl:leadingSkip="4">
+      <xs:restriction base="xs:unsignedByte"/>
+    </xs:simpleType>
+
+    <xs:element name="e" type="xs:unsignedByte" dfdl:lengthKind="implicit" dfdl:alignment="2" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4" />
+    <xs:element name="e2" type="xs:unsignedInt" dfdl:lengthKind="implicit" dfdl:alignment="2" dfdl:alignmentUnits="bits" dfdl:leadingSkip="8" />
+    <xs:element name="e3" dfdl:leadingSkip="0">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="ex:uByte2Bits"/>
+          <xs:element name="two" type="ex:uByte2Bits"/>
+          <xs:element name="three" type="ex:uByte2Bits"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e4">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" dfdl:alignment="8" type="ex:uByte2Bits"/>
+          <xs:element name="two" dfdl:alignment="8" type="ex:uByte2Bits"/>
+          <xs:element name="three" dfdl:alignment="8" type="ex:uByte2Bits"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+
+    <xs:simpleType name="explUnsignedIntBit" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0">
+      <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="explUnsignedIntByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="0">
+      <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="explUnsignedIntMix" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="0">
+      <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+
+    <xs:element name="e5">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="ex:explUnsignedIntBit" dfdl:length="2" dfdl:alignment="4"/>
+          <xs:element name="two" type="ex:explUnsignedIntBit" dfdl:length="6" dfdl:alignment="4"/>
+          <xs:element name="three" type="ex:explUnsignedIntBit" dfdl:length="1" dfdl:alignment="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e6">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="ex:explUnsignedIntBit" dfdl:length="3" dfdl:alignment="4"/>
+          <xs:element name="two" type="ex:explUnsignedIntBit" dfdl:length="9" dfdl:alignment="8"/>
+          <xs:element name="three" type="ex:explUnsignedIntBit" dfdl:length="1" dfdl:alignment="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e7">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="ex:explUnsignedIntMix" dfdl:length="6" dfdl:alignment="1"/>
+          <xs:element name="two" type="ex:explUnsignedIntMix" dfdl:length="3" dfdl:alignment="2"/>
+          <xs:element name="three" type="ex:explUnsignedIntMix" dfdl:length="12" dfdl:alignment="1"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e8">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="ex:explUnsignedIntByte" dfdl:length="1" dfdl:alignment="1"/>
+          <xs:element name="two" type="ex:explUnsignedIntByte" dfdl:length="1" dfdl:alignment="2"/>
+          <xs:element name="three" type="ex:explUnsignedIntByte" dfdl:length="3" dfdl:alignment="1"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e9">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="ex:explUnsignedIntByte" dfdl:length="1" dfdl:alignment="1"/>
+          <xs:element name="two" type="ex:explUnsignedIntByte" dfdl:length="1" dfdl:alignment="1"/>
+          <xs:element name="three" type="ex:explUnsignedIntByte" dfdl:length="3" dfdl:alignment="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e10">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits"
+            dfdl:length="1" dfdl:alignment="1"/>
+          <xs:element name="two" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits"
+            minOccurs="0" maxOccurs="1" dfdl:length="1" dfdl:alignment="1"
+            dfdl:occursCountKind='implicit' />
+          <xs:element name="three" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits"
+            dfdl:length="3" dfdl:alignment="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e10a">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            minOccurs="0" maxOccurs="1" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1"
+            dfdl:occursCountKind='implicit'/>
+          <xs:element name="two" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            dfdl:length="1" dfdl:lengthUnits="bits" dfdl:alignment="2"/>
+          <xs:element name="three" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            dfdl:length="3" dfdl:lengthUnits="bits" dfdl:alignment="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e10b">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="varArr">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="e" type="xs:unsignedInt" dfdl:lengthKind="explicit" 
+                  minOccurs="0" maxOccurs="5" dfdl:lengthUnits="bits" dfdl:length="8" dfdl:alignment="2"
+                  dfdl:occursCountKind='implicit'/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="one" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            minOccurs="0" maxOccurs="1" dfdl:lengthUnits="bits" dfdl:length="8" dfdl:alignment="1"
+            dfdl:occursCountKind='implicit'/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e10c">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="one" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            minOccurs="0" maxOccurs="1" dfdl:lengthUnits="bits" dfdl:length="8" dfdl:alignment="1"
+            dfdl:occursCountKind='implicit'/>
+          <xs:element name="two" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            dfdl:length="8" dfdl:lengthUnits="bits" dfdl:alignment="2"/>
+          <xs:element name="three" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            dfdl:length="3" dfdl:lengthUnits="bits" dfdl:alignment="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e11" dfdl:lengthKind="explicit" dfdl:length="4" dfdl:encoding="utf-8" 
+      dfdl:lengthUnits="bytes" dfdl:alignment="4" dfdl:leadingSkip="4">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="4" />
+          <xs:minLength value="4" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+
+    <xs:element name="e12">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="bits" type="xs:unsignedByte" dfdl:representation="binary" dfdl:leadingSkip="0" dfdl:alignment="1" 
+            dfdl:alignmentUnits="bits" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="4"/>
+          <xs:element name="string" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4" dfdl:encoding="utf-8" dfdl:leadingSkip="0"
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits">
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e12withTerm">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="bits" type="xs:unsignedByte" 
+            dfdl:terminator="TERM" dfdl:representation="binary" dfdl:leadingSkip="0" dfdl:alignment="1" 
+            dfdl:alignmentUnits="bits" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="4"/>
+          <xs:element name="string" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4" dfdl:encoding="utf-8" dfdl:leadingSkip="0"
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits">
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e13" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+      dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+    
+    <xs:element name="e14" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+      dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+
+    <xs:element name="e15">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e13" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+          <xs:element name="e14" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e16">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e14" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+          <xs:element name="e13" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e17" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e14" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+          <xs:element name="e13" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e18" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="1" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="a" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a1" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+                <xs:element name="a2" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="b" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="b1" type="xs:string" dfdl:terminator="" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="1" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+                <xs:element name="b2" type="xs:string" dfdl:initiator="" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="2" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="1"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e19" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="e14" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+          <xs:element name="e13" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e20" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence dfdl:initiator="^">
+          <xs:element name="a" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+            <xs:complexType>
+              <xs:sequence dfdl:separator=",">
+                <xs:element name="a1" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+                <xs:element name="a2" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e21" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="a" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+            <xs:complexType>
+              <xs:sequence dfdl:separator=",">
+                <xs:element name="a1" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+                <xs:element name="a2" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e22" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="a1" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4" dfdl:trailingSkip="2"/>
+          <xs:element name="a2" type="xs:string" dfdl:initiator=":" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+            dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4"
+                      daf:suppressSchemaDefinitionWarnings="alignmentAndInitiatorTextAlignmentNotCompatible"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e23" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e23a" minOccurs="2" maxOccurs="2">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="a1" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="4" dfdl:initiator=":" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4" dfdl:trailingSkip="2"
+                            daf:suppressSchemaDefinitionWarnings="alignmentAndInitiatorTextAlignmentNotCompatible"/>
+                <xs:element name="a2" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:terminator=":" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e24" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="2" dfdl:trailingSkip="2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e24a" minOccurs="2" maxOccurs="2">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="a1" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="4" dfdl:initiator=":" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4" dfdl:trailingSkip="2"
+                            daf:suppressSchemaDefinitionWarnings="alignmentAndInitiatorTextAlignmentNotCompatible"/>
+                <xs:element name="a2" type="xs:string" dfdl:lengthKind="delimited" dfdl:encoding="ascii" 
+                  dfdl:alignment="8" dfdl:terminator=":" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="e24b" minOccurs="2" maxOccurs="2">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="b1" type="xs:nonNegativeInteger" dfdl:representation="text" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="8" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4"/>
+                <xs:element name="b2" type="xs:int" dfdl:representation="text" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="ascii" 
+                  dfdl:lengthUnits="bytes" dfdl:alignment="4" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4" dfdl:trailingSkip="2"/>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e25">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="repeat" type="xs:string" dfdl:alignmentUnits="bytes" dfdl:alignment="4" dfdl:lengthKind="delimited" 
+            minOccurs="5" maxOccurs="5" dfdl:leadingSkip="2" dfdl:trailingSkip="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e26">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="repeat" type="xs:string" dfdl:terminator="|" dfdl:alignmentUnits="bytes" dfdl:alignment="4" dfdl:lengthKind="delimited" 
+            minOccurs="5" maxOccurs="5" dfdl:leadingSkip="2" dfdl:trailingSkip="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e27">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="outer" minOccurs="3" maxOccurs="3" dfdl:alignment="2" dfdl:leadingSkip="1" dfdl:alignmentUnits="bytes" dfdl:lengthKind="delimited">
+            <xs:complexType>
+              <xs:sequence dfdl:separator="|">
+                <xs:element name="inner" type="xs:string" dfdl:initiator="(" dfdl:terminator=")" dfdl:alignmentUnits="bytes" dfdl:alignment="4" dfdl:lengthKind="delimited" 
+                  minOccurs="2"  maxOccurs="2" dfdl:leadingSkip="2" dfdl:trailingSkip="4" daf:suppressSchemaDefinitionWarnings="alignmentAndInitiatorTextAlignmentNotCompatible"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e28" type="xs:string" dfdl:terminator=":" dfdl:lengthKind="delimited" dfdl:encoding="ascii"
+      dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+
+    <xs:element name="e29" type="xs:string" dfdl:lengthKind="delimited" dfdl:encoding="ascii"
+      dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8"/>
+
+    <xs:element name="e30" dfdl:lengthKind="delimited" dfdl:terminator=")">
+      <xs:complexType>
+        <xs:sequence dfdl:terminator="]" dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8">
+          <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:encoding="ascii" dfdl:alignment="8" dfdl:terminator=":"/>
+          <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:encoding="ascii" dfdl:alignment="8" dfdl:terminator=":"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e31" dfdl:lengthKind="delimited" dfdl:terminator=")">
+      <xs:complexType>
+        <!-- 
+          a sequence doesn't have a lengthKind, so the check for trailingSkip 
+          with lengthKind 'delimited' won't fail a check on the sequence here.
+          -->
+        <xs:sequence dfdl:alignment="8" dfdl:alignmentUnits="bits" dfdl:leadingSkip="0" dfdl:trailingSkip="8">
+          <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:encoding="ascii" dfdl:alignment="8" dfdl:terminator=":"/>
+          <!-- 
+            this element violates the requirement that when trailingSkip is non-zero and
+            lengthKind is 'delimited' there must be a terminator.
+           -->
+          <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:encoding="ascii" dfdl:alignment="8" 
+            dfdl:trailingSkip="8"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e32">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="elem" type="xs:unsignedInt" dfdl:lengthKind="explicit"
+            dfdl:length="3" dfdl:lengthUnits="bits" dfdl:alignment="4" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="implicitAlignmentSchema">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary" encoding="ascii" 
+      lengthUnits="bits" alignmentUnits="bits" binaryNumberRep="binary" textNumberPattern="###0.###;-###0.###"/>
+
+    <xs:element name="string" dfdl:lengthKind="implicit" dfdl:encoding="ascii" 
+      dfdl:lengthUnits="characters" dfdl:alignment="implicit" dfdl:leadingSkip="4">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="4" />
+          <xs:minLength value="4" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+
+    <xs:element name="hB" type="xs:hexBinary" dfdl:lengthKind="delimited" dfdl:alignment="implicit" dfdl:alignmentUnits="bits" dfdl:leadingSkip="4" dfdl:encoding="ISO-8859-1" />
+    <xs:element name="hB2" type="xs:hexBinary" dfdl:lengthKind="delimited" dfdl:alignment="implicit" dfdl:alignmentUnits="bytes" dfdl:leadingSkip="4" dfdl:encoding="ISO-8859-1" />
+
+    <xs:element name="uInt" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:length="32" dfdl:alignment="implicit" dfdl:leadingSkip="1"/>
+    <xs:element name="uShort" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:alignment="implicit" dfdl:leadingSkip="1"/>
+    <xs:element name="uLong" type="xs:unsignedLong" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="5"/>
+    <xs:element name="int" type="xs:int" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="16"/>
+    <xs:element name="short" type="xs:short" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="6"/>
+    <xs:element name="long" type="xs:long" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="20"/>
+    <xs:element name="byte" type="xs:byte" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="2"/>
+    <xs:element name="uByte" type="xs:unsignedByte" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="2"/>
+    <xs:element name="float" type="xs:float" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="2" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bytes"/>
+
+    <xs:element name="double" type="xs:double" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="2" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bytes"/>
+    <xs:element name="double2" type="xs:double" dfdl:lengthKind="implicit" dfdl:alignment="implicit" dfdl:leadingSkip="2" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bits"/>
+    
+    <xs:element name="nonNeg" type="xs:nonNegativeInteger" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:alignment="implicit" dfdl:leadingSkip="2" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bytes"/>
+    <xs:element name="nonNeg2" type="xs:nonNegativeInteger" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:alignment="implicit" dfdl:leadingSkip="1" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bits"/>
+    
+    <xs:element name="integer" type="xs:integer" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:alignment="implicit" dfdl:leadingSkip="2" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bytes"/>
+    <xs:element name="integer2" type="xs:integer" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:alignment="implicit" dfdl:leadingSkip="1" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bits"/>
+
+    <xs:element name="decimal" type="xs:decimal" dfdl:binaryDecimalVirtualPoint="1" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:alignment="implicit" dfdl:leadingSkip="2" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bytes"/>
+    <xs:element name="decimal2" type="xs:decimal" dfdl:binaryDecimalVirtualPoint="1" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:alignment="implicit" dfdl:leadingSkip="1" dfdl:lengthUnits="bytes" dfdl:alignmentUnits="bits"/>
+      
+ <!-- TEXTUAL DATA -->
+      
+    <xs:element name="string2" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:lengthUnits="characters" dfdl:alignment="implicit" dfdl:leadingSkip="16" />
+  
+    <dfdl:defineFormat name="textImp">
+      <dfdl:format ref="ex:GeneralFormat" textNumberPattern="###0.###;-###0.###" lengthKind="delimited" representation="text" alignment="implicit" alignmentUnits="bytes" />
+    </dfdl:defineFormat>
+    <dfdl:defineFormat name="textImpBitAlign">
+      <dfdl:format ref="ex:GeneralFormat" textNumberPattern="###0.###;-###0.###" lengthKind="delimited" representation="text" alignment="implicit" alignmentUnits="bits" />
+    </dfdl:defineFormat>
+  
+    <xs:element name="uIntT" type="xs:unsignedInt" dfdl:ref="ex:textImp" dfdl:leadingSkip="1"/>
+    <xs:element name="uIntT2" type="xs:unsignedInt" dfdl:ref="ex:textImp" dfdl:encoding="utf-16be" dfdl:leadingSkip="1"/>
+    <xs:element name="uIntTBits" type="xs:unsignedInt" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="1"/>
+    <xs:element name="uShortT" type="xs:unsignedShort" dfdl:ref="ex:textImp" dfdl:leadingSkip="1"/>
+    <xs:element name="uShortT2" type="xs:unsignedShort" dfdl:ref="ex:textImp" dfdl:encoding="utf-16be" dfdl:leadingSkip="1"/>
+    <xs:element name="uShortTBits" type="xs:unsignedShort" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="1"/>
+    <xs:element name="uLongT" type="xs:unsignedLong" dfdl:ref="ex:textImp" dfdl:leadingSkip="5"/>
+    <xs:element name="uLongTBits" type="xs:unsignedLong" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="5"/>
+    <xs:element name="longT" type="xs:long" dfdl:ref="ex:textImp" dfdl:leadingSkip="4"/>
+    <xs:element name="longTBits" type="xs:long" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="4"/>
+    
+    <xs:element name="dateT" type="xs:date" dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="dd MM yyyy" dfdl:ref="ex:textImp" dfdl:leadingSkip="5"/>
+    <xs:element name="dateT2" type="xs:date" dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="EEEE 'in' MMMM - yyyy" dfdl:ref="ex:textImp" dfdl:leadingSkip="5"/>
+    <xs:element name="timeT" type="xs:time" dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="hh:mm:ss" dfdl:ref="ex:textImp" dfdl:leadingSkip="5"/>
+    <xs:element name="dateTimeT" type="xs:dateTime" dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="EEEE MM yyyy - hh:mm:ss" dfdl:ref="ex:textImp" dfdl:leadingSkip="5"/>
+    <xs:element name="nonNegativeIntegerT" type="xs:nonNegativeInteger" dfdl:ref="ex:textImp" dfdl:leadingSkip="1"/>
+    <xs:element name="nonNegativeIntegerTBits" type="xs:nonNegativeInteger" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="1"/>
+    <xs:element name="integerT" type="xs:integer" dfdl:ref="ex:textImp" dfdl:leadingSkip="1"/>
+    <xs:element name="integerTBits" type="xs:integer" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="1"/>
+    <xs:element name="decimalT" type="xs:decimal" dfdl:ref="ex:textImp" dfdl:leadingSkip="1"/>
+    <xs:element name="decimalTBits" type="xs:decimal" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="1"/>
+    <xs:element name="intT" type="xs:int" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="2"/>
+    <xs:element name="shortT" type="xs:short" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="6"/>
+    <xs:element name="byteT" type="xs:byte" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="2"/>
+    <xs:element name="byteT2" type="xs:byte" dfdl:ref="ex:textImpBitAlign" dfdl:encoding="utf-16le" dfdl:leadingSkip="2"/>
+    <xs:element name="uByteT" type="xs:unsignedByte" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="2"/>
+    <xs:element name="floatT" type="xs:float" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="2"/>
+    <xs:element name="doubleT" type="xs:double" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="2"/>
+    <xs:element name="doubleTBits" type="xs:double" dfdl:ref="ex:textImpBitAlign" dfdl:leadingSkip="1"/>
+
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="alignmentBitOrder">
+      <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" textNumberPattern="###0.###;-###0.###" lengthUnits='bits' representation='binary'
+      binaryNumberRep='binary' alignmentUnits='bits' lengthKind='explicit'
+      byteOrder="littleEndian"/>
+
+    <xs:element name="least" dfdl:lengthKind='implicit' >
+      <xs:complexType >
+        <xs:sequence>
+          <xs:element name="A" type="xs:int" dfdl:length="2" dfdl:alignment='8' dfdl:bitOrder='leastSignificantBitFirst'/>
+          <xs:element name="B" type="xs:int" dfdl:length="4" dfdl:alignment='4' dfdl:bitOrder='leastSignificantBitFirst'/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="most" dfdl:lengthKind='implicit' >
+      <xs:complexType >
+        <xs:sequence>
+          <xs:element name="A" type="xs:int" dfdl:length="2" dfdl:alignment='8' dfdl:bitOrder='mostSignificantBitFirst'/>
+          <xs:element name="B" type="xs:int" dfdl:length="4" dfdl:alignment='4' dfdl:bitOrder='mostSignificantBitFirst'/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s2" elementFormDefault="unqualified">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormatPortable.dfdl.xsd"/>
+    <dfdl:format
+      ref="ex:GeneralFormat"
+      representation="text"
+      lengthKind="delimited"
+      separatorPosition="infix"
+      lengthUnits="bits"
+      alignmentUnits="bits"
+      encoding="US-ASCII"
+    />
+
+    <xs:element name="postfix_init">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:string"
+                  dfdl:initiator="I"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="postfix_init_2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:fillByte="1" dfdl:initiator="I">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="e2" type="xs:string"
+            dfdl:length="16" dfdl:fillByte="2"
+            dfdl:lengthKind="explicit" dfdl:alignment="16"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+     <xs:element name="postfix_term">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="A" dfdl:terminator="T"/>
+                <xs:element name="b" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="postfix_term_2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:fillByte="1" dfdl:terminator="T">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                  dfdl:length="16"
+                  dfdl:lengthKind="explicit" dfdl:alignment="16"
+                  dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="e2" type="xs:string"
+            dfdl:length="16" dfdl:fillByte="2"
+            dfdl:lengthKind="explicit" dfdl:alignment="16"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:simpleType name="prefixType" dfdl:lengthKind="explicit" dfdl:length="8">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+    <xs:element name="prefixed_element">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+                      dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="c" type="xs:string"
+                            dfdl:length="16"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="16"
+                            dfdl:fillByte="C"/>
+                <xs:element name="a" type="xs:string"
+                            dfdl:prefixLengthType="ex:prefixType"
+                            dfdl:prefixIncludesPrefixLength="no"
+                            dfdl:lengthKind="prefixed"
+                            dfdl:alignment="16"
+                            dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="16"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="16"
+                            dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s3" elementFormDefault="unqualified">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormatPortable.dfdl.xsd"/>
+    <dfdl:format
+        ref="ex:GeneralFormat"
+        representation="text"
+        lengthKind="delimited"
+        separatorPosition="infix"
+        lengthUnits="bytes"
+        alignmentUnits="bytes"
+        encoding="US-ASCII"
+    />
+    <xs:simpleType name="prefixType" dfdl:lengthKind="explicit" dfdl:length="1">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+    <xs:element name="prefixed_element">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+                      dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="c" type="xs:string"
+                            dfdl:length="2"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="C"/>
+                <xs:element name="a" type="xs:string"
+                            dfdl:prefixLengthType="ex:prefixType"
+                            dfdl:prefixIncludesPrefixLength="no"
+                            dfdl:lengthKind="prefixed"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="2"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+    <xs:simpleType name="prefixType_bits" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="16">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="deep_prefixed_inner" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="16">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="deep_prefixed_outer"
+      dfdl:lengthKind="prefixed"
+      dfdl:prefixLengthType="ex:prefixType_bits"
+      dfdl:prefixIncludesPrefixLength="no">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+    <xs:element name="prefixed_element_bits">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+                      dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="c" type="xs:string"
+                            dfdl:length="2"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="C"/>
+                <xs:element name="a" type="xs:string"
+                            dfdl:lengthUnits="bits"
+                            dfdl:prefixLengthType="ex:prefixType_bits"
+                            dfdl:prefixIncludesPrefixLength="no"
+                            dfdl:lengthKind="prefixed"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="2"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="prefixed_element_nested">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+                      dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="c" type="xs:string"
+                            dfdl:length="2"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="C"/>
+                <xs:element name="a" type="xs:string"
+                            dfdl:lengthUnits="bits"
+                            dfdl:prefixLengthType="ex:deep_prefixed_outer"
+                            dfdl:prefixIncludesPrefixLength="no"
+                            dfdl:lengthKind="prefixed"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="A"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="2"
+                            dfdl:lengthKind="explicit"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s4" elementFormDefault="unqualified">
+
+  <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormatPortable.dfdl.xsd"/>
+  <dfdl:format
+      ref="ex:GeneralFormat"
+      representation="text"
+      lengthKind="delimited"
+      separatorPosition="infix"
+      lengthUnits="bytes"
+      alignmentUnits="bytes"
+      encoding="US-ASCII"
+  />
+
+    <xs:element name="elem">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+                      dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:string"
+                            dfdl:encoding="X-DFDL-BITS-MSBF"
+                            dfdl:lengthUnits="bits"
+                            dfdl:fillByte="%#r00;"
+                            dfdl:length="4"
+                            dfdl:lengthKind="explicit"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="0"
+                            dfdl:lengthKind="explicit"
+                            dfdl:trailingSkip="4"
+                            dfdl:fillByte="%#rFF;"/>
+                <xs:element name="c" type="xs:string"
+                            dfdl:encoding="X-DFDL-BITS-MSBF"
+                            dfdl:lengthUnits="bits"
+                            dfdl:fillByte="%#r00;"
+                            dfdl:length="4"
+                            dfdl:lengthKind="explicit"
+                />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s5" elementFormDefault="unqualified">
+
+  <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormatPortable.dfdl.xsd"/>
+  <dfdl:format
+      ref="ex:GeneralFormat"
+      representation="text"
+      lengthKind="explicit"
+      lengthUnits="bytes"
+      alignmentUnits="bytes"
+      encoding="US-ASCII"
+  />
+
+    <xs:element name="elem1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e0" type="xs:string" dfdl:length="1"/>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:alignment="2"
+            dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:string"
+                  dfdl:fillByte="A"
+                  dfdl:length="1"
+                  dfdl:alignment="2"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="1"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="elem2" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+<!--          <xs:element name="e0" type="xs:string" dfdl:length="1"/>-->
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:alignment="2"
+            dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a" type="xs:int"
+                  dfdl:representation="binary"
+                  dfdl:fillByte="%#rFF;"
+                  dfdl:encoding="X-DFDL-BITS-MSBF"
+                  dfdl:lengthUnits="bits"
+                  dfdl:alignmentUnits="bits"
+                  dfdl:length="4"/>
+                <xs:element name="b" type="xs:int"
+                  minOccurs="0"
+                  dfdl:representation="binary"
+                  dfdl:initiator="-"
+                  dfdl:fillByte="%#r00;"
+                  dfdl:length="1"
+                  dfdl:alignment="1"/>
+                <xs:element name="c" type="xs:int"
+                  dfdl:representation="binary"
+                            dfdl:length="1"
+                            dfdl:alignment="1"
+                            dfdl:fillByte="%#rFF;"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="elem3" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e0" type="xs:string" dfdl:length="1"/>
+          <xs:element name="e1" dfdl:lengthKind="implicit"
+            dfdl:alignment="2"
+            dfdl:fillByte="E">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="opt" type="xs:string"
+                  minOccurs="0"
+                  dfdl:initiator="-"
+                  dfdl:fillByte="O"
+                  dfdl:length="1"
+                  dfdl:alignment="2"/>
+                <xs:element name="b" type="xs:string"
+                            dfdl:length="1"
+                            dfdl:alignment="2"
+                            dfdl:fillByte="B"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:simpleType name="innerPrefixType" dfdl:lengthKind="explicit" dfdl:representation="binary" dfdl:length="1">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="outerPrefixType" dfdl:lengthKind="prefixed"
+      dfdl:prefixLengthType="ex:innerPrefixType"
+      dfdl:prefixIncludesPrefixLength="no"
+      dfdl:representation="binary">
+      <xs:restriction base="xs:int"/>
+    </xs:simpleType>
+
+
+
+    <xs:element name="elem4" type="xs:int"
+      dfdl:representation="binary" dfdl:lengthKind="prefixed"
+      dfdl:prefixLengthType="ex:outerPrefixType"
+      dfdl:prefixIncludesPrefixLength="no"
+      dfdl:initiator="FOO:" dfdl:encoding="US-ASCII" />
+  </tdml:defineSchema>
+
+  <!--
+     Test Name: impAlignmentHexBinary
+        Schema: implicitAlignmentSchema
+          Root: hB
+          Purpose: This test demonstrates that the implicit alignment for hexBinary data is 8 bits
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentHexBinary" root="hB"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - hexBinary - DFDL-12-029R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0101</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">1101</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="bits">11110100</tdml:documentPart> <!-- hB -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <hB>F4</hB>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentHexBinary2
+        Schema: implicitAlignmentSchema
+          Root: hB2
+          Purpose: This test demonstrates that the implicit alignment for hexBinary data is 1 byte
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentHexBinary2" root="hB2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - hexBinary - DFDL-12-029R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">ab 43 82 b3</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">ba ba 00 00</tdml:documentPart> <!-- hB -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <hB2>BABA0000</hB2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignment01
+        Schema: alignmentSchema
+          Root: e
+       Purpose: This test demonstrates that alignment (2 bits) is applied after leadingSkip (4 bits)
+  -->
+  
+  <tdml:parserTestCase name="alignment01" root="e"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - DFDL-12-002R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0010 00000100</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e>4</e>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: alignment02
+        Schema: alignmentSchema
+          Root: e3
+       Purpose: This test demonstrates that leadingSkip (4 bits) is applied before alignment (4 bits) on each element
+  -->
+  
+  <tdml:parserTestCase name="alignment02" root="e3"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - DFDL-12-002R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00 00</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">11 10</tdml:documentPart> <!-- "one" and padding to fulfill alignment-->
+      <tdml:documentPart type="bits">10 01</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">10 11</tdml:documentPart> <!-- "two" and padding to fulfill alignment -->
+      <tdml:documentPart type="bits">01 10</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">00</tdml:documentPart> <!-- "three" -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <one>3</one>
+          <two>2</two>
+          <three>0</three>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignment03
+        Schema: alignmentSchema
+          Root: e4
+       Purpose: This test demonstrates that the leadingSkip (4 bits) is applied before alignment (4 bits)
+                for the first element.
+  -->
+  
+  <tdml:parserTestCase name="alignment03" root="e4"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - DFDL-12-002R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00 00</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">11 10</tdml:documentPart> 
+      <tdml:documentPart type="bits">01</tdml:documentPart> <!-- "one" starting at bit position 8 -->
+      <tdml:documentPart type="bits">00 10 01</tdml:documentPart>
+      <tdml:documentPart type="bits">10</tdml:documentPart> <!-- "two" starting at bit position 16 -->
+      <tdml:documentPart type="bits">11 00 00</tdml:documentPart>
+      <tdml:documentPart type="bits">11</tdml:documentPart> <!-- "three" starting at bit position 24 -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <one>1</one>
+          <two>2</two>
+          <three>3</three>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leadingSkip1
+        Schema: s1
+          Root: e
+       Purpose: This test demonstrates a leadingSkip of 3 bytes. The actual data begins at the 4th byte.
+  -->
+
+  <tdml:parserTestCase name="leadingSkip1" root="e"
+    model="s1" description="Section 12.1 Aligned Data - DFDL-12-005R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">aabbcc</tdml:documentPart>
+      <tdml:documentPart type="text">Hello</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e>Hello</e>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leadingSkip2
+        Schema: s1
+          Root: e2
+       Purpose: This test demonstrates that there is a limit to the size of a leadingSkip (1024).
+  -->
+
+  <tdml:parserTestCase name="leadingSkip2" root="e2"
+    model="s1" description="Section 12.1 Aligned Data - DFDL-12-005R">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Tunable Limit Exceeded Error</tdml:error>
+      <tdml:error>Property leadingSkip</tdml:error>
+      <tdml:error>is larger than limit</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentString1
+        Schema: implicitAlignmentSchema
+          Root: string
+       Purpose: This test demonstrates that even is representation is defined
+                as binary for type xs:string, implicit alignment still works, and the
+                representation is assumed to be text
+   -->
+
+  <tdml:parserTestCase name="implicitAlignmentString1" root="string"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - String - DFDL-12-014R - DFDL-13-006R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0110 0111</tdml:documentPart> <!-- leadingSkip and buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">01101111 01100001 01110100 01110011</tdml:documentPart> <!-- string -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <string>oats</string>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <!--
+     Test Name: implicitAlignmentString2
+        Schema: implicitAlignmentSchema
+          Root: string2
+       Purpose: This test demonstrates that the implicit alignment for the text representation of type 'string' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentString2" root="string2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - String - DFDL-12-014R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01100111 01101111</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">01100001 01110100 01110011</tdml:documentPart> <!-- string -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <string2>ats</string2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedInt1
+        Schema: implicitAlignmentSchema
+          Root: uInt
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'unsignedInt' is 32 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedInt" root="uInt"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedInt (binary) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1 0000000 00000000 00000000 00000000</tdml:documentPart> <!-- leadingSkip and buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">00000000 00000000 00000000 00001101</tdml:documentPart> <!-- uInt -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uInt>13</uInt>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+ 
+  <!--
+     Test Name: implicitAlignmentUnsignedShort
+        Schema: implicitAlignmentSchema
+          Root: uShort
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'unsignedShort' is 16 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedShort" root="uShort"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedShort (binary) - DFDL-12-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1 0000000 00000000</tdml:documentPart> <!-- leadingSkip and buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">01101</tdml:documentPart> <!-- uShort -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uShort>13</uShort>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentInt
+        Schema: implicitAlignmentSchema
+          Root: int
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'int' is 32 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentInt" root="int"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - int (binary) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">a4 b4</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">a9 cc</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="byte">00 00 00 1d</tdml:documentPart> <!-- int -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int>29</int>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentInt2
+        Schema: implicitAlignmentSchema
+          Root: int
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'int' is 32 bits
+                This test uses the binary representation of a negative number. 
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentInt2" root="int"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - int (binary) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">a4 b4</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">a9 cc</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="byte">ff ff ff e3</tdml:documentPart> <!-- int -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int>-29</int>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentShort
+        Schema: implicitAlignmentSchema
+          Root: short
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'short' is 16 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentShort" root="short"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - short (binary) - DFDL-12-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">100100</tdml:documentPart> <!-- leadingSkip (6 bits) -->
+      <tdml:documentPart type="bits">11011000 10</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">00000000 10010101</tdml:documentPart> <!-- short -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <short>149</short>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentShort2
+        Schema: implicitAlignmentSchema
+          Root: short
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'short' is 16 bits
+                The data is the binary representation of a negative value.   
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentShort2" root="short"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - short (binary) - DFDL-12-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">100100</tdml:documentPart> <!-- leadingSkip (6 bits) -->
+      <tdml:documentPart type="bits">11011000 10</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">11111111 01101011</tdml:documentPart> <!-- short -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <short>-149</short>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentLong
+        Schema: implicitAlignmentSchema
+          Root: long
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'long' is 64 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentLong" root="long"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - long (binary) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11010101 10101010 1101</tdml:documentPart> <!-- leadingSkip (20 bits) -->
+      <tdml:documentPart type="bits">1101 01000101 11010010 11010010 11001000 00000010</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="byte">00 b3 b3 b3 b3 b3 b3 b3</tdml:documentPart> <!-- long -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <long>50581605226623923</long>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentLongT
+        Schema: implicitAlignmentSchema
+          Root: longT
+       Purpose: This test demonstrates that the implicit alignment for the text representation of type 'long' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentLongT" root="longT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - long (text) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00 b3 b3 b3</tdml:documentPart> <!-- leadingSkip (4 bytes) -->
+      <tdml:documentPart type="text">50581605226623923</tdml:documentPart> <!-- longT -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <longT>50581605226623923</longT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentLongTBits
+        Schema: implicitAlignmentSchema
+          Root: longTBits
+       Purpose: This test demonstrates that the implicit alignment for the text representation of type 'long' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentLongTBits" root="longTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - long (text) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0101</tdml:documentPart> <!-- leadingSkip (4 bits) -->
+      <tdml:documentPart type="bits">0101</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">50581605226623923</tdml:documentPart> <!-- longTBits -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <longTBits>50581605226623923</longTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentByte
+        Schema: implicitAlignmentSchema
+          Root: byte
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'byte' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentByte" root="byte"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - byte (binary) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11</tdml:documentPart> <!-- leadingSkip (2 bits) -->
+      <tdml:documentPart type="bits">110101</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">01001010</tdml:documentPart> <!-- byte -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <byte>74</byte>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentByte2
+        Schema: implicitAlignmentSchema
+          Root: byte
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'byte' is 8 bits
+                The data provided represents a negative value.   
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentByte2" root="byte"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - byte (binary) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11</tdml:documentPart> <!-- leadingSkip (2 bits) -->
+      <tdml:documentPart type="bits">110101</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">10110110</tdml:documentPart> <!-- byte -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <byte>-74</byte>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedByte
+        Schema: implicitAlignmentSchema
+          Root: uByte
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'unsignedByte' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedByte" root="uByte"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedByte (binary) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11</tdml:documentPart> <!-- leadingSkip (2 bits) -->
+      <tdml:documentPart type="bits">110101</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">01001010</tdml:documentPart> <!-- uByte -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uByte>74</uByte>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedByte2
+        Schema: implicitAlignmentSchema
+          Root: uByte
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'unsignedByte' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedByte2" root="uByte"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedByte (binary) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11</tdml:documentPart> <!-- leadingSkip (2 bits) -->
+      <tdml:documentPart type="bits">110101</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="bits">10110110</tdml:documentPart> <!-- uByte -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uByte>182</uByte>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedIntT
+        Schema: implicitAlignmentSchema
+          Root: uIntT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedInt' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedIntT" root="uIntT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedInt (text) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">3</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- uIntT -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uIntT>42</uIntT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedIntT2
+        Schema: implicitAlignmentSchema
+          Root: uIntT2
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedInt' is
+       encoding-specific (generally 8 bits, even though encoding is utf-16be). In this case the data isn't accounting for 
+       the leadingSkip, so the test will fail with a useful error message.
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedIntT2" root="uIntT2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedInt (text) - DFDL-12-019R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00 34 00 32</tdml:documentPart> <!-- uIntT - byte-representation of the number 42 -->
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:unsignedInt</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+      <tdml:error>㐀</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedIntT2b
+        Schema: implicitAlignmentSchema
+          Root: uIntT2
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedInt' is
+                encoding-specific (generally 8 bits - in this case it should be 8 bits even though the encoding is utf-16be)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedIntT2b" root="uIntT2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedInt (text) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">00 34 00 32</tdml:documentPart> <!-- uIntT - byte-representation of the number 42 -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uIntT2>42</uIntT2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedIntTBits
+        Schema: implicitAlignmentSchema
+          Root: uIntTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedInt' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedIntTBits" root="uIntTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedInt (text) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">0101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- uIntTBits -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uIntTBits>42</uIntTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentUnsignedShortT2b
+        Schema: implicitAlignmentSchema
+          Root: uShortT2
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedShort' is
+                encoding-specific (generally 8 bits - in this case it should be 8 bits even though the encoding is utf-16be)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedShortT2b" root="uShortT2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedShort (text) - DFDL-12-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">00 32</tdml:documentPart> <!-- uShortT - byte-representation of the number 2 -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uShortT2>2</uShortT2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedShortTBits
+        Schema: implicitAlignmentSchema
+          Root: uShortTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedShort' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedShortTBits" root="uShortTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedShort (text) - DFDL-12-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">0101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">2</tdml:documentPart> <!-- uShortTBits -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uShortTBits>2</uShortTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedLong
+        Schema: implicitAlignmentSchema
+          Root: uLong
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'unsignedLong' is 64 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedLong" root="uLong"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - uLong (binary) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11010</tdml:documentPart> <!-- leadingSkip (5 bits) -->
+      <tdml:documentPart type="bits">101 10101010 11011101 01000101 11010010 11010010 11001000 00000010</tdml:documentPart> <!-- buffer to fulfill alignment -->
+      <tdml:documentPart type="byte">00 00 00 00 00 BC 61 4E</tdml:documentPart> <!-- uLong -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uLong>12345678</uLong>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedLongT
+        Schema: implicitAlignmentSchema
+          Root: uLongT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedLong' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedLongT" root="uLongT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedLong (text) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">32 32 32 32 32</tdml:documentPart> <!-- leadingSkip plus 3 filler bits for alignment (8 bits) -->
+      <tdml:documentPart type="byte">31 32 33 34 35 36 37 38</tdml:documentPart> <!-- uLongT - byte-representation of 12345678  -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uLongT>12345678</uLongT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedLongT2
+        Schema: implicitAlignmentSchema
+          Root: uLongT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedLong' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedLongT2" root="uLongT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedLong (text) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">10101111 10001010</tdml:documentPart> <!-- 2 bytes of leadingSkip (in bits) -->
+      <tdml:documentPart type="byte">31 32 33</tdml:documentPart> <!-- remaining 3 bytes of leadingSkip (in bytes) -->
+      <tdml:documentPart type="byte">31 32 33 34 35 36 37 38</tdml:documentPart> <!-- uLongT - byte-representation of 12345678  -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uLongT>12345678</uLongT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedLongTBits
+        Schema: implicitAlignmentSchema
+          Root: uLongTBits
+       Purpose: This test demonstrates that the implicit alignment for the text representation of type 'unsignedLong' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedLongTBits" root="uLongTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedLong (text) - DFDL-12-018R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0101</tdml:documentPart> <!-- leadingSkip (4 bits) -->
+      <tdml:documentPart type="bits">0101</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">12345678</tdml:documentPart> <!-- uLongTBits -->
+    </tdml:document>
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uLongTBits>12345678</uLongTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentIntT
+        Schema: implicitAlignmentSchema
+          Root: intT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'int' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentIntT" root="intT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - int (text) - DFDL-12-019R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01 101001</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">31 32 33 34</tdml:documentPart> <!-- intT - byte-representation of 1234  -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <intT>1234</intT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentShortT
+        Schema: implicitAlignmentSchema
+          Root: shortT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'short' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentShortT" root="shortT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - short (text) - DFDL-12-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">011010 01</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">31 32</tdml:documentPart> <!-- shortT - byte-representation of 12  -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <shortT>12</shortT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentByteT
+        Schema: implicitAlignmentSchema
+          Root: byteT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'byte' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentByteT" root="byteT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - byte (text) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01 111111</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">2D 31</tdml:documentPart> <!-- byteT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <byteT>-1</byteT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentByteT2
+        Schema: implicitAlignmentSchema
+          Root: byteT2
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'byte' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentByteT2" root="byteT2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - byte (text) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">10 111111</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">2D 00 31 00</tdml:documentPart> <!-- byteT2 -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <byteT2>-1</byteT2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedByteT
+        Schema: implicitAlignmentSchema
+          Root: uByteT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedByte' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedByteT" root="uByteT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedByte (text) - DFDL-12-021R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">10 111111</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">2D 31</tdml:documentPart> <!-- uByteT -->
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:unsignedByte</tdml:error>
+      <tdml:error>out of range</tdml:error>
+      <tdml:error>-1</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentUnsignedByteT2
+        Schema: implicitAlignmentSchema
+          Root: uByteT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'unsignedByte' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentUnsignedByteT2" root="uByteT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - unsignedByte (text) - DFDL-12-021R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">10 111111</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">31</tdml:documentPart> <!-- uByteT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uByteT>1</uByteT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentDateT
+        Schema: implicitAlignmentSchema
+          Root: dateT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'date' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDateT" root="dateT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - date (text) - DFDL-12-024R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">junk!31 03 2013</tdml:documentPart> <!-- leadingSkip (junk!) and dateT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dateT>2013-03-31</dateT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentDateT2
+        Schema: implicitAlignmentSchema
+          Root: dateT2
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'date' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDateT2" root="dateT2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - date (text) - DFDL-12-024R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">Bleak Monday in May - 2013</tdml:documentPart> <!-- leadingSkip (Bleak) and dateT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dateT2>2013-05-06</dateT2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentTimeT
+        Schema: implicitAlignmentSchema
+          Root: timeT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'time' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentTimeT" root="timeT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - time (text) - DFDL-12-026R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">time: 04:09:23</tdml:documentPart> <!-- leadingSkip (time:) and timeT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <timeT>04:09:23</timeT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentDateTimeT
+        Schema: implicitAlignmentSchema
+          Root: dateTimeT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'dateTime' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDateTimeT" root="dateTimeT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - dateTime (text) - DFDL-12-022R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">look: Friday 05 2013 - 03:30:30</tdml:documentPart> <!-- leadingSkip (look:) and dateTimeT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dateTimeT>2013-05-03T03:30:30</dateTimeT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentFloatT
+        Schema: implicitAlignmentSchema
+          Root: floatT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'float' is
+                encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentFloatT" root="floatT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - float (text) - DFDL-12-015R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">3</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="text">42.2</tdml:documentPart> <!-- float -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <floatT>42.2</floatT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentFloatT2
+        Schema: implicitAlignmentSchema
+          Root: floatT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'float' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentFloatT2" root="floatT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - float (text) - DFDL-12-015R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">10</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">42.3</tdml:documentPart> <!-- floatT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <floatT>42.3</floatT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentFloatT_Fail
+        Schema: implicitAlignmentSchema
+          Root: floatT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'float' is encoding-specific (generally 8 bits) and will fail with improper alignment.
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentFloatT_Fail" root="floatT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - float (text) - DFDL-12-015R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- floatT -->
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:float</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentFloat
+        Schema: implicitAlignmentSchema
+          Root: float
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'float' is 32 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentFloat" root="float"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - float (binary) - DFDL-12-015R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">2A 00 90 0D</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">42 28 CC CD</tdml:documentPart> <!-- float -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <float>42.2</float>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentFloat2
+        Schema: implicitAlignmentSchema
+          Root: float
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'float' is 32 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentFloat2" root="float"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - float (binary) - DFDL-12-015R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01010101 01010101</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">10101010 10101010</tdml:documentPart> <!-- padding for alignment -->
+      <tdml:documentPart type="bits">01000010 00101000 11001100 11001101</tdml:documentPart> <!-- float -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <float>42.2</float>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDouble
+        Schema: implicitAlignmentSchema
+          Root: double
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'double' is 64 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDouble" root="double"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - double (binary) - DFDL-12-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">2A 00 90 0D 2A 45 9F 9E</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">42 28 CC CD AB B7 78 09</tdml:documentPart> <!-- double -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <double>5.325762300373444E10</double>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDouble2
+        Schema: implicitAlignmentSchema
+          Root: double2
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'double' is 64 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDouble2" root="double2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - double (binary) - DFDL-12-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01010101 01010101 01010101 01010101 01010101 01010101 01010101 01010101</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="bits">01000000 00111001 00000000 00000000 00000000 00000000 00000000 00000000</tdml:documentPart> <!-- double2 -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <double2>25.0</double2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentDoubleT
+        Schema: implicitAlignmentSchema
+          Root: doubleT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'double' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDoubleT" root="doubleT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - double (text) - DFDL-12-016R"
+    roundTrip="false">
+
+    <!-- Test does not round trip due to floating point text conversion and comparison issues. -->
+
+    <tdml:document>
+      <tdml:documentPart type="byte">2A</tdml:documentPart> <!-- leadingSkip and padding for alignment -->
+      <tdml:documentPart type="byte">35 2E 33 32 35 37 36 32 33 30 30 33 37 33 34 34 34 45 31 30</tdml:documentPart> <!-- double -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <doubleT>5.325762300373444E10</doubleT> <!-- 5.3257623003734E10 -->
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: implicitAlignmentDoubleT2
+        Schema: implicitAlignmentSchema
+          Root: doubleTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'double' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDoubleT2" root="doubleTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - double (text) - DFDL-12-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">0101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">42.3</tdml:documentPart> <!-- doubleTBits -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <doubleTBits>42.3</doubleTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDoubleT_Fail
+        Schema: implicitAlignmentSchema
+          Root: doubleTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'double' is 8 bits and will fail with improper alignment.
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDoubleT_Fail" root="doubleTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - double (text) - DFDL-12-016R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- doubleTBits -->
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:double</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: explicitAlignmentNoSkips01
+        Schema: alignmentSchema
+          Root: e5
+       Purpose: This test demonstrates that the length of the alignment fill region is the smallest non-negative
+                integer L such that (L+N) mod B(4) = 1. The position of the first bit of the aligned element is P = L + N   
+  -->
+
+  <tdml:parserTestCase name="explicitAlignmentNoSkips01" root="e5"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - alignmentUnits - DFDL-12-010R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01 00 100101 00 1</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <one>1</one>
+          <two>37</two>
+          <three>1</three>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: explicitAlignmentNoSkips02
+        Schema: alignmentSchema
+          Root: e6
+       Purpose: This test demonstrates that the length of the alignment fill region is the smallest non-negative
+                integer L such that (L+N) mod B(4) = 1. The position of the first bit of the aligned element is P = L + N   
+  -->
+
+  <tdml:parserTestCase name="explicitAlignmentNoSkips02" root="e6"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - alignmentUnits - DFDL-12-010R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">011 00000 010011000 001 0</tdml:documentPart>
+      <!--                           |         |             |                 -->
+      <!--                           one       two           three             -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6>
+          <one>3</one>
+          <two>152</two>
+          <three>0</three>
+        </e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  
+  </tdml:parserTestCase>
+    
+  <!--
+     Test Name: explicitAlignmentNoSkips03
+        Schema: alignmentSchema
+          Root: e7
+       Purpose: This test demonstrates that the length of the alignment fill region is the smallest non-negative
+                integer L such that (L+N) mod B(4) = 1. The position of the first bit of the aligned element is P = L + N   
+  -->
+
+  <tdml:parserTestCase name="explicitAlignmentNoSkips03" root="e7"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - alignmentUnits - DFDL-12-010R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">011100 0001001100 000 10100 000100001111</tdml:documentPart>
+      <!--                           |                 |         |                 -->
+      <!--                           one               two       three             -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e7>
+          <one>28</one>
+          <two>0</two>
+          <three>271</three>
+        </e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: explicitAlignmentNoSkips04
+        Schema: alignmentSchema
+          Root: e8
+       Purpose: This test demonstrates that the length of the alignment fill region is the smallest non-negative
+                integer L such that (L+N) mod B(4) = 1. The position of the first bit of the aligned element is P = L + N   
+  -->
+
+  <tdml:parserTestCase name="explicitAlignmentNoSkips04" root="e8"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - alignmentUnits - DFDL-12-010R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00000001 11111111 00001100 00010100 00000000 00000000</tdml:documentPart>
+      <!--                           |                 |        |                                          -->
+      <!--                           one               two      three                                      -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e8>
+          <one>1</one>
+          <two>12</two>
+          <three>1310720</three>
+        </e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: explicitAlignmentNoSkips05
+        Schema: alignmentSchema
+          Root: e9
+       Purpose: This test demonstrates that the length of the alignment fill region is the smallest non-negative
+                integer L such that (L+N) mod B(4) = 1. The position of the first bit of the aligned element is P = L + N   
+  -->
+
+  <tdml:parserTestCase name="explicitAlignmentNoSkips05" root="e9"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - alignmentUnits - DFDL-12-010R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00000001 00001100 00010100 00000000 10000000 00000000 00000001</tdml:documentPart>
+      <!--                           |        |                          |                             -->
+      <!--                           one      two                        three                         -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e9>
+          <one>1</one>
+          <two>12</two>
+          <three>8388609</three>
+        </e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentOptionalElem
+        Schema: alignmentSchema
+          Root: e10
+       Purpose: This test demonstrates that optional elements cannot have alignment properties different from the items
+                that follow them, or a SDW will be issued.
+  -->
+
+  <tdml:parserTestCase name="alignmentOptionalElem" root="e10"
+    model="alignmentSchema"
+    description="Section 12.1 Aligned Data - Avoid Ambiguity when parsing - DFDL-12-011R"
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="bits">1 0 11 101 </tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e10><one>1</one><two>0</two><three>5</three></e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>ex:two is an optional element or a variable-occurrence array and its alignment (1) is not the same as ex:three's alignment (4)</tdml:warning>
+    </tdml:warnings>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentOptionalElem02
+        Schema: alignmentSchema
+          Root: e10a
+       Purpose: This test demonstrates that optional elements cannot have alignment properties different from the items
+                that follow them, or a SDW will be issued..
+  -->
+
+  <tdml:parserTestCase name="alignmentOptionalElem02" root="e10a"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Avoid Ambiguity when parsing - DFDL-12-011R"
+    roundTrip="twoPass">
+
+  <tdml:document>
+    <tdml:documentPart type="bits">0 1 1 1 101</tdml:documentPart>
+  </tdml:document>
+  <tdml:infoset>
+    <tdml:dfdlInfoset><e10a><one>0</one><two>1</two><three>5</three></e10a>
+    </tdml:dfdlInfoset>
+  </tdml:infoset>
+  <tdml:warnings>
+    <tdml:warning>Schema Definition Warning</tdml:warning>
+    <tdml:warning>ex:one is an optional element or a variable-occurrence array and its alignment (1) is not the same as ex:two's alignment (2)</tdml:warning>
+  </tdml:warnings>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentOptionalElem03
+        Schema: alignmentSchema
+          Root: e10b
+       Purpose: This test demonstrates that optional elements cannot have alignment properties different from the items
+                that follow them, or a SDW will be issued.
+  -->
+
+  <tdml:parserTestCase name="alignmentOptionalElem03" root="e10b"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Avoid Ambiguity when parsing - DFDL-12-011R">
+
+  <tdml:document>
+    <tdml:documentPart type="bits">00001011 00000100 00001110 00001001 00001011 00001011</tdml:documentPart>
+  </tdml:document>
+  <tdml:infoset>
+    <tdml:dfdlInfoset><e10b><varArr><e>11</e><e>4</e><e>14</e><e>9</e><e>11</e></varArr><one>11</one></e10b>
+  </tdml:dfdlInfoset>
+  </tdml:infoset>
+  <tdml:warnings>
+    <tdml:warning>Schema Definition Warning Palceholder</tdml:warning>
+  </tdml:warnings>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentOptionalElem04
+        Schema: alignmentSchema
+          Root: e10c
+       Purpose: This test demonstrates that optional elements cannot have alignment properties different from the items
+                that follow them, or a SDW will be issued.
+  -->
+
+  <tdml:parserTestCase name="alignmentOptionalElem04" root="e10c"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Avoid Ambiguity when parsing - DFDL-12-011R">
+
+  <tdml:document>
+    <tdml:documentPart type="bits">00000001 00001000 101</tdml:documentPart>
+  </tdml:document>
+  <tdml:infoset>
+    <tdml:dfdlInfoset><e10c><one>1</one><two>8</two><three>5</three></e10c>
+    </tdml:dfdlInfoset>
+  </tdml:infoset>
+  <tdml:warnings>
+    <tdml:warning>Schema Definition Warning</tdml:warning>
+    <tdml:warning>ex:one is an optional element or a variable-occurrence array and its alignment (1) is not the same as ex:two's alignment (2)</tdml:warning>
+  </tdml:warnings>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentStringErr
+        Schema: alignmentSchema
+          Root: e11
+       Purpose: This test demonstrates that a textual representation of a string has a mandatory alignment (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="alignmentStringErr" root="e11"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Textual data - Mandatory Alignment - DFDL-12-025R">
+
+    <tdml:document>
+      <tdml:documentPart type="text">nope</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>The given alignment (4 bits) must be a multiple of the encoding specified alignment (8 bits) for String</tdml:error>
+      <tdml:error>representation='text'</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentStringBitSkip
+        Schema: alignmentSchema
+          Root: e12
+       Purpose: This test demonstrates that if the data is not aligned to the proper boundary for the encoding from textual 
+                data is processed, bits are skipped.
+  -->
+
+  <tdml:parserTestCase name="alignmentStringBitSkip" root="e12"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Textual data - Mandatory Alignment - DFDL-12-025R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">101 00000</tdml:documentPart>
+      <tdml:documentPart type="text">nope</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e12>
+          <bits>10</bits>
+          <string>nope</string>
+        </e12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+    <!--
+     Test Name: alignmentTerminatorBitSkip
+        Schema: alignmentSchema
+          Root: e12WithTerm
+       Purpose: This test demonstrates that a terminator after a non-byte-sized data field
+       Is properly aligned for the characters of the terminator.
+  -->
+  <tdml:parserTestCase name="alignmentTerminatorBitSkip" root="e12withTerm"
+    model="alignmentSchema" description="Section 12.1 Aligned Data - Textual data - Mandatory Alignment - DFDL-12-025R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">101 00000</tdml:documentPart>
+      <tdml:documentPart type="text">TERMnope</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e12withTerm>
+          <bits>10</bits>
+          <string>nope</string>
+        </e12withTerm>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftFraming01
+        Schema: alignmentSchema
+          Root: e13
+       Purpose: This test demonstrates that LeftFraming consists of a LeadingSkip, AlignmentFill, and an Initiator 
+  -->
+
+  <tdml:parserTestCase name="leftFraming01" root="e13"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">a</tdml:documentPart>
+      <tdml:documentPart type="text">:strng</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e13>strng</e13>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: rightFraming01
+        Schema: alignmentSchema
+          Root: e14
+       Purpose: This test demonstrates that RightFraming consists of a Terminator and TrailingSkip 
+  -->
+
+  <tdml:parserTestCase name="rightFraming01" root="e14"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">strng:a</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e14>strng</e14>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFraming01
+        Schema: alignmentSchema
+          Root: e15
+       Purpose: This test demonstrates Right and Left Framing 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFraming01" root="e15"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">a:strnggnrts:a</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e15>
+          <e13>strng</e13>
+          <e14>gnrts</e14>
+        </e15>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFraming02
+        Schema: alignmentSchema
+          Root: e16
+       Purpose: This test demonstrates Right and Left Framing 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFraming02" root="e16"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">gnrts:aa:strng</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e16>
+          <e14>gnrts</e14>
+          <e13>strng</e13>
+        </e16>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingNested01
+        Schema: alignmentSchema
+          Root: e17
+       Purpose: This test demonstrates Right and Left Framing on a complex element 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingNested01" root="e17"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- 2 byte (2 char) leadingSkip and 2 byte (2 char) padding to fulfill alignment -->
+      <tdml:documentPart type="text">gnrts:aa:strng</tdml:documentPart>
+      <tdml:documentPart type="text">eh</tdml:documentPart> <!-- 2 byte (2 char) trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e17>
+          <e14>gnrts</e14>
+          <e13>strng</e13>
+        </e17>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingNested02
+        Schema: alignmentSchema
+          Root: e18
+       Purpose: This test demonstrates Right and Left Framing on a nested complex element 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingNested02" root="e18"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- e18 - 2 byte leadingSkip and 2 byte padding to fulfill alignment -->
+      <!--                           1234               -->
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- a - 2 byte leadingSkip and 2 byte padding to fulfill alignment -->
+      <!--                           5678               -->
+      <tdml:documentPart type="text">gnrts:a</tdml:documentPart> <!-- a1 and trailingSkip of 8 bits -->
+      <!--                           |     |            -->
+      <!--                           9     15           -->
+      <tdml:documentPart type="text">a:strng</tdml:documentPart> <!-- a2 - leadingSkip of 4 bits and 4 more bits to fulfill alignment -->
+      <!--                           |     |            -->
+      <!--                          16     22           -->
+      <tdml:documentPart type="text">XX</tdml:documentPart> <!-- 2 byte trailingSkip for a -->
+      <!--                            |                 -->
+      <!--                            24                -->
+      <tdml:documentPart type="text">,</tdml:documentPart> <!-- sequence separator -->
+      <!--                           |                  -->
+      <!--                          25                  -->
+      <tdml:documentPart type="text">LLP</tdml:documentPart> <!-- b - 2 byte leadingSkip and 1 byte padding to fulfill alignment (elem starts on byte 29) -->
+      <!--                           | |                -->
+      <!--                          26 28               -->
+      <tdml:documentPart type="text">gnrtsTTTTTTTT</tdml:documentPart> <!-- b1 - 'gnrts', trailingSkip of 8 bytes -->
+      <!--                           |           |      -->
+      <!--                          29           41     -->
+      <tdml:documentPart type="text">Lstrng</tdml:documentPart> <!-- b2 - leadingSkip of 1 byte and 2 bytes to fulfill alignment, 'strng' starts on 43-->
+      <!--                           |                  -->
+      <!--                          42                  -->
+      <tdml:documentPart type="text">TT</tdml:documentPart> <!-- 2 byte trailingSkip for b -->
+      <tdml:documentPart type="text">TT</tdml:documentPart> <!-- 2 byte trailingSkip for e18 -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e18>
+          <a>
+            <a1>gnrts</a1>
+            <a2>strng</a2>
+          </a>
+          <b>
+            <b1>gnrts</b1>
+            <b2>strng</b2>
+          </b>
+        </e18>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingNested03
+        Schema: alignmentSchema
+          Root: e19
+       Purpose: This test demonstrates Right and Left Framing on a complex element 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingNested03" root="e19"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- 2 byte (2 char) leadingSkip and 2 byte (2 char) padding to fulfill alignment -->
+      <tdml:documentPart type="text">gnrts:a,a:strng</tdml:documentPart>
+      <tdml:documentPart type="text">eh</tdml:documentPart> <!-- 2 byte (2 char) trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e19>
+          <e14>gnrts</e14>
+          <e13>strng</e13>
+        </e19>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingNested04
+        Schema: alignmentSchema
+          Root: e20
+       Purpose: This test demonstrates Right and Left Framing on a complex element 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingNested04" root="e20"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- 2 byte (2 char) leadingSkip and 2 byte padding to fulfill alignment -->
+      <!--                           1234                 -->
+      <tdml:documentPart type="text">^</tdml:documentPart> <!-- initiator -->
+      <!--                           5                    -->
+      <tdml:documentPart type="text">ski</tdml:documentPart> <!-- 2 byte (2 char) leadingSkip and 1 byte padding to fulfill alignment (4 byte aligned) -->
+      <!--                           678                 -->
+      <!--                             ^                 -->
+      <tdml:documentPart type="text">gnrts:a,a:strng</tdml:documentPart>
+      <tdml:documentPart type="text">eh</tdml:documentPart> <!-- 2 byte (2 char) trailingSkip -->
+      <tdml:documentPart type="text">eh</tdml:documentPart> <!-- 2 byte (2 char) trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e20>
+          <a>
+            <a1>gnrts</a1>
+            <a2>strng</a2>
+          </a>
+        </e20>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingNested05
+        Schema: alignmentSchema
+          Root: e21
+       Purpose: This test demonstrates Right and Left Framing on a complex element 
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingNested05" root="e21"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- 2 byte (2 char) leadingSkip and 2 byte (2 char) padding to fulfill alignment -->
+      <tdml:documentPart type="text">skip</tdml:documentPart> <!-- 2 byte (2 char) leadingSkip and 2 byte (2 char) padding to fulfill alignment -->
+      <tdml:documentPart type="text">gnrts:a,a:strng</tdml:documentPart>
+      <tdml:documentPart type="text">eh</tdml:documentPart> <!-- 2 byte (2 char) trailingSkip -->
+      <tdml:documentPart type="text">eh</tdml:documentPart> <!-- 2 byte (2 char) trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e21>
+          <a>
+            <a1>gnrts</a1>
+            <a2>strng</a2>
+          </a>
+        </e21>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: encodingAlignmentUtf32be
+        Schema: alignmentSchema
+          Root: string32be
+       Purpose: This test demonstrates that the alignment for Utf-32be encoded text must be 8-bit aligned
+  -->
+
+  <tdml:parserTestCase name="encodingAlignmentUtf32be" root="string32be"
+    model="alignmentSchema" description="Section 12 - Aligned Data - DFDL-12-027R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00 00 00 74 00 00 00 65 00 00 00 73 00 00 00 74</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>The given alignment (2 bits) must be a multiple of the encoding specified alignment (8 bits) for String when representation='text'</tdml:error>
+      <tdml:error>Encoding: UTF-32BE</tdml:error>
+    </tdml:errors> 
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: alignmentUnitsInvalid
+        Schema: InvalidAlignSchema.dfdl.xsd
+          Root: e_invalid
+       Purpose: This test demonstrates that DFDL properly handles a case where alignmentUnits is invalid
+  -->
+
+  <tdml:parserTestCase name="alignmentUnitsInvalid" root="e_invalid"
+    model="InvalidAlignSchema.dfdl.xsd" description="Section 12 - Aligned Data - alignmentUnits - DFDL-12-003R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">12345</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Value 'characters' is not facet-valid with respect to enumeration '[bits, bytes]'</tdml:error>
+      <tdml:error>It must be a value from the enumeration</tdml:error>
+    </tdml:errors> 
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentNonNegativeInteger
+        Schema: implicitAlignmentSchema
+          Root: nonNeg
+          Purpose: This test demonstrates that the implicit alignment for nonNegativeIntegers is 8 bits
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentNonNegativeInteger" root="nonNeg"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">01110101 11010010</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">00000000 00000000 00000000 00000010 00000001</tdml:documentPart> <!-- nonNeg -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nonNeg>513</nonNeg>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentNonNegativeInteger2
+        Schema: implicitAlignmentSchema
+          Root: nonNeg
+          Purpose: This test demonstrates that the implicit alignment for nonNegativeIntegers is 1 byte
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentNonNegativeInteger2" root="nonNeg"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">01 01</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">00 00 00 02 01</tdml:documentPart> <!-- nonNeg -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nonNeg>513</nonNeg>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentNonNegativeInteger3
+        Schema: implicitAlignmentSchema
+          Root: nonNeg2
+          Purpose: This test demonstrates that the implicit alignment for nonNegativeIntegers is 8 bits
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentNonNegativeInteger3" root="nonNeg2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">1001010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="bits">00000000 10001001</tdml:documentPart> <!-- nonNeg -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nonNeg2>137</nonNeg2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentInteger1
+        Schema: implicitAlignmentSchema
+          Root: integer2
+          Purpose: This test demonstrates that the implicit alignment for integer is 8 bits
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentInteger1" root="integer2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - integer - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">1001010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="bits">00000000 10001001</tdml:documentPart> <!-- nonNeg -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <integer2>137</integer2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentInteger2
+        Schema: implicitAlignmentSchema
+          Root: integer
+          Purpose: This test demonstrates that the implicit alignment for integer is 8 bits
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentInteger2" root="integer"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - integer - DFDL-12-017R"
+    roundTrip="twoPass">
+    
+    <tdml:document>
+      <tdml:documentPart type="byte">01 01</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">00 00 00 02 01</tdml:documentPart> <!-- nonNeg -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <integer>513</integer>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: impAlignmentInteger3
+        Schema: implicitAlignmentSchema
+          Root: integer
+          Purpose: This test demonstrates that the implicit alignment for integer is 8 bits
+  -->
+  
+  <tdml:parserTestCase name="impAlignmentInteger3" root="integer"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - integer - DFDL-12-017R"
+    roundTrip="twoPass">
+    
+    <tdml:document>
+      <tdml:documentPart type="byte">01 01</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">ff ff ff fd ff</tdml:documentPart> <!-- nonNeg -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <integer>-513</integer>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentNonNegativeIntegerT
+        Schema: implicitAlignmentSchema
+          Root: nonNegativeIntegerT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'nonNegativeInteger' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentNonNegativeIntegerT" root="nonNegativeIntegerT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">3</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- nonNegativeIntegerT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nonNegativeIntegerT>42</nonNegativeIntegerT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentNonNegativeIntegerT2
+        Schema: implicitAlignmentSchema
+          Root: nonNegativeIntegerT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'nonNegativeInteger' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentNonNegativeIntegerT2" root="nonNegativeIntegerT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">10101010</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- nonNegativeIntegerT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nonNegativeIntegerT>42</nonNegativeIntegerT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentNonNegativeIntegerT3
+        Schema: implicitAlignmentSchema
+          Root: nonNegativeIntegerTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'nonNegativeInteger' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentNonNegativeIntegerT3" root="nonNegativeIntegerTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">0101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- nonNegativeIntegerTBits -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nonNegativeIntegerTBits>42</nonNegativeIntegerTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentNonNegativeIntegerT_Fail
+        Schema: implicitAlignmentSchema
+          Root: nonNegativeIntegerT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'nonNegativeInteger' is encoding-specific (generally 8 bits) and will fail with improper alignment.
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentNonNegativeIntegerT_Fail" root="nonNegativeIntegerT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - nonNegativeInteger (text) - DFDL-12-017R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- nonNegativeIntegerT -->
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:nonNegativeInteger</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentIntegerT
+        Schema: implicitAlignmentSchema
+          Root: integerT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'integer' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentIntegerT" root="integerT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - integer (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">3</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- integerT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <integerT>42</integerT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentIntegerT2
+        Schema: implicitAlignmentSchema
+          Root: integerTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'integer' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentIntegerT2" root="integerTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - integer (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">0101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- integerTBits -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <integerTBits>42</integerTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentIntegerT_Fail
+        Schema: implicitAlignmentSchema
+          Root: integerT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'integer' is encoding-specific (generally 8 bits) and will fail with improper alignment.
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentIntegerT_Fail" root="integerT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - integer (text) - DFDL-12-017R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- integerT -->
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:integer</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDecimalT
+        Schema: implicitAlignmentSchema
+          Root: decimalT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'decimal' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDecimalT" root="decimalT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - decimal (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">3</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42.3</tdml:documentPart> <!-- decimalT -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <decimalT>42.3</decimalT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDecimalT2
+        Schema: implicitAlignmentSchema
+          Root: decimalTBits
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'decimal' is encoding-specific (generally 8 bits)
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDecimalT2" root="decimalTBits"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - decimal (text) - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">0101010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="text">42.3</tdml:documentPart> <!-- decimalTBits -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <decimalTBits>42.3</decimalTBits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDecimalT_Fail
+        Schema: implicitAlignmentSchema
+          Root: decimalT
+       Purpose: This test demonstrates that the implicit alignment for the textual representation of type 'decimal' is encoding-specific (generally 8 bits) and will fail with improper alignment.
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDecimalT_Fail" root="decimalT"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - decimal (text) - DFDL-12-017R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="text">42</tdml:documentPart> <!-- decimalT -->
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:decimal</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDecimal
+        Schema: implicitAlignmentSchema
+          Root: decimal
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'decimal' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDecimal" root="decimal"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - decimal  - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">09 01</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="byte">02 DF DC 1C 35</tdml:documentPart> <!-- decimal -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <decimal>1234567890.1</decimal>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: implicitAlignmentDecimal2
+        Schema: implicitAlignmentSchema
+          Root: decimal2
+       Purpose: This test demonstrates that the implicit alignment for the binary representation of type 'decimal' is 8 bits
+  -->
+
+  <tdml:parserTestCase name="implicitAlignmentDecimal2" root="decimal2"
+    model="implicitAlignmentSchema" description="Section 12.1 Aligned Data - Implicit Alignment - decimal  - DFDL-12-017R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart> <!-- leadingSkip -->
+      <tdml:documentPart type="bits">1001010</tdml:documentPart> <!-- padding to fulfill alignment -->
+      <tdml:documentPart type="bits">00000000 10001001</tdml:documentPart> <!-- decimal2 -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <decimal2>13.7</decimal2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingChoice01
+        Schema: alignmentSchema
+          Root: e22
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice01" root="e22"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart> <!-- e22 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">11 11 22 22</tdml:documentPart> <!-- a1 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">73 74 72 6E 67 3A</tdml:documentPart> <!-- a1 "strng:" -->
+      <tdml:documentPart type="byte">11 11</tdml:documentPart> <!-- a1 trailingSkip -->
+      <tdml:documentPart type="byte">11 11</tdml:documentPart> <!-- e22 trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e22>
+          <a1>strng</a1>
+        </e22>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: leftAndRightFramingChoice02
+        Schema: alignmentSchema
+          Root: e22
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice02" root="e22"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart> <!-- e22 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">11 11 22 22</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">3A 73 74 72 6E 67</tdml:documentPart> <!-- a2 ":strng" -->
+      <tdml:documentPart type="byte">11 11</tdml:documentPart> <!-- e22 trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e22>
+          <a2>strng</a2>
+        </e22>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+      
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingChoice03
+        Schema: alignmentSchema
+          Root: e23
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice03" root="e23"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart> <!-- e23 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">11 11 22 22</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">73 74 72 6E 67 3A</tdml:documentPart> <!-- a2 "strng" -->
+      <tdml:documentPart type="byte">11 11 22 22 19 20 21 22 23 24</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <!--                           15       18                24     -->
+      <tdml:documentPart type="byte">73 74 72 6E 67 3A</tdml:documentPart> <!-- a2 "strng:" -->
+      <tdml:documentPart type="byte">11 11 22 24 35 36 37 38 39 40</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <!--                           31 32    34                40     -->
+      <tdml:documentPart type="byte">73 74 72 6E 67 3A</tdml:documentPart> <!-- a2 "strng:" -->
+      <tdml:documentPart type="byte">11 11</tdml:documentPart> <!-- e23 trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e23>
+          <e23a>
+            <a2>strng</a2>
+          </e23a>
+          <e23a>
+            <a2>strng</a2>
+          </e23a>
+          <e23a>
+            <a2>strng</a2>
+          </e23a>
+        </e23>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingChoice04
+        Schema: alignmentSchema
+          Root: e23
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice04" root="e23"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart> <!-- e23 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">11 11 22 22</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <tdml:documentPart type="byte">73 74 72 6E 67 3A</tdml:documentPart> <!-- a2 "strng:" -->
+      <tdml:documentPart type="byte">11 11 22 22 19 20</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <!--                           15       18    20                              -->
+      <tdml:documentPart type="byte">3A 73 74 72 6E 67</tdml:documentPart> <!-- a1 ":strng" -->
+      <tdml:documentPart type="byte">11 11 22 24 35 36</tdml:documentPart> <!-- a2 leadingSkip and padding to fulfill alignment-->
+      <!--                           27             32                             -->
+      <tdml:documentPart type="byte">73 74 72 6E 67 3A</tdml:documentPart> <!-- a2 "strng:" -->
+      <tdml:documentPart type="byte">11 11</tdml:documentPart> <!-- e23 trailingSkip -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e23>
+          <e23a>
+            <a2>strng</a2>
+          </e23a>
+          <e23a>
+            <a1>strng</a1>
+          </e23a>
+          <e23a>
+            <a2>strng</a2>
+          </e23a>
+        </e23>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingChoice05
+        Schema: alignmentSchema
+          Root: e24
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice05" root="e24"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart>                       <!-- e24 leadingSkip (2B) and padding to fulfill alignment -->
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart>                       <!-- a2 leadingSkip (4B) - no padding needed -->
+      <tdml:documentPart type="byte">74 65 72 6D 69 6E 61 74 65 64 3A</tdml:documentPart>  <!-- a2 "terminated:" -->
+      <tdml:documentPart type="byte">11 11 11 11 22</tdml:documentPart>                    <!-- a1 leadingSkip (4B) and padding to fulfill alignment of 4B-->
+      <!--                                    23 24                 -->
+      <tdml:documentPart type="byte">3A 69 6E 69 74 73</tdml:documentPart>                 <!-- a1 ":inits" -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- a1 trailingSkip (2B) -->
+      <tdml:documentPart type="byte">11 11 11 11 00 00 00 00</tdml:documentPart>           <!-- b1 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    36          40                 -->
+      <tdml:documentPart type="byte">33 32</tdml:documentPart>                             <!-- b1 "32" -->
+      <tdml:documentPart type="byte">11 11 11 11 00 00</tdml:documentPart>                 <!-- b2 leadingSkip (4B) and padding to fulfill alignment of 4B -->
+      <!--                                    46    48                 -->
+      <tdml:documentPart type="byte">2D 33 30</tdml:documentPart>                          <!-- b2 "-30" -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- b2 trailingSkip (2B) -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- e24 trailingSkip (2B) -->
+
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e24>
+          <e24a>
+            <a2>terminated</a2>
+          </e24a>
+          <e24a>
+            <a1>inits</a1>
+          </e24a>
+          <e24b>
+            <b1>32</b1>
+          </e24b>
+          <e24b>
+            <b2>-30</b2>
+          </e24b>
+        </e24>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingChoice06
+        Schema: alignmentSchema
+          Root: e24
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice06" root="e24"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart>                       <!-- e24 leadingSkip (2B) and padding to fulfill alignment -->
+      <tdml:documentPart type="byte">11 11 11 11</tdml:documentPart>                       <!-- a1 leadingSkip (4B) - no padding needed -->
+      <!--                                    08                 -->
+      <tdml:documentPart type="byte">3A 69 6E 69 74 73</tdml:documentPart>                 <!-- a1 ":inits" -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- a1 trailingSkip (2B) -->
+      <tdml:documentPart type="byte">BA 19 00 00 11 11 11 11</tdml:documentPart>           <!-- a2 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    20          24                 -->
+      <tdml:documentPart type="byte">74 65 72 6D 69 6E 61 74 65 64 3A</tdml:documentPart>  <!-- a2 "terminated:" -->
+      <tdml:documentPart type="byte">BA 19 00 00 11</tdml:documentPart>                    <!-- a2 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    39 40                 -->
+      <tdml:documentPart type="byte">74 65 72 6D 69 6E 61 74 65 64 3A</tdml:documentPart>  <!-- a2 "terminated:" -->
+      <tdml:documentPart type="byte">BA 19 00 00 11</tdml:documentPart>                    <!-- a2 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    55 56                 -->
+      <tdml:documentPart type="byte">74 65 72 6D 69 6E 61 74 65 64 3A</tdml:documentPart>  <!-- a2 "terminated:" -->
+      <tdml:documentPart type="byte">11 11 11 11 00</tdml:documentPart>                    <!-- b1 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    71 72                 -->
+      <tdml:documentPart type="byte">33 32</tdml:documentPart>                             <!-- b1 "32" -->
+      <tdml:documentPart type="byte">11 11 11 11 00 00</tdml:documentPart>                 <!-- b2 leadingSkip (4B) and padding to fulfill alignment of 4B -->
+      <!--                                    78    80                 -->
+      <tdml:documentPart type="byte">2D 33 30</tdml:documentPart>                          <!-- b2 "-30" -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- b2 trailingSkip (2B) -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- e24 trailingSkip (2B) -->
+
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e24>
+          <e24a>
+            <a1>inits</a1>
+          </e24a>
+          <e24a>
+            <a2>terminated</a2>
+          </e24a>
+          <e24a>
+            <a2>terminated</a2>
+          </e24a>
+          <e24a>
+            <a2>terminated</a2>
+          </e24a>
+          <e24b>
+            <b1>32</b1>
+          </e24b>
+          <e24b>
+            <b2>-30</b2>
+          </e24b>
+        </e24>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingChoice07
+        Schema: alignmentSchema
+          Root: e24
+       Purpose: This test demonstrates Right and Left Framing on a complex element (choice)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingChoice07" root="e24"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-016R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">BA 19 00 00</tdml:documentPart>                       <!-- e24 leadingSkip (2B) and padding to fulfill alignment -->
+      <tdml:documentPart type="byte">11 11 11 11</tdml:documentPart>                       <!-- a1 leadingSkip (4B) - no padding needed -->
+      <!--                                    08                 -->
+      <tdml:documentPart type="byte">3A 69 6E 69 74 73</tdml:documentPart>                 <!-- a1 ":inits" -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- a1 trailingSkip (2B) -->
+      <tdml:documentPart type="byte">BA 19 00 00 11 11 11 11</tdml:documentPart>           <!-- a2 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    20          24                 -->
+      <tdml:documentPart type="byte">77 61 6C 74 65 72 3A</tdml:documentPart>              <!-- a2 "walter:" -->
+      <tdml:documentPart type="byte">BA 19 00 00 11 11 11 11 11</tdml:documentPart>        <!-- a2 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    35             40       -->
+      <tdml:documentPart type="byte">6A 65 73 73 65 3A</tdml:documentPart>                 <!-- a2 "jesse:" -->
+      <tdml:documentPart type="byte">BA 19 00 00 51 52 53 54 55 11</tdml:documentPart>     <!-- a2 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    50                56                 -->
+      <tdml:documentPart type="byte">67 75 73 74 61 76 6F 3A</tdml:documentPart>           <!-- a2 "gustavo:" -->
+      <tdml:documentPart type="byte">11 11 11 11 69 70 71 00</tdml:documentPart>           <!-- b1 leadingSkip (4B) and padding to fulfill alignment of 8B -->
+      <!--                                    68          72                 -->
+      <tdml:documentPart type="byte">33 32</tdml:documentPart>                             <!-- b1 "32" -->
+      <tdml:documentPart type="byte">11 11 11 11 00 00</tdml:documentPart>                 <!-- b2 leadingSkip (4B) and padding to fulfill alignment of 4B -->
+      <!--                                    78    80                 -->
+      <tdml:documentPart type="byte">2D 33 30</tdml:documentPart>                          <!-- b2 "-30" -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- b2 trailingSkip (2B) -->
+      <tdml:documentPart type="byte">73 73</tdml:documentPart>                             <!-- e24 trailingSkip (2B) -->
+
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e24>
+          <e24a>
+            <a1>inits</a1>
+          </e24a>
+          <e24a>
+            <a2>walter</a2>
+          </e24a>
+          <e24a>
+            <a2>jesse</a2>
+          </e24a>
+          <e24a>
+            <a2>gustavo</a2>
+          </e24a>
+          <e24b>
+            <b1>32</b1>
+          </e24b>
+          <e24b>
+            <b2>-30</b2>
+          </e24b>
+        </e24>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingArray01
+        Schema: alignmentSchema
+          Root: e25
+       Purpose: This test demonstrates Right and Left Framing on a complex element (array)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingArray01" root="e25"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-020R">
+
+    <tdml:document>
+      <tdml:documentPart type="text">aaaaaaaaaaaaa,aaaaaaaaaaaa,aaaaaaaaaaaaaaaa,aaaaaaaaaaaaaaaa,aaaaaaaaaaaaaaaa,aaaaaaaaaaaaaaaa</tdml:documentPart> 
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Property terminator must be defined when trailingSkip > 0 and lengthKind='delimited'</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingArray02
+        Schema: alignmentSchema
+          Root: e26
+       Purpose: This test demonstrates Right and Left Framing on a complex element (array)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingArray02" root="e26"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">aabb</tdml:documentPart>               <!-- leadingSkip (2B) and padding to fulfill alignment -->
+      <!--                              4                 -->
+      <tdml:documentPart type="text">the first string|</tdml:documentPart>   <!-- repeat -->
+      <!--                                          21                -->
+      <tdml:documentPart type="text">cccc</tdml:documentPart>               <!-- trailingSkip (4B) -->
+      <!--                              25                -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- separator -->
+      <!--                           26                -->
+      <tdml:documentPart type="text">aa</tdml:documentPart>            <!-- leadingSkip (2B) and padding to fulfill alignment -->
+      <!--                           28                -->
+      <tdml:documentPart type="text">the second string|</tdml:documentPart>  <!-- repeat -->
+      <!--                                            46                -->
+      <tdml:documentPart type="text">cccc</tdml:documentPart>               <!-- trailingSkip (4B) -->
+      <!--                             50                 -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- separator -->
+      <!--                           51                -->
+      <tdml:documentPart type="text">aabbb</tdml:documentPart>                <!-- leadingSkip (2B) and padding to fulfill alignment -->
+      <!--                           53  56                   -->
+      <tdml:documentPart type="text">three|</tdml:documentPart>              <!-- repeat -->
+      <!--                                62                -->
+      <tdml:documentPart type="text">cccc</tdml:documentPart>               <!-- trailingSkip (4B) -->
+      <!--                              66                           -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- separator -->
+      <!--                           67                -->
+      <tdml:documentPart type="text">aabbb</tdml:documentPart>             <!-- leadingSkip (2B) and padding to fulfill alignment -->
+      <!--                           69  72               -->
+      <tdml:documentPart type="text">4|</tdml:documentPart>                  <!-- repeat -->
+      <!--                            74                -->
+      <tdml:documentPart type="text">cccc</tdml:documentPart>               <!-- trailingSkip (4B) -->
+      <!--                              78                -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- separator -->
+      <!--                           79                -->
+      <tdml:documentPart type="text">aabbb</tdml:documentPart>                 <!-- leadingSkip (2B) and padding -->
+      <!--                           81  84               -->
+      <tdml:documentPart type="text">the fifth one is the biggest one|</tdml:documentPart>              <!-- repeat -->
+      <!--                                                           117-->
+      <tdml:documentPart type="text">cccc</tdml:documentPart>               <!-- trailingSkip (4B) -->
+      <!--                              121                 -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- separator -->
+      <!--                           122               -->
+      <tdml:documentPart type="text">aa</tdml:documentPart>                <!-- leadingSkip (2B) - no padding needed -->
+      <!--                          124                -->
+      <tdml:documentPart type="text">6 4 fun|</tdml:documentPart>                  <!-- repeat -->
+      <tdml:documentPart type="text">cccc</tdml:documentPart>               <!-- trailingSkip (4B) -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e26>
+          <repeat>the first string</repeat>
+          <repeat>the second string</repeat>
+          <repeat>three</repeat>
+          <repeat>4</repeat>
+          <repeat>the fifth one is the biggest one</repeat>
+          <repeat>6 4 fun</repeat>
+        </e26>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: leftAndRightFramingArray03
+        Schema: alignmentSchema
+          Root: e27
+       Purpose: This test demonstrates Right and Left Framing on a complex element (array)
+  -->
+
+  <tdml:parserTestCase name="leftAndRightFramingArray03" root="e27"
+    model="alignmentSchema" description="Section 9 Framing - Aligned Data - DFDL-09-020R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">-=</tdml:documentPart>                 <!-- outer[1] leadingSkip and alignment padding --> 
+      <!--                            2                 -->
+      <tdml:documentPart type="text">--(one)----</tdml:documentPart>        <!-- inner[1] leadingSkip, data, and trailingSkip --> 
+      <!--                                     13       -->
+      <tdml:documentPart type="text">|</tdml:documentPart>                  <!-- inner sep --> 
+      <!--                           14                 -->
+      <tdml:documentPart type="text">--(two)----</tdml:documentPart>        <!-- inner[2] leadingSkip, data, and trailingSkip --> 
+      <!--                                     25       -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- outer sep --> 
+      <!--                           26                 -->
+      <tdml:documentPart type="text">-=</tdml:documentPart>                 <!-- outer[2] leadingSkip and alignment padding --> 
+      <!--                            28                -->
+      <tdml:documentPart type="text">--==(potato)----</tdml:documentPart>   <!-- inner[1] leadingSkip, data, and trailingSkip --> 
+      <!--                                          44  -->
+      <tdml:documentPart type="text">|</tdml:documentPart>                  <!-- inner sep --> 
+      <!--                           45                 -->
+      <tdml:documentPart type="text">--=(potato)----</tdml:documentPart>    <!-- inner[2] leadingSkip, data, and trailingSkip --> 
+      <!--                                         60   -->
+      <tdml:documentPart type="text">,</tdml:documentPart>                  <!-- outer sep --> 
+      <!--                           61                 -->
+      <tdml:documentPart type="text">-</tdml:documentPart>                  <!-- outer[3] leadingSkip and alignment padding --> 
+      <!--                           62                 -->
+      <tdml:documentPart type="text">--(one)----</tdml:documentPart>        <!-- inner[1] leadingSkip, data, and trailingSkip --> 
+      <!--                                     73       -->
+      <tdml:documentPart type="text">|</tdml:documentPart>                  <!-- inner sep --> 
+      <!--                           74                 -->
+      <tdml:documentPart type="text">--(two)----</tdml:documentPart>        <!-- inner[2] leadingSkip, data, and trailingSkip --> 
+      <!--                                     84       -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e27>
+          <outer>
+            <inner>one</inner>
+            <inner>two</inner>
+          </outer>
+          <outer>
+            <inner>potato</inner>
+            <inner>potato</inner>
+          </outer>
+          <outer>
+            <inner>one</inner>
+            <inner>two</inner>
+          </outer>
+        </e27>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: trailingSkipDelimited01
+        Schema: alignmentSchema
+          Root: e28
+       Purpose: This test demonstrates trailingSkip with delimited with terminator works
+  -->
+
+  <tdml:parserTestCase name="trailingSkipDelimited01" root="e28"
+    model="alignmentSchema" description="Section 12 - Aligned Data - DFDL-12-006R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">test:a</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e28>test</e28>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: trailingSkipDelimited02
+        Schema: alignmentSchema
+          Root: e29
+       Purpose: This test demonstrates trailingSkip with delimited without terminator fails
+  -->
+
+  <tdml:parserTestCase name="trailingSkipDelimited02" root="e29"
+    model="alignmentSchema" description="Section 12 - Aligned Data - DFDL-12-006R">
+
+    <tdml:document>
+      <tdml:documentPart type="text">testarooa</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>terminator</tdml:error>
+      <tdml:error>trailingSkip</tdml:error>
+      <tdml:error>lengthKind</tdml:error>
+      <tdml:error>delimited</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: trailingSkipDelimited03
+        Schema: alignmentSchema
+          Root: e30
+       Purpose: This test demonstrates trailingSkip with delimited with terminator works with sequences
+  -->
+
+  <tdml:parserTestCase name="trailingSkipDelimited03" root="e30"
+    model="alignmentSchema" description="Section 12 - Aligned Data - DFDL-12-006R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="text">test1:test2:]a)</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e30>
+          <s1>test1</s1>
+          <s2>test2</s2>
+        </e30>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: trailingSkipDelimited04
+        Schema: alignmentSchema
+          Root: e31
+       Purpose: This test demonstrates trailingSkip with delimited without terminator fails with sequences
+  -->
+
+  <tdml:parserTestCase name="trailingSkipDelimited04" root="e31"
+    model="alignmentSchema" description="Section 12 - Aligned Data - DFDL-12-006R">
+    <tdml:document>
+      <tdml:documentPart type="text">test1:test2:a)</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>terminator</tdml:error>
+      <tdml:error>trailingSkip</tdml:error>
+      <tdml:error>lengthKind</tdml:error>
+      <tdml:error>delimited</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: alignmentLSBFirst
+        Schema: alignmentBitOrder
+          Root: least
+       Purpose: This test shows alignment with the bit order of 'leastSignificantBitFirst'.
+  -->
+  <tdml:parserTestCase name="alignmentLSBFirst"
+    root="least" model="alignmentBitOrder" description="Tests alignment with the bit order of 'leastSignificantBitFirst'">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01010001</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <least>
+          <A>1</A>
+          <B>5</B>
+        </least>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: alignmentMSBFirst
+        Schema: alignmentBitOrder
+          Root: most
+       Purpose: This test shows alignment with the bit order of 'mostSignificantBitFirst'.
+  -->
+  <tdml:parserTestCase name="alignmentMSBFirst"
+    root="most" model="alignmentBitOrder" description="Tests alignment with the bit order of 'mostSignificantBitFirst'">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01000101</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <most>
+          <A>1</A>
+          <B>5</B>
+        </most>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: alignmentArray
+        Schema: alignmentSchema
+          Root: e32
+       Purpose: This test demonstrates that the alignment applies to all elements of the array, not just the first one.
+  -->
+
+  <tdml:parserTestCase name="alignmentArray" root="e32"
+    model="alignmentSchema"
+    description="Section 12.1 Aligned Data"
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="bits">101 1 000 1 111</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e32><elem>5</elem><elem>0</elem><elem>7</elem></e32>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: fillByte_01
+        Schema: s1
+          Root: e3
+       Purpose: This test demonstrates the fillByte property must be a single character
+  -->
+
+  <tdml:unparserTestCase name="fillByte_01" root="e3"
+      model="s1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3>a1a2a3</ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>fillByte</tdml:error>
+      <tdml:error>1 character</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!--
+     Test Name: fillByte_02
+        Schema: s1
+          Root: e3
+       Purpose: This test demonstrates the fillByte property must be a single character, and that it is checked even when using byte class entities
+  -->
+
+  <tdml:unparserTestCase name="fillByte_02" root="e4"
+      model="s1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e4>a1a2a3</ex:e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>fillByte</tdml:error>
+      <tdml:error>1 character</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!--
+     Test Name: fillByte_03
+        Schema: s1
+          Root: e8
+       Purpose: This test demonstrates the fillByte property where encoding is a non byte size charset
+  -->
+
+  <tdml:unparserTestCase name="fillByte_03" root="e8"
+      model="s1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e8>a1a2</ex:e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>fillByte</tdml:error>
+      <tdml:error>encoding</tdml:error>
+      <tdml:error>X-DFDL-US-ASCII-7-BIT-PACKED</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!--
+     Test Name: fillByte_04
+        Schema: s1
+          Root: e4
+       Purpose: This test demonstrates the fillByte property where encoding is runtime calculated, and results in a multi-byte character for fillByte
+  -->
+
+  <tdml:unparserTestCase name="fillByte_04" root="e5"
+      model="s1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e5>
+          <ex:encoding>UTF-8</ex:encoding>
+          <ex:e3>a1a2</ex:e3>
+        </ex:e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>fillByte</tdml:error>
+      <tdml:error>single-byte character</tdml:error>
+      <tdml:error>encoding</tdml:error>
+      <tdml:error>UTF-8</tdml:error>
+      <tdml:error>年</tdml:error>
+      <tdml:error>3 bytes</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!--
+     Test Name: fillByte_05
+        Schema: s1
+          Root: e5
+       Purpose: This test demonstrates the fillByte property cannot be a character class
+  -->
+
+  <tdml:unparserTestCase name="fillByte_05" root="e6"
+      model="s1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6>a1a2a3</ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>fillByte</tdml:error>
+      <tdml:error>%NL;</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+  
+  <!--
+     Test Name: fillByte_06
+        Schema: s1
+          Root: e6
+       Purpose: This test demonstrates the fillByte property cannot be the %ES; character class
+  -->
+
+  <tdml:unparserTestCase name="fillByte_06" root="e7"
+      model="s1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e7>a1a2a3</ex:e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>fillByte</tdml:error>
+      <tdml:error>%ES;</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+ 
+  <tdml:defineSchema name="schemaWithNoFillByte"
+    xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+    xmlns:fn="http://www.w3.org/2005/xpath-functions"
+    elementFormDefault="unqualified">
+
+    <dfdl:defineFormat name="myFormat">
+      <dfdl:format
+        textBidi="no"
+        floating="no"
+        encodingErrorPolicy="replace"
+        leadingSkip="0"
+        alignmentUnits="bytes"
+        alignment="1"
+        trailingSkip="0"
+        textPadKind="none"
+        escapeSchemeRef=""
+        truncateSpecifiedLengthString="no"
+        textTrimKind="none"
+        binaryNumberRep="binary"
+
+        representation="binary"
+        byteOrder="littleEndian"
+        encoding="ISO-8859-1"
+        sequenceKind="ordered"
+        initiator=""
+        terminator=""
+        separator=""
+        ignoreCase = "yes"
+        initiatedContent="no" />
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="ex:myFormat" />
+
+    <xs:element name="input"
+      dfdl:lengthKind="implicit"
+      dfdl:lengthUnits="bytes">
+      <xs:complexType>
+        <xs:sequence dfdl:fillByte="%NUL;">
+          <xs:element name="A" type="xs:unsignedInt"
+            dfdl:lengthKind="explicit"
+            dfdl:length="1"
+            dfdl:lengthUnits="bytes"
+            dfdl:alignment="1"
+            dfdl:alignmentUnits="bytes"/>
+          <xs:element name="B" type="xs:unsignedInt"
+            dfdl:lengthKind="explicit"
+            dfdl:length="1"
+            dfdl:lengthUnits="bytes"
+            dfdl:alignment="2"
+            dfdl:alignmentUnits="bytes" />
+          <xs:element name="C" type="xs:unsignedInt"
+            dfdl:lengthKind="explicit"
+            dfdl:length="1"
+            dfdl:lengthUnits="bytes"
+            dfdl:alignment="2"
+            dfdl:alignmentUnits="bytes" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="schemaWithFillByte" 
+    xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+    xmlns:fn="http://www.w3.org/2005/xpath-functions"
+    elementFormDefault="unqualified">
+
+    <dfdl:defineFormat name="myFormat">
+      <dfdl:format 
+      textBidi="no"
+      floating="no"
+      encodingErrorPolicy="replace"
+      leadingSkip="0" 
+      alignmentUnits="bytes"
+      alignment="1" 
+      trailingSkip="0"
+      textPadKind="none"
+      escapeSchemeRef=""
+      truncateSpecifiedLengthString="no"
+      textTrimKind="none" 
+      binaryNumberRep="binary"
+
+      representation="binary"
+      byteOrder="littleEndian"
+      encoding="ISO-8859-1"
+      sequenceKind="ordered"
+      initiator=""
+      terminator=""
+      separator=""
+      ignoreCase = "yes"
+      fillByte="x"
+      initiatedContent="no" />
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="ex:myFormat" />
+
+    <xs:element name="input"
+      dfdl:lengthKind="implicit"
+      dfdl:lengthUnits="bytes" >
+      <xs:complexType>
+        <xs:sequence dfdl:fillByte="%NUL;">
+          <xs:element name="A" type="xs:unsignedInt" 
+            dfdl:lengthKind="explicit"
+            dfdl:length="1"
+            dfdl:lengthUnits="bytes"
+            dfdl:alignment="1"
+            dfdl:alignmentUnits="bytes" />
+          <xs:element name="B" type="xs:unsignedInt" 
+            dfdl:lengthKind="explicit"
+            dfdl:length="1"
+            dfdl:lengthUnits="bytes"
+            dfdl:alignment="2"
+            dfdl:alignmentUnits="bytes" />
+          <xs:element name="C" type="xs:unsignedInt" 
+            dfdl:lengthKind="explicit"
+            dfdl:length="1"
+            dfdl:lengthUnits="bytes"
+            dfdl:alignment="2"
+            dfdl:alignmentUnits="bytes" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+	</tdml:defineSchema>
+
+  <!--
+     Test Name: alignmentFillByteNotDefined
+        Schema: schemaWithNoFillByte
+          Root: input
+       Purpose: This test demonstrates the fix for DAFFODIL-2377 - the fillByte 
+       property is required when data is not aligned to the proper boundary for 
+       encoding. Now when fillByte is not defined, an SDE is thrown instead of 
+       an abort message.
+  -->
+  <tdml:unparserTestCase name="alignmentFillByteNotDefined"
+    model="schemaWithNoFillByte" roundTrip="onePass" root="input"
+    validation="off">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:input>
+          <A>49</A>
+          <B>50</B>
+          <C>51</C>
+        </ex:input>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Property fillByte is not defined</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="alignmentFillByteDefined"
+    model="schemaWithFillByte" roundTrip="onePass" root="input"
+    validation="off">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:input>
+          <A>49</A>
+          <B>50</B>
+          <C>51</C>
+        </ex:input>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1x2x3]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="separatorMTA">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+    <dfdl:format ref="ex:GeneralFormat"
+      lengthUnits="bits"
+      alignmentUnits="bits"
+      fillByte="%#rFF;"/>
+
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence
+          dfdl:separator=","
+          dfdl:separatorPosition="prefix"
+          dfdl:separatorSuppressionPolicy="anyEmpty"
+          dfdl:encoding="US-ASCII" dfdl:alignment="8">
+          <xs:element name="a" type="xs:string" maxOccurs="unbounded"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="."
+            dfdl:encoding="X-DFDL-BASE4-MSBF" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+     Test Name: separatorMTA_01
+        Schema: separatorMTA
+        Root: root
+        Purpose: This test demonstrates that with the correct separator
+          suppression, separators are only unparsed when elements unparse to
+          non-zero length. Infoset elements that unparse to zero length
+          essentially disappear. This also tests that when we determine a field
+          is zero length and do not unparse the seprator, that we also do not
+          unparse mandatory text alignment associated with that separator
+  -->
+
+  <tdml:unparserTestCase name="separatorMTA_01"
+    model="separatorMTA"
+    description="Section 12.1 - Aligned Data" roundTrip="none">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>
+          <ex:a>0</ex:a>
+          <ex:a></ex:a>
+          <ex:a>1</ex:a>
+          <ex:a></ex:a>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="bits">00101100</tdml:documentPart> <!-- us-ascii comma separator -->
+      <tdml:documentPart type="bits">00 111111</tdml:documentPart> <!-- base-4 "0" string + mta fill bits-->
+      <tdml:documentPart type="bits">00101100</tdml:documentPart> <!-- us-ascii comma separator -->
+      <tdml:documentPart type="bits">01</tdml:documentPart> <!-- base-4 "1" string (no mta fill bits)-->
+    </tdml:document>
+  </tdml:unparserTestCase>
+  
+    <tdml:unparserTestCase name="test_init_alignment_1" root="postfix_init" model="s2" roundTrip="onePass">
+    <tdml:document>IaaBbb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:postfix_init xmlns:ex="http://example.com">
+          <e1>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+        </ex:postfix_init>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_init_alignment_2" root="postfix_init_2" model="s2" roundTrip="onePass">
+    <tdml:document>IAaabbee</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:postfix_init_2 xmlns:ex="http://example.com">
+          <e1>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+          <e2>ee</e2>
+        </ex:postfix_init_2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_term_alignment_1" root="postfix_term" model="s2" roundTrip="onePass">
+    <tdml:document>aaTBbb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:postfix_term xmlns:ex="http://example.com">
+          <e1>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+        </ex:postfix_term>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_term_alignment_2" root="postfix_term_2" model="s2" roundTrip="onePass">
+    <tdml:document>aabbT2ee</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:postfix_term_2 xmlns:ex="http://example.com">
+          <e1>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+          <e2>ee</e2>
+        </ex:postfix_term_2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_prefix_alignment_0" root="prefixed_element" model="s2" roundTrip="onePass">
+    <!-- can't be 1 bit aligned, and no way to set to 8 bits without it complaining -->
+    <!--    <tdml:document>cc16aaBbb</tdml:document>-->
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>1 bits</tdml:error>
+      <tdml:error>must be a multiple</tdml:error>
+      <tdml:error>8 bits</tdml:error>
+      <tdml:error>US-ASCII</tdml:error>
+    </tdml:errors>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:prefixed_element xmlns:ex="http://example.com">
+          <e1>
+            <c>cc</c>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+        </ex:prefixed_element>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_prefix_alignment_1" root="prefixed_element" model="s3" roundTrip="onePass">
+    <tdml:document>cc2aaBbb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:prefixed_element xmlns:ex="http://example.com">
+          <e1>
+            <c>cc</c>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+        </ex:prefixed_element>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_prefix_alignment_2" root="prefixed_element_bits" model="s3" roundTrip="onePass">
+    <tdml:document>cc16aabb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:prefixed_element_bits xmlns:ex="http://example.com">
+          <e1>
+            <c>cc</c>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+        </ex:prefixed_element_bits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_prefix_alignment_3" root="prefixed_element_nested" model="s3" roundTrip="onePass">
+    <tdml:document>cc16aabb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:prefixed_element_nested xmlns:ex="http://example.com">
+          <e1>
+            <c>cc</c>
+            <a>aa</a>
+            <b>bb</b>
+          </e1>
+        </ex:prefixed_element_nested>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:errors>
+      <tdml:error>Nested</tdml:error>
+      <tdml:error>prefixed</tdml:error>
+      <tdml:error>not supported</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_prefix_alignment_4" root="elem4" model="s5" roundTrip="onePass">
+    <tdml:document>
+      <tdml:documentPart type="text">FOO:</tdml:documentPart>
+      <tdml:documentPart type="byte">040000FFFF</tdml:documentPart>
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem4 xmlns:ex="http://example.com">65535</ex:elem4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:errors>
+      <tdml:error>Nested</tdml:error>
+      <tdml:error>prefixed</tdml:error>
+      <tdml:error>not supported</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="test_valueMTA_alignment_1" root="elem" model="s4" roundTrip="onePass">
+    <tdml:document>
+      <tdml:documentPart type="bits">1110</tdml:documentPart>
+      <tdml:documentPart type="bits">1111</tdml:documentPart> <!-- pre b alignment -->
+      <tdml:documentPart type="byte">FFFFFFFF</tdml:documentPart> <!-- post b trailing skip -->
+      <tdml:documentPart type="bits">0111</tdml:documentPart><!-- c -->
+      <tdml:documentPart type="bits">0000</tdml:documentPart><!-- c -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem xmlns:ex="http://example.com">
+          <e1>
+            <a>1110</a>
+            <b></b>
+            <c>0111</c>
+          </e1>
+        </ex:elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="prior_siblings_1" root="elem1" model="s5" roundTrip="onePass">
+    <tdml:document>eEaBb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem1 xmlns:ex="http://example.com">
+          <e0>e</e0>
+          <e1>
+            <a>a</a>
+            <b>b</b>
+          </e1>
+        </ex:elem1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="prior_siblings_2" root="elem2" model="s5" roundTrip="onePass">
+    <tdml:document>
+      <tdml:documentPart type="bits">0011</tdml:documentPart>
+      <tdml:documentPart type="bits">1111</tdml:documentPart> <!-- pre c alignment -->
+      <tdml:documentPart type="bits">0000</tdml:documentPart> <!-- c -->
+      <tdml:documentPart type="bits">0100</tdml:documentPart> <!-- c -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem2 xmlns:ex="http://example.com">
+          <e1>
+            <a>3</a>
+            <c>4</c>
+          </e1>
+        </ex:elem2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="prior_siblings_3" root="elem2" model="s5" roundTrip="onePass">
+    <tdml:document>
+      <tdml:documentPart type="bits">0011</tdml:documentPart>
+      <tdml:documentPart type="bits">0000</tdml:documentPart> <!-- pre b alignment -->
+      <tdml:documentPart type="text">-</tdml:documentPart> <!-- b initiator-->
+      <tdml:documentPart type="bits">00000101</tdml:documentPart> <!-- b -->
+      <tdml:documentPart type="bits">00000100</tdml:documentPart> <!-- c -->
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem2 xmlns:ex="http://example.com">
+          <e1>
+            <a>3</a>
+            <b>5</b>
+            <c>4</c>
+          </e1>
+        </ex:elem2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="prior_siblings_4" root="elem3" model="s5" roundTrip="onePass">
+    <tdml:document>eE-ob</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem3 xmlns:ex="http://example.com">
+          <e0>e</e0>
+          <e1>
+            <opt>o</opt>
+            <b>b</b>
+          </e1>
+        </ex:elem3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="prior_siblings_5" root="elem3" model="s5" roundTrip="onePass">
+    <tdml:document>eEb</tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:elem3 xmlns:ex="http://example.com">
+          <e0>e</e0>
+          <e1>
+            <b>b</b>
+          </e1>
+        </ex:elem3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

@@ -1,0 +1,1004 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="lengthKindPattern"
+  description="Section 12 - lengthKind=pattern" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset"
+  xmlns:ex="http://example.com"
+  defaultRoundTrip="true">
+  
+  <tdml:defineSchema name="lengthPatternsUnmatched">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="seq1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="pattern" dfdl:lengthPattern="\d\d\d"/>
+          <xs:element name="leftover" type="xs:string"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="pattern" dfdl:lengthPattern="literal"/>
+          <xs:element name="leftover" type="xs:string"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq3">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="pattern" dfdl:lengthPattern="[0-9]"/>
+          <xs:element name="leftover" type="xs:string"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+
+  <tdml:defineSchema name="lengthKindPattern-Embedded.dfdl.xsd">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="implicit"
+      lengthUnits="bytes" encoding="US-ASCII" separator="" initiator=""
+      terminator="" textNumberRep="standard" representation="text" />
+
+    <!-- Patterned length and fixed length -->
+
+    <xs:element name="list">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="firstToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[a-zA-Z]+" />
+          <xs:element name="secondToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[0-9]+" />
+          <xs:element name="thirdToken" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="5" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="list_01">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="first" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="(b|c|h)at" />
+          <xs:element name="second" type="xs:string"
+            dfdl:lengthKind="pattern"
+            dfdl:lengthPattern="[^ab]z" />
+          <xs:element name="third" type="xs:string"
+            dfdl:lengthKind="pattern"
+            dfdl:lengthPattern="3&#x20;4" />
+          <xs:element name="fourth" type="xs:string"
+            dfdl:encoding="ASCII"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[ ]+" />
+          <xs:element name="fifth" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="5" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="list_02" dfdl:encoding='ascii'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="first" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="(b|c|h)at," />
+          <xs:element name="fifth" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="5" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="simple" type="ex:newType" />
+
+    <xs:simpleType name="newType">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="pattern"
+            lengthPattern="(b|c|h)at" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="list_03">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="firstToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[a-zA-Z]+"
+            dfdl:nilValue="nil" dfdl:nilKind="literalValue" nillable="true" />
+          <xs:element name="secondToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[0-9]+" />
+          <xs:element name="thirdToken" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="5" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="list_03_01">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="firstToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[a-zA-Z]*"
+            dfdl:nilValue="%ES;" dfdl:nilKind="literalValue" nillable="true" />
+          <xs:element name="secondToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[0-9]+" />
+          <xs:element name="thirdToken" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="5" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="list_04" dfdl:lengthKind="pattern"
+      dfdl:lengthPattern="(?s)cat(\r\n)?,dog(\r\n)?,house.">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%NL;, ," dfdl:outputNewLine="%CR;%LF;"
+          dfdl:separatorPosition="infix" dfdl:terminator=".">
+          <xs:element name="firstToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="cat" />
+          <xs:element name="secondToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="dog" />
+          <xs:element name="thirdToken" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="house" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="data_01" type="xs:string"
+      dfdl:lengthKind="pattern" dfdl:lengthPattern="(a|b|c)" />
+
+    <xs:element name="data_02" type="xs:string"
+      dfdl:lengthKind="pattern" dfdl:lengthPattern="(1|2|3)"/>
+
+  <xs:element name="list_05" dfdl:lengthKind="pattern"
+    dfdl:lengthPattern="(?s)cat(\r\n)?,dog(\r\n)?,house(\r\n)?,(a|b|c|1|2|3).">
+    <xs:complexType>
+      <xs:sequence dfdl:separator="%NL;, ," dfdl:outputNewLine="%CR;%LF;"
+        dfdl:separatorPosition="infix" dfdl:terminator=".">
+        <xs:element name="firstToken" type="xs:string"
+          dfdl:lengthKind="pattern" dfdl:lengthPattern="cat" />
+        <xs:element name="secondToken" type="xs:string"
+          dfdl:lengthKind="pattern" dfdl:lengthPattern="dog" />
+        <xs:element name="thirdToken" type="xs:string"
+          dfdl:lengthKind="pattern" dfdl:lengthPattern="house" />
+        <xs:choice>
+          <xs:element ref="ex:data_01">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:assert testKind="pattern" testPattern="(a|b|c)"
+                  message="Did not find a or b or c" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element ref="ex:data_02">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:assert testKind="pattern" testPattern="(1|2|3)"
+                  message="Did not find 1 or 2 or 3" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+        </xs:choice>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+
+    <xs:element name="e8" type="xs:string" dfdl:lengthKind="pattern"
+      dfdl:lengthPattern="\p{L}{2,5}">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:assert testKind="pattern" testPattern="\p{L}{2,5}"
+            message="Assertion failed for pattern '\p{L}{2,5}'" />
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:element>
+
+    <xs:element name="e9">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="arr" minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind="implicit">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="hb" type="xs:hexBinary" dfdl:lengthKind="pattern" dfdl:lengthPattern=".*?(?=\xFF[\x01-\xFE])" dfdl:encoding="ISO-8859-1" />
+                <xs:element name="sep" type="xs:hexBinary" dfdl:lengthKind="explicit" dfdl:length="2" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="lengthKindPattern-Embedded-2.dfdl.xsd">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="implicit"
+      lengthUnits="bytes" encoding="UTF-8" separator="" initiator=""
+      terminator="" textNumberRep="standard" representation="text"
+      encodingErrorPolicy="replace" />
+
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="pat" type="xs:string" dfdl:lengthKind="pattern" dfdl:lengthPattern="." />
+          <xs:element name="end" type="xs:string" dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="lengthKindPatternFail"
+    root="e8" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="lengthKind pattern - length of the element is given by scanning for a regular expression - DFDL-12-038R">
+    <tdml:document><![CDATA[abcDEFG]]></tdml:document>
+    <tdml:errors>
+      <tdml:error></tdml:error>
+      <tdml:error></tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="hexBinaryLengthKindPattern01"
+    root="e9" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="lengthKind pattern - length of the element is given by scanning for a regular expression, with element type hexBinary - DFDL-12-038R">
+    <tdml:document>
+      <tdml:documentPart type="byte">00010203FF00010203 FF01 112233FFFF00112233 FFFE</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e9>
+          <arr>
+            <hb>00010203FF00010203</hb>
+            <sep>FF01</sep>
+          </arr>
+          <arr>
+            <hb>112233FFFF00112233</hb>
+            <sep>FFFE</sep>
+          </arr>
+        </e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="AI000_rev" root="list"
+    model="lengthKindPattern-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document><![CDATA[aSingleToken123456789AAAAA]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list>
+          <firstToken>aSingleToken</firstToken>
+          <secondToken>123456789</secondToken>
+          <thirdToken>AAAAA</thirdToken>
+        </list>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="lengthKindPattern_01"
+    root="list_01" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - DFDL-12-088R">
+
+    <tdml:document><![CDATA[batcz3 4  AAAAA]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_01>
+          <first>bat</first>
+          <second>cz</second>
+          <third>3 4</third>
+          <fourth><![CDATA[  ]]></fourth>
+          <fifth>AAAAA</fifth>
+        </list_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="lengthKindPattern_02"
+    root="list_01" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - no match error- DFDL-12-088R">
+
+    <tdml:document><![CDATA[datcz3 4  AAAAA]]></tdml:document>
+    <tdml:errors>
+      <tdml:error />
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="lengthKindPattern_03"
+    root="list_02" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - complex element encoding - DFDL-12-088R">
+
+    <tdml:document><![CDATA[bat,AAAAA]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_02>
+          <first>bat,</first>
+          <fifth>AAAAA</fifth>
+        </list_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="lengthKindPattern_04"
+    root="simple" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - simpleType - DFDL-12-087R">
+
+    <tdml:document><![CDATA[hat]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <simple>hat</simple>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="DFDL-207-Embedded.dfdl.xsd">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text"
+      lengthUnits="bytes" encoding="US-ASCII" byteOrder='bigEndian'
+      ignoreCase='no' initiatedContent='no' lengthKind='implicit'
+      occursCountKind='parsed' separatorSuppressionPolicy='anyEmpty'
+      separatorPosition='infix' textNumberRep='standard' initiator=""
+      terminator="" separator=""/>
+
+    <xs:element name="doctors">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="name" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern=".*?[^\\](?=,|$)"
+            dfdl:occursCountKind="fixed" minOccurs="11" maxOccurs="11" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="abc">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="nul" dfdl:lengthKind="explicit"
+            type="xs:int" dfdl:length="{1}" />
+          <xs:element name="ab" dfdl:lengthKind="pattern"
+            dfdl:lengthPattern=".*?//">
+            <xs:complexType>
+              <xs:sequence dfdl:separator=",">
+                <xs:element name="name" type="xs:string"
+                  dfdl:lengthKind="delimited" />
+                <xs:element name="item" type="xs:string"
+                  dfdl:lengthKind="delimited" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="c" dfdl:lengthKind="explicit"
+            type="xs:int" dfdl:length="{1}" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="abc2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="nul" dfdl:lengthKind="explicit"
+            type="xs:int" dfdl:length="{1}" />
+          <xs:element name="ab" dfdl:lengthKind="explicit" dfdl:length="8">
+            <xs:complexType>
+              <xs:sequence dfdl:separator=",">
+                <xs:element name="name" type="xs:string"
+                  dfdl:lengthKind="delimited" />
+                <xs:element name="item" type="xs:string"
+                  dfdl:lengthKind="delimited" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="c" dfdl:lengthKind="explicit"
+            type="xs:int" dfdl:length="{1}" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="def" dfdl:lengthKind="pattern"
+      dfdl:lengthPattern="!!.*!!" dfdl:encoding="utf-8">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="first" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}" />
+          <xs:element name="inner" type="xs:int"
+            dfdl:representation="binary" dfdl:binaryNumberRep="binary"
+            dfdl:lengthKind="implicit" />
+          <xs:element name="last" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="def_01" dfdl:lengthKind="pattern"
+      dfdl:lengthPattern="!!.*!!" dfdl:encoding="utf-8">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="first" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}" />
+          <xs:element name="inner" type="xs:int"
+            dfdl:lengthKind="explicit" dfdl:length="{5}" dfdl:textNumberPattern="#####"/>
+          <xs:element name="last" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="def_02" type="xs:string"
+      dfdl:lengthKind="pattern" dfdl:lengthPattern="!!.*!!"
+      dfdl:encoding="utf-8" />
+
+    <xs:element name="def_05" dfdl:lengthKind="pattern"
+      dfdl:lengthPattern="!!.*!!" dfdl:lengthUnits="characters"
+      dfdl:encoding="utf-8" dfdl:encodingErrorPolicy="error">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="first" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}"
+            dfdl:lengthUnits="characters" dfdl:encoding="utf-8"/>
+          <xs:element name="inner" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}"
+            dfdl:lengthUnits="characters" dfdl:encoding="utf-8"/>
+          <xs:element name="last" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}"
+            dfdl:lengthUnits="characters" dfdl:encoding="utf-8"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="LengthKindPattern"
+    root="doctors" model="DFDL-207-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-088R">
+
+    <tdml:document><![CDATA[Hartnell\, William,Troughton\, Patrick,Pertwee\, Jon,Baker\, Tom,Davison\, Peter,Baker\, Colin,McCoy\, Sylvester,McGann\, Paul,Christopher Eccleston,David Tennant,Matt Smith]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <doctors>
+          <name>Hartnell\, William</name>
+          <name>Troughton\, Patrick</name>
+          <name>Pertwee\, Jon</name>
+          <name>Baker\, Tom</name>
+          <name>Davison\, Peter</name>
+          <name>Baker\, Colin</name>
+          <name>McCoy\, Sylvester</name>
+          <name>McGann\, Paul</name>
+          <name>Christopher Eccleston</name>
+          <name>David Tennant</name>
+          <name>Matt Smith</name>
+        </doctors>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthKindPatternCompound"
+    root="abc" model="DFDL-207-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-088R">
+    <tdml:document><![CDATA[0aaa,bb//5]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <abc>
+          <nul>0</nul>
+          <ab>
+            <name>aaa</name>
+            <item>bb//</item>
+          </ab>
+          <c>5</c>
+        </abc>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+       Test Name: LengthKindPatternCompound2
+          Schema: DFDL-207-Embedded.dfdl.xsd
+         Purpose: This test demonstrates an error I was running into when trying
+         to troubleshoot test LengthKindPatternCompound
+  -->
+
+  <tdml:parserTestCase name="LengthKindPatternCompound2"
+    root="abc2" model="DFDL-207-Embedded.dfdl.xsd" description="Section 12">
+    <tdml:document><![CDATA[0aaa,bb//5]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <abc2>
+          <nul>0</nul>
+          <ab>
+            <name>aaa</name>
+            <item>bb//</item>
+          </ab>
+          <c>5</c>
+        </abc2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="ComplexWithBinaryChild"
+    root="def" model="DFDL-207-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern -elements of complex type must have child content with representation 'text' - DFDL-12-088R">
+    <tdml:document><![CDATA[!!c2c2!!]]></tdml:document>
+    <tdml:errors>
+      <tdml:error/>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthPatternIllegalBits_01"
+    root="def_01" model="DFDL-207-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-088R">
+    <tdml:document>
+      <tdml:documentPart type="byte">2121343938353a2121</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error />
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+       Test Name: LengthPatternIllegalBits_02_EncodingErrorPolicy_Error
+          Schema: DFDL-207-Embedded.dfdl.xsd
+            Root: def_05
+         Purpose: This test demonstrates that illegal bits with encodingErrorPolicy = 'error'
+                  results in an error.
+  -->
+  <tdml:parserTestCase name="LengthPatternIllegalBits_02_EncodingErrorPolicy_Error"
+    root="def_05" model="DFDL-207-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern -c2c2 is an invalid code point in utf-8 - DFDL-12-088R">
+    <tdml:document>
+      <tdml:documentPart type="byte">2121c2c22121</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Placeholder</tdml:error>
+      <tdml:error>Malformed</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<tdml:defineSchema name="DFDL-207-non-portable">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text"
+      lengthUnits="bytes" encoding="US-ASCII" byteOrder='bigEndian'
+      ignoreCase='no' initiatedContent='no' lengthKind='implicit'
+      occursCountKind='parsed' separatorSuppressionPolicy='anyEmpty'
+      separatorPosition='infix' textNumberRep='standard' initiator=""
+      terminator="" separator=""
+      encodingErrorPolicy="replace"/>
+      
+    <xs:element name="def_04" dfdl:lengthKind="pattern"
+      dfdl:lengthPattern="!!.*!!"
+      dfdl:encoding="utf-8">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="first" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}"
+            dfdl:lengthUnits="characters" dfdl:encoding="utf-8"/>
+          <xs:element name="inner" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}"
+            dfdl:lengthUnits="characters" dfdl:encoding="utf-8" dfdl:encodingErrorPolicy="replace"/>
+          <xs:element name="last" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{2}"
+            dfdl:lengthUnits="characters" dfdl:encoding="utf-8"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+  </tdml:defineSchema>
+  
+  <!--
+       Test Name: LengthPatternIllegalBits_02_EncodingErrorPolicy_Replace
+          Schema: DFDL-207-Embedded.dfdl.xsd
+            Root: def_04
+         Purpose: This test demonstrates that the replacement character is used for illegal bits
+                  with encodingErrorPolicy = 'replace'.
+  -->
+  <tdml:parserTestCase name="LengthPatternIllegalBits_02_EncodingErrorPolicy_Replace"
+    root="def_04" model="DFDL-207-non-portable"
+    description="Section 12 lengthKind-pattern -c2c2 is an invalid code point in utf-8 - DFDL-12-088R"
+    roundTrip="twoPass"
+    implementations="daffodil">
+    <tdml:document>
+      <tdml:documentPart type="byte">2121c2c22121</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <def_04>
+          <first>!!</first>
+          <inner>&#xFFFD;&#xFFFD;</inner><!-- unicode replacement characters -->
+          <last>!!</last>
+        </def_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthPatternLegalBits_01"
+    root="def_01" model="DFDL-207-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-088R">
+    <tdml:document>
+      <tdml:documentPart type="byte">212134393835382121</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <def_01>
+          <first>!!</first>
+          <inner>49858</inner>
+          <last>!!</last>
+        </def_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthPatternLegalBits_02"
+    root="def_02" model="DFDL-207-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-088R">
+    <tdml:document>
+      <tdml:documentPart type="byte">212134393835382121</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <def_02>!!49858!!</def_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthPatternNil_FindsNil"
+    root="list_03" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document><![CDATA[nil123456789AAAAA]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_03>
+          <firstToken xsi:nil="true"></firstToken>
+          <secondToken>123456789</secondToken>
+          <thirdToken>AAAAA</thirdToken>
+        </list_03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthPatternNil_NoNil"
+    root="list_03" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document><![CDATA[aSingleToken123456789AAAAA]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_03>
+          <firstToken>aSingleToken</firstToken>
+          <secondToken>123456789</secondToken>
+          <thirdToken>AAAAA</thirdToken>
+        </list_03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthPatternNil_EmptyStringAllowed"
+    root="list_03_01" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document><![CDATA[123456789AAAAA]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_03_01>
+          <firstToken xsi:nil="true"></firstToken>
+          <secondToken>123456789</secondToken>
+          <thirdToken>AAAAA</thirdToken>
+        </list_03_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nested_patterns" root="list_04"
+    model="lengthKindPattern-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-087R"
+    roundTrip="twoPass">
+
+    <tdml:document><![CDATA[cat,dog,house.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_04>
+          <firstToken>cat</firstToken>
+          <secondToken>dog</secondToken>
+          <thirdToken>house</thirdToken>
+        </list_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nested_patterns_01"
+    root="list_04" model="lengthKindPattern-Embedded.dfdl.xsd"
+    description="Section 12 lengthKind-pattern - DFDL-12-087R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">6361742C646F670D0A2C686F7573652E</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_04>
+          <firstToken>cat</firstToken>
+          <secondToken>dog</secondToken>
+          <thirdToken>house</thirdToken>
+        </list_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nested_patterns_02" root="list_05"
+    model="lengthKindPattern-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-087R"
+    roundTrip="twoPass">
+
+    <tdml:document><![CDATA[cat,dog,house,1.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_05>
+          <firstToken>cat</firstToken>
+          <secondToken>dog</secondToken>
+          <thirdToken>house</thirdToken>
+          <data_02>1</data_02>
+        </list_05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nested_patterns_03" root="list_05"
+    model="lengthKindPattern-Embedded.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-087R"
+    roundTrip="twoPass">
+
+    <tdml:document><![CDATA[cat,dog,house,b.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <list_05>
+          <firstToken>cat</firstToken>
+          <secondToken>dog</secondToken>
+          <thirdToken>house</thirdToken>
+          <data_01>b</data_01>
+        </list_05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="invalidPattern">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text"
+      lengthUnits="bytes" encoding="US-ASCII" byteOrder='bigEndian'
+      ignoreCase='no' initiatedContent='no' lengthKind='implicit'
+      occursCountKind='parsed' separatorSuppressionPolicy='anyEmpty'
+      separatorPosition='infix' textNumberRep='standard' initiator=""
+      terminator="" separator="" />
+
+      <xs:element name="elem1" type="xs:string"
+        dfdl:lengthKind="pattern" dfdl:lengthPattern="[a-z]{1, 2}"/>
+      
+      <xs:element name="elem2" type="xs:string"
+        dfdl:lengthKind="pattern" dfdl:lengthPattern="[a-z]{B}"/>
+      
+      <xs:element name="elem3" type="xs:string"
+        dfdl:lengthKind="pattern" dfdl:lengthPattern="*"/>
+
+  </tdml:defineSchema>
+
+<!--
+      Test Name: invalid_pattern
+         Schema: invalidPattern
+           Root: elem1
+    Description: This test demonstrates that Daffodil will fail gracefully when the regex provided for lengthKind is not valid
+-->
+
+  <tdml:parserTestCase name="invalid_pattern"
+    root="elem1" model="invalidPattern" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document>input!</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Unclosed counted closure near index</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: invalid_pattern2
+         Schema: invalidPattern
+           Root: elem2
+    Description: This test demonstrates that Daffodil will fail gracefully when the regex provided for lengthKind is not valid
+-->
+
+  <tdml:parserTestCase name="invalid_pattern2"
+    root="elem2" model="invalidPattern" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document>input!</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Illegal repetition near index</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: invalid_pattern3
+         Schema: invalidPattern
+           Root: elem3
+    Description: This test demonstrates that Daffodil will fail gracefully when the regex provided for lengthKind is not valid
+-->
+
+  <tdml:parserTestCase name="invalid_pattern3"
+    root="elem3" model="invalidPattern" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document>input!</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Dangling meta character '*' near index</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unmatchedPattern01
+         Schema: lengthPatternsUnmatched
+           Root: seq1
+    Description: This test demonstrates that if a lengthPattern does not match at all, the length is 0
+-->
+
+  <tdml:parserTestCase name="unmatchedPattern01"
+    root="seq1" model="lengthPatternsUnmatched" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document>nope</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq1>
+          <e1></e1>
+          <leftover>nope</leftover>
+        </seq1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unmatchedPattern02
+         Schema: lengthPatternsUnmatched
+           Root: seq2
+    Description: This test demonstrates that if a lengthPattern does not match at all, the length is 0
+-->
+
+  <tdml:parserTestCase name="unmatchedPattern02"
+    root="seq2" model="lengthPatternsUnmatched" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document>figurative</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq2>
+          <e1></e1>
+          <leftover>figurative</leftover>
+        </seq2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unmatchedPattern03
+         Schema: lengthPatternsUnmatched
+           Root: seq3
+    Description: This test demonstrates that if a lengthPattern does not match at all, the length is 0
+-->
+
+  <tdml:parserTestCase name="unmatchedPattern03"
+    root="seq3" model="lengthPatternsUnmatched" description="Section 12 lengthKind-pattern - DFDL-12-087R">
+
+    <tdml:document>three</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq3>
+          <e1></e1>
+          <leftover>three</leftover>
+        </seq3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: lengthPatternEncodingErrorReplace
+         Schema: lengthKindPattern-Embedded-2.dfdl.xsd
+           Root: e1
+    Description: This test demonstrates that if there is an encoding error
+                 in a lengthKindPattern and multibytes are malformed, then
+                 they are all skipped appropriately. The first two bytes form
+                 a single UTF-8 space character but it is overlong so is malformed
+-->
+
+  <tdml:parserTestCase name="lengthPatternEncodingErrorReplace"
+    root="e1" model="lengthKindPattern-Embedded-2.dfdl.xsd" description="Section 12 lengthKind-pattern - DFDL-12-087R"
+    roundTrip="twoPass"
+    implementations="daffodil">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">11000000 10100000</tdml:documentPart>
+      <tdml:documentPart type="text">b</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <pat>�</pat>
+          <end>b</end>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="lengthPatternBinary">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary" />
+
+    <xs:element name="bin1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="bin" type="xs:hexBinary" maxOccurs="unbounded" dfdl:occursCountKind="implicit"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[\x00-\xFF]{0,80}" dfdl:encoding="ISO-8859-1">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:assert>{ dfdl:valueLength(., 'bytes') gt 0 }</dfdl:assert>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="lengthPatternBinaryPatternLimit"
+    root="bin1" model="lengthPatternBinary" description="Section 12 lengthKind-pattern - DFDL-12-087R" >
+
+    <tdml:document>
+      <tdml:documentPart type="byte">6162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970</tdml:documentPart>
+      <tdml:documentPart type="byte">6162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970</tdml:documentPart>
+      <tdml:documentPart type="byte">6162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970</tdml:documentPart>
+      <tdml:documentPart type="byte">6162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bin1>
+          <bin>6162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970</bin>
+          <bin>6162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970616263646566676869706162636465666768697061626364656667686970</bin>
+          <bin>61626364656667686970616263646566676869706162636465666768697061626364656667686970</bin>
+        </bin1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+
+</tdml:testSuite>

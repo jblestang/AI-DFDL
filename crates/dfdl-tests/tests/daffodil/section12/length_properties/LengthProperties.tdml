@@ -1,0 +1,1550 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="LengthPropertiesTests"
+  description="Section 12 - Length Properties" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset"
+  xmlns:ex="http://example.com"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="LengthProperties-Embedded.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" initiator=""
+      terminator="" separator="" encoding="utf-8" ignoreCase="no"
+      representation="text" lengthUnits="characters" textNumberRep="standard" textPadKind="padChar" textTrimKind="padChar" />
+
+    <xs:element name="LP_01" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="num" type="xs:int"
+            dfdl:lengthKind="explicit" dfdl:length="3"
+            dfdl:occursCountKind="parsed" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="LP_02" type="ex:lp_02" />
+    <xs:simpleType name="lp_02" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" 
+      dfdl:length="2" dfdl:byteOrder="bigEndian">
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_03" type="ex:lp_03" />
+    <xs:simpleType name="lp_03">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit"
+            lengthUnits="bytes" length="3" byteOrder="bigEndian" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+    
+    <xs:element name="LP_03a" type="ex:lp_03a" />
+    <xs:simpleType name="lp_03a">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit" encoding="ascii"
+            lengthUnits="bytes" length="3" byteOrder="bigEndian" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_04" type="ex:lp_04" />
+    <xs:simpleType name="lp_04">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit" length="3" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_05" type="ex:lp_05" />
+    <xs:simpleType name="lp_05">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit" length="3"
+            encoding="ASCII" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_06" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="data" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="6" dfdl:lengthUnits="bytes"
+            dfdl:encoding="utf-32BE" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="LP_07">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="data" dfdl:alignmentUnits='bits'
+            dfdl:alignment='1' dfdl:encoding="utf-8" type="xs:int"
+            dfdl:lengthKind="explicit" dfdl:length="32"
+            dfdl:representation="binary" dfdl:lengthUnits="bits"
+            dfdl:byteOrder="bigEndian" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="LP_08">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="ignored" dfdl:alignmentUnits='bits'
+            dfdl:alignment='1' type="xs:unsignedByte" dfdl:lengthKind="explicit"
+            dfdl:length="1" dfdl:representation="binary"
+            dfdl:lengthUnits="bits" dfdl:byteOrder="bigEndian" />
+          <xs:element name="data" dfdl:alignmentUnits='bits'
+            dfdl:alignment='1' type="xs:unsignedShort" dfdl:lengthKind="explicit"
+            dfdl:length="13" dfdl:representation="binary"
+            dfdl:lengthUnits="bits" dfdl:byteOrder="bigEndian" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="LP_09">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="bitbool" dfdl:alignmentUnits='bits'
+            dfdl:alignment='1' type="xs:boolean" dfdl:binaryBooleanTrueRep="1" dfdl:binaryBooleanFalseRep="0" dfdl:lengthKind="explicit"
+            dfdl:length="1" dfdl:representation="binary" dfdl:lengthUnits="bits" dfdl:byteOrder="bigEndian" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="LP_10">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="data" type="ex:lp_10" />
+          <xs:element name="extra" type="xs:string" dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="LP_11">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="data" type="ex:lp_11" />
+          <xs:element name="extra" type="xs:string" dfdl:encoding="utf-16be" dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:simpleType name="lp_10" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:lengthUnits="bytes" 
+      dfdl:byteOrder="bigEndian" dfdl:encoding="ascii">
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+    
+    <xs:simpleType name="lp_11" dfdl:lengthKind="explicit" dfdl:length="6" dfdl:encoding="utf-16be" dfdl:lengthUnits="bytes" 
+      dfdl:byteOrder="bigEndian">
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+    
+    <xs:element name="LP_12">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="data" dfdl:alignmentUnits='bits'
+            dfdl:alignment='1' dfdl:encoding="utf-8" type="xs:float"
+            dfdl:lengthKind="implicit" dfdl:representation="binary" dfdl:lengthUnits="bits"
+            dfdl:byteOrder="bigEndian" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <!--
+    Test name: LengthProp_leftover1
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that "When parsing, as many characters as possible are extracted from the bytes 
+             of the simple content region. Any left over bytes are skipped" (in this case, the bytes are consumed by an 'extra' element
+             so the test runner does not complain). 
+  -->
+
+  <tdml:parserTestCase name="LengthProp_leftover1"
+    root="LP_10" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-134R">
+
+    <tdml:document>
+      <tdml:documentPart type="text">lemons</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_10>
+          <data>lemon</data>
+          <extra>s</extra>
+        </LP_10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: LengthProp_leftover2
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that "When parsing, as many characters as possible are extracted from the bytes 
+             of the simple content region. Any left over bytes are skipped" (in this case, the bytes are consumed by an 'extra' element
+             so the test runner does not complain). 
+  -->
+
+  <tdml:parserTestCase name="LengthProp_leftover2"
+    root="LP_11" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-134R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00 6C 00 65 00 6D 00 6F 00 6E 00 73</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_11>
+          <data>lem</data>
+          <extra>ons</extra>
+        </LP_11>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: LengthProp_floatBits
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates the use of lengthKind="bits" when representing a float
+  -->
+
+  <tdml:parserTestCase name="LengthProp_floatBits"
+    root="LP_12" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-058R">
+    <tdml:document>
+      <tdml:documentPart type="bits">01000010 00111000 00000000 00000000</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_12>
+          <data>46.0</data>
+        </LP_12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: LengthProp_leftover2
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that "When parsing, as many characters as possible are extracted from the bytes 
+             of the simple content region. Any left over bytes are skipped" (in this case, the bytes are consumed by an 'extra' element
+             so the test runner does not complain). 
+  -->
+  
+  <!--
+    Test name: LengthProp_leftover3
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that "When parsing, as many characters as possible are extracted from the bytes 
+             of the simple content region. Any left over bytes are skipped" (in this case, the bytes are consumed by an 'extra' element
+             so the test runner does not complain). 
+  -->
+
+  <tdml:parserTestCase name="LengthProp_leftover3"
+    root="LP_10" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-134R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">44 76 44 76 44 76</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_10>
+          <data>DvDvD</data>
+          <extra>v</extra>
+        </LP_10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: LengthProp_leftover4
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that "When parsing, as many characters as possible are extracted from the bytes 
+             of the simple content region. Any left over bytes are skipped" (in this case, the bytes are consumed by an 'extra' element
+             so the test runner does not complain). 
+  -->
+
+  <tdml:parserTestCase name="LengthProp_leftover4"
+    root="LP_11" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-134R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">44 76 44 76 44 76 44 76</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_11>
+          <data>䑶䑶䑶</data>
+          <extra>䑶</extra>
+        </LP_11>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: LengthProp_bits_bool
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: this test demonstrates the representation of boolean data in bits, with lengthUnits also set to bits
+  -->
+
+  <tdml:parserTestCase name="LengthProp_bits_bool"
+    root="LP_09" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-129R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[1]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_09>
+          <bitbool>true</bitbool>
+        </LP_09>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<tdml:parserTestCase name="LengthProp_bits_bool_false"
+    root="LP_09" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-129R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[0]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_09>
+          <bitbool>false</bitbool>
+        </LP_09>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  <!--
+    Test name: LengthProp_bits_01
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: this test demonstrates the representation of data in bits, with lengthUnits also set to bits
+  -->
+
+  <tdml:parserTestCase name="LengthProp_bits_01"
+    root="LP_07" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-129R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[00000000000000000000010011010010]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_07>
+          <data>1234</data>
+        </LP_07>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_bits_02
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that a bit string of an arbitrary length will be properly interpreted
+  -->
+
+  <tdml:parserTestCase name="LengthProp_bits_02"
+    root="LP_08" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-152R">
+
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[0 1 0110 1010 0100]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_08>
+          <ignored>0</ignored>
+          <data>5796</data>
+        </LP_08>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <!--
+    Test name: LengthProp_sequenceByLength
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This document contains a sequence of 3 elements of character 
+    length 3, and should be parsed accordingly
+  -->
+
+  <tdml:parserTestCase name="LengthProp_sequenceByLength"
+    root="LP_01" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-039R">
+
+    <tdml:document>123456789</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_01>
+          <num>123</num>
+          <num>456</num>
+          <num>789</num>
+        </LP_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthProp_02" root="LP_02"
+    model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-161R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">c2a9</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_02>&#169;</LP_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_charVsBytes
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This document is the correct size (3 bytes), consists of 3 characters, 
+    and should be parsed correctly.
+  -->
+  <tdml:parserTestCase name="LengthProp_charVsBytes"
+    root="LP_03" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-039R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">2a2b2c</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_03>*+,</LP_03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_charVsBytes2
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This document is the correct size (3 bytes), consists of 2 characters, 
+    and should be parsed correctly.
+  -->
+  <tdml:parserTestCase name="LengthProp_charVsBytes2"
+    root="LP_03" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-039R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">c2a22c</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_03>¢,</LP_03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_tooShortFailure
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This document is shorter than the length specified in the schema 
+    and should throw an error.
+  -->
+  <tdml:parserTestCase name="LengthProp_tooShortFailure"
+    root="LP_03a" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-039R">
+
+    <tdml:document>
+      <tdml:documentPart type="text">ab</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Insufficient Bits</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_tooLongFailure
+    Schema: LengthProperties-Embedded.dfdl.xsd
+    Purpose: This document is longer than the length specified in the schema 
+    and should throw an error.
+  -->
+  <tdml:parserTestCase name="LengthProp_tooLongFailure"
+    root="LP_03a" model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-039R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">74657374</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Left over data. Consumed 24 bit(s) with 8 bit(s) remaining.</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthProp_04" root="LP_04"
+    model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-161R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">c2a2c2a3c2ae</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_04>&#162;&#163;&#174;</LP_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthProp_05" root="LP_05"
+    model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-161R">
+
+    <tdml:document>3Ax</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_05>3Ax</LP_05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="LengthProp_06" root="LP_06"
+    model="LengthProperties-Embedded.dfdl.xsd" description="Section 12 Length Properties - DFDL-12-134R" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="byte">00000032AA55</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_06>
+          <data>2�</data>
+        </LP_06>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Schema name: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This schema is used specifically to test DFDL-12-040R: The 'length' 
+    property.
+  -->
+
+  <tdml:defineSchema name="LengthProperties-lengthNumeric.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" initiator=""
+      terminator="" separator="" encoding="utf-8" ignoreCase="no"
+      representation="text" lengthUnits="characters" textNumberRep="standard" textTrimKind="padChar" textPadKind="padChar"/>
+
+    <xs:element name="LP_01">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="num" type="xs:int"
+            dfdl:lengthKind="explicit" dfdl:length="0"
+            dfdl:occursCountKind="parsed" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="LP_02" type="ex:lp_02" />
+    <xs:simpleType name="lp_02">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit"
+            lengthUnits="bytes" length="10" byteOrder="bigEndian" encoding="ascii"/>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_03" type="ex:lp_03" />
+    <xs:simpleType name="lp_03">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit"
+            lengthUnits="bytes" length="2324" byteOrder="bigEndian" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_04" type="ex:lp_04" />
+    <xs:simpleType name="lp_04">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit" length="557" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_05" type="ex:lp_05" />
+    <xs:simpleType name="lp_05">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit"
+            lengthUnits="bytes" length="2" byteOrder="bigEndian" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+    <xs:element name="LP_06" type="ex:lp_06" />
+    <xs:simpleType name="lp_06">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType encoding="utf-16be" lengthKind="explicit"
+            lengthUnits="bytes" length="2" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: LengthProp_zeroLength
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document has the correct length of zero and should be parsed 
+    correctly.
+  -->
+  <tdml:parserTestCase name="LengthProp_zeroLength"
+    root="LP_01" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-040R">
+
+    <tdml:document></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_01></LP_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_byteLength
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document has the correct length of 10 bytes and should 
+    be parsed correctly
+  -->
+  <tdml:parserTestCase name="LengthProp_byteLength"
+    root="LP_02" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-040R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">62616e616e6174726565</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_02>bananatree</LP_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_byteLength2
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document has the correct length of 2 bytes and should be 
+    parsed correctly
+  -->
+  <tdml:parserTestCase name="LengthProp_byteLength2"
+    root="LP_05" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-040R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">3033</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_05>03</LP_05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  <!--
+    Test name: LengthProp_longByteLength
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document is the correct length of 557 bytes and should 
+    be parsed correctly.
+  -->
+  <tdml:parserTestCase name="LengthProp_longByteLength"
+    root="LP_03" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-039R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">28E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB2028E295AFC2B0E296A1C2B0EFBC89E295AFEFB8B520E294BBE29481E294BB</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_03 xmlns:ex="http://example.com">(╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻ (╯°□°）╯︵ ┻━┻</LP_03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_longTextLength
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document is not enough bytes (expected 557 bytes) and should 
+    cause an error.
+  -->
+  <tdml:parserTestCase name="LengthProp_longTextLength"
+    root="LP_04" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-161R">
+
+    <tdml:document><![CDATA[Four score and seven years ago our fathers brought forth on this continent a new nation, conceived in liberty, and dedicated to the proposition that all men are created equal. Now we are engaged in a great civil war, testing whether that nation, or any nation, so conceived and so dedicated, can long endure. We are met on a great battle-field of that war. We have come to dedicate a portion of that field, as a final resting place for those who here gave their lives that that nation might live. It is altogether fitting and proper that we should do this]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>557</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_byteLength_UTF16
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document has the correct length of 2 bytes (UTF-16) and 
+    should be parsed correctly
+  -->
+  <tdml:parserTestCase name="LengthProp_byteLength_UTF16"
+    root="LP_06" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-040R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0030</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:LP_06>0</ex:LP_06>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: LengthProp_byteLength_UTF16fail
+    Schema: LengthProperties-lengthNumeric.dfdl.xsd
+    Purpose: This document has the incorrect length of 8 bytes (UTF-16) and 
+    should fail
+  -->
+  <tdml:parserTestCase name="LengthProp_byteLength_UTF16fail"
+    root="LP_06" model="LengthProperties-lengthNumeric.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-040R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0030006E006F000A</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Left over data</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Schema name: LengthProperties-lengthExpression.dfdl.xsd
+    Purpose: This schema is used specifically to test DFDL-12-040R: The 'length' 
+    property.
+    All lengths specified here will use expressions to get values from previously-defined 
+    tests.
+  -->
+
+  <tdml:defineSchema name="LengthProperties-lengthExpression.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" initiator=""
+      terminator="" separator="" encoding="utf-8" ignoreCase="no"
+      representation="text" lengthUnits="characters" textNumberRep="standard" />
+
+    <xs:element name="LP_exp01">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="len" type="xs:int"
+            dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:element name="num" type="xs:int"
+            dfdl:lengthKind="explicit" dfdl:length="{ ../ex:len }" dfdl:textNumberPattern="###0.###;-###0.###"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <!--
+    Test name: LengthProp_lengthExpression1
+    Schema: LengthProperties-lengthExpression.dfdl.xsd
+    Purpose: This document uses an expression to determine the length of an element 
+    test.
+  -->
+  <tdml:parserTestCase name="LengthProp_lengthExpression1"
+    root="LP_exp01" model="LengthProperties-lengthExpression.dfdl.xsd"
+    description="Section 12 Length Properties - DFDL-12-040R">
+
+    <tdml:document>512345</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <LP_exp01>
+          <len>5</len>
+          <num>12345</num>
+        </LP_exp01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="DFDL-307-one-octet.dfdl.xsd">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary"
+      binaryNumberRep="binary" lengthUnits="bits" byteOrder='bigEndian'
+      alignment="1" alignmentUnits="bits" lengthKind='explicit' />
+
+    <xs:element name="e1" type="xs:unsignedByte" dfdl:length="1" />
+    <xs:element name="e2" type="xs:unsignedByte" dfdl:length="3" />
+
+    <xs:element name="s1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="e3" type="xs:unsignedByte" dfdl:length="3" />
+          <xs:element name="e4" type="xs:unsignedByte" dfdl:length="1" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <!--
+    Test name: OneBitLeftOver
+    Schema: DFDL-307-one-octet.dfdl.xsd
+    Purpose: This test demonstrates that the number of available bits (for checking for leftover data) does not include any bits added on. In this case however, the 
+             number of significant bits is still more than what is being consumed, so parsing fails.
+  -->
+
+  <tdml:parserTestCase name="OneBitLeftOver" root="e1"
+    model="DFDL-307-one-octet.dfdl.xsd" description="Section 12 - Length Properties (binary)">
+    <tdml:document>
+      <tdml:documentPart type="bits">11</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Left over</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: OneBit1
+    Schema: DFDL-307-one-octet.dfdl.xsd
+    Purpose: This test demonstrates that even though additional bits are added onto the document in order for it to represent a complete
+             byte, the test runner does not see this as excess data that has not been parsed. 
+  -->
+
+  <tdml:parserTestCase name="OneBit1" root="e1"
+    model="DFDL-307-one-octet.dfdl.xsd" description="Section 12 - Length Properties (binary)">
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>1</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="bitSchema">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthUnits="bits"
+      lengthKind="implicit" alignment="1" alignmentUnits="bits"
+      representation="binary" byteOrder="bigEndian" />
+
+    <xs:element name="bit1" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="1" dfdl:byteOrder="littleEndian" />
+    <xs:element name="bit2" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="2" dfdl:byteOrder="littleEndian" />
+    <xs:element name="bit3" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="3" dfdl:byteOrder="littleEndian" />
+    <xs:element name="bit4" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="16" dfdl:byteOrder="littleEndian" />
+    <xs:element name="bit5" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="16" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit6" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="24" dfdl:alignment="1" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit7" type="xs:unsignedInt"
+      dfdl:lengthKind="explicit" dfdl:length="24" dfdl:alignment="1" dfdl:byteOrder="littleEndian" />
+    <xs:element name="bit8" type="xs:unsignedShort"
+      dfdl:lengthKind="explicit" dfdl:length="9" dfdl:alignment="1" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit9" type="xs:unsignedShort"
+      dfdl:lengthKind="explicit" dfdl:length="9" dfdl:alignment="1" dfdl:byteOrder="littleEndian" />
+
+    <xs:element name="s1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="bit10" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="9" dfdl:byteOrder="bigEndian" />
+          <xs:element name="bit11" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:byteOrder="littleEndian"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="bit12" type="xs:unsignedLong"
+      dfdl:lengthKind="explicit" dfdl:length="32" dfdl:byteOrder="bigEndian" />
+    
+    <xs:element name="bit13" type="xs:short"
+      dfdl:lengthKind="explicit" dfdl:length="16" dfdl:byteOrder="bigEndian" />
+    
+    <xs:element name="bit14" type="xs:unsignedLong"
+      dfdl:lengthKind="explicit" dfdl:length="24" dfdl:alignment="1" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit15" type="xs:unsignedLong"
+      dfdl:lengthKind="explicit" dfdl:length="24" dfdl:alignment="1" dfdl:byteOrder="littleEndian" />
+    <xs:element name="bit16" type="xs:unsignedLong"
+      dfdl:lengthKind="explicit" dfdl:length="64" dfdl:alignment="1" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit17" type="xs:unsignedShort"
+      dfdl:lengthKind="explicit" dfdl:length="64" dfdl:alignment="1" dfdl:byteOrder="littleEndian" />
+    
+    <xs:element name="s2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="bit18" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:byteOrder="bigEndian" />
+          <xs:element name="bit19" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:byteOrder="bigEndian"/>
+          <xs:element name="bit20" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:byteOrder="bigEndian"/>
+          <xs:element name="bit21" type="xs:unsignedLong" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:byteOrder="bigEndian"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="s3">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="bit22" type="xs:unsignedByte" dfdl:lengthKind="implicit" dfdl:byteOrder="bigEndian" />
+          <xs:element name="bit23" type="xs:unsignedShort" dfdl:lengthKind="implicit" dfdl:byteOrder="littleEndian"/>
+          <xs:element name="bit24" type="xs:unsignedInt" dfdl:lengthKind="implicit" dfdl:byteOrder="bigEndian"/>
+          <xs:element name="bit25" type="xs:unsignedLong" dfdl:lengthKind="implicit" dfdl:byteOrder="littleEndian"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="bit26" type="xs:short" dfdl:lengthKind="explicit" dfdl:length="5" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit27" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="9" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit28" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="13" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit29" type="xs:long" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit30" type="xs:byte" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:byteOrder="bigEndian" />
+    
+    <xs:element name="bit31" type="xs:short" dfdl:lengthKind="implicit" dfdl:byteOrder="bigEndian" />
+    <xs:element name="bit32" type="xs:int" dfdl:lengthKind="implicit" dfdl:byteOrder="bigEndian" />
+    
+    <xs:element name="s4">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="bit33" type="xs:byte" dfdl:lengthKind="implicit" dfdl:byteOrder="bigEndian" />
+          <xs:element name="bit34" type="xs:short" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:byteOrder="littleEndian"/>
+          <xs:element name="bit35" type="xs:int" dfdl:lengthKind="implicit" dfdl:byteOrder="littleEndian"/>
+          <xs:element name="bit36" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:byteOrder="bigEndian"/>
+          <xs:element name="bit37" type="xs:long" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:byteOrder="bigEndian"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="bit38" type="xs:short" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:byteOrder="bigEndian" />
+  
+  </tdml:defineSchema>
+  
+  <!--
+    Test name: bitUnsignedLong
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey an unsigned Long
+  -->
+
+  <tdml:parserTestCase name="bitUnsignedLong"
+    root="bit12" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[11000011010100001100001101010000]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit12>3276850000</bit12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitUnsignedLong2
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey an unsigned Long (bigEndian)
+  -->
+
+  <tdml:parserTestCase name="bitUnsignedLong2"
+    root="bit14" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[10000000 00100000 00000001]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit14>8396801</bit14>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitUnsignedLong3
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey an unsigned Long (littleEndian)
+  -->
+
+  <tdml:parserTestCase name="bitUnsignedLong3"
+    root="bit15" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[10000000 00100000 00000001]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit15>73856</bit15>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitUnsignedLong4
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey an unsigned Long (bigEndian)
+  -->
+
+  <tdml:parserTestCase name="bitUnsignedLong4"
+    root="bit16" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[00000000 00000010 00000111 00000001 00000000 00000001 00100000 00000000]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit16>570650829856768</bit16>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitUnsignedLong5
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey an unsigned Long (littleEndian)
+  -->
+
+  <tdml:parserTestCase name="bitUnsignedLong5"
+    root="bit16" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[00000000 00100000 00000001 00000000 00000001 00000111 00000010 00000000]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit16>9008298783605248</bit16>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitUCombo
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a combination of unsigned types (bigEndian)
+  -->
+
+  <tdml:parserTestCase name="bitUCombo"
+    root="s2" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[10100 00111 00100 11111]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <s2>
+          <bit18>20</bit18>
+          <bit19>7</bit19>
+          <bit20>4</bit20>
+          <bit21>31</bit21>
+        </s2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitUCombo2
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a combination of unsigned types and byte orders
+  -->
+
+  <tdml:parserTestCase name="bitUCombo2"
+    root="s3" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits">00101010</tdml:documentPart>
+      <tdml:documentPart type="bits">00111111 00000001</tdml:documentPart>
+      <tdml:documentPart type="bits">00000000 00000000 00000000 00000001</tdml:documentPart>
+      <tdml:documentPart type="bits">00001010 00000000 00000000 00000000 00000000 00000000 00000000 00000000</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <s3>
+          <bit22>42</bit22>
+          <bit23>319</bit23>
+          <bit24>1</bit24>
+          <bit25>10</bit25>
+        </s3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitShort
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Short
+  -->
+
+  <tdml:parserTestCase name="bitShort"
+    root="bit13" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[1100001101010000]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit13>-15536</bit13>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitShort2
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Short
+  -->
+
+  <tdml:parserTestCase name="bitShort2"
+    root="bit26" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[10101]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit26>-11</bit26>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitShort3
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Short
+  -->
+
+  <tdml:parserTestCase name="bitShort3"
+    root="bit38" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[01]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit38>1</bit38>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitInt
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Int
+  -->
+
+  <tdml:parserTestCase name="bitInt"
+    root="bit27" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[000010101]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit27>21</bit27>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitInteger
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Integer
+  -->
+
+  <tdml:parserTestCase name="bitInteger"
+    root="bit28" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[1111000010101]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit28>-491</bit28>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitLong
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Long
+  -->
+
+  <tdml:parserTestCase name="bitLong"
+    root="bit29" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[101]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit29>-3</bit29>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitByte
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed byte
+  -->
+
+  <tdml:parserTestCase name="bitByte"
+    root="bit30" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[00]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit30>0</bit30>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitShortImplicit
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed Short of implicit length
+  -->
+
+  <tdml:parserTestCase name="bitShortImplicit"
+    root="bit31" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[11111111 10101010]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit31>-86</bit31>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitIntImplicit
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a signed int of implicit length
+  -->
+
+  <tdml:parserTestCase name="bitIntImplicit"
+    root="bit32" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[10101000 00100100 11111111 10101010]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit32>-1473970262</bit32>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitSignedCombo
+    Schema: bitSchema
+    Purpose: This test demonstrates the use of bits to convey a combination of signed types and byte orders
+  -->
+
+  <tdml:parserTestCase name="bitSignedCombo"
+    root="s4" model="bitSchema" description="Section 12 Length Properties - DFDL-12-161R">
+    <tdml:document>
+      <tdml:documentPart type="bits">00101010</tdml:documentPart>
+      <tdml:documentPart type="bits">01</tdml:documentPart>
+      <tdml:documentPart type="bits">00000000 00000000 00000000 00000001</tdml:documentPart>
+      <tdml:documentPart type="bits">00</tdml:documentPart>
+      <tdml:documentPart type="bits">01</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <s4>
+          <bit33>42</bit33>
+          <bit34>1</bit34>
+          <bit35>16777216</bit35>
+          <bit36>0</bit36>
+          <bit37>1</bit37>
+        </s4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+ <!--
+    Test name: lengthGreaterThanEight1
+    Schema: bitSchema
+    Purpose: This test demonstrates that a bit string of an arbitrary length will be properly interpreted (Big Endian)
+  -->
+
+  <tdml:parserTestCase name="lengthGreaterThanEight1"
+    root="bit6" model="bitSchema" description="Section 12 Length Properties - DFDL-12-153R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[110000000010100100100101]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit6>12593445</bit6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: lengthGreaterThanEight2
+    Schema: bitSchema
+    Purpose: This test demonstrates that a bit string of an arbitrary length will be properly interpreted (Little Endian)
+  -->
+
+  <tdml:parserTestCase name="lengthGreaterThanEight2"
+    root="bit7" model="bitSchema" description="Section 12 Length Properties - DFDL-12-154R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[110000000010100100100101]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit7>2435520</bit7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: lengthGreaterThanEight3
+    Schema: bitSchema
+    Purpose: This test demonstrates that a bit string of an arbitrary length will be properly interpreted (Big Endian)
+  -->
+
+  <tdml:parserTestCase name="lengthGreaterThanEight3"
+    root="bit8" model="bitSchema" description="Section 12 Length Properties - DFDL-12-153R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[100000001]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit8>257</bit8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: lengthGreaterThanEight4
+    Schema: bitSchema
+    Purpose: This test demonstrates that a bit string of an arbitrary length will be properly interpreted (Little Endian)
+  -->
+
+  <tdml:parserTestCase name="lengthGreaterThanEight4"
+    root="bit9" model="bitSchema" description="Section 12 Length Properties - DFDL-12-154R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[100000001]]></tdml:documentPart>
+      <!-- 1000 0000 1000 0000 then swap bytes (looks same), then shift right until msb of byte becomes lsb.
+      resulting in 0000 0001 1000 0000 aka 0x0180 which is 384. -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit9>384</bit9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: lengthGreaterThanEight5
+    Schema: bitSchema
+    Purpose: This test demonstrates that a bit string of an arbitrary length will be properly interpreted (Big & Little Endian)
+  -->
+
+  <tdml:parserTestCase name="lengthGreaterThanEight5"
+    root="s1" model="bitSchema" description="Section 12 Length Properties - DFDL-12-153R">
+    <tdml:document>
+      <tdml:documentPart type="bits"><![CDATA[1000 0000 1|100 0000 001]]></tdml:documentPart>
+      <!-- 2nd number is Little Endian 100 0000 001 or 10000000 01000000 swapping bytes is 01000000 10000000
+       then shifting first byte down by 6 00000001 10000000 or 0x0180 which is 384 -->
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <s1>
+          <bit10>257</bit10>
+          <bit11>384</bit11>
+        </s1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: bitsRepresentedAsText1
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' when the document uses a text representation (big endian).
+             no -> 01101110 01101111 -> 28271
+  -->
+
+  <tdml:parserTestCase name="bitsRepresentedAsText1" model="bitSchema"
+    root="bit5">
+    <tdml:document>
+      <tdml:documentPart type="text">no</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit5>28271</bit5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bitsRepresentedAsText2
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' when the document uses a text representation (big endian).
+             no -> 01101110 01101111 -> (LE) -> 28526
+  -->
+
+  <tdml:parserTestCase name="bitsRepresentedAsText2" model="bitSchema"
+    root="bit4">
+    <tdml:document>
+      <tdml:documentPart type="text">no</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit4>28526</bit4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: bit1
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' with a single bit
+  -->
+
+  <tdml:parserTestCase name="bit1" model="bitSchema"
+    root="bit1">
+    <tdml:document>
+      <tdml:documentPart type="bits">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit1>1</bit1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: twoByteBigEndian
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' with bigEndian byte order
+  -->
+  
+  <tdml:parserTestCase name="twoByteBigEndian" model="bitSchema"
+    root="bit5">
+    <tdml:document>
+      <tdml:documentPart type="bits">0000000110000000</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit5>384</bit5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: ThreeBit1
+    Schema: DFDL-307-one-octet.dfdl.xsd
+    Purpose: This test demonstrates that even though additional bits are added onto the document in order for it to represent a complete
+             byte, the test runner does not see this as excess data that has not been parsed. 
+  -->
+
+  <tdml:parserTestCase name="ThreeBit1" root="e2"
+    model="DFDL-307-one-octet.dfdl.xsd" description="Section 12 - Length Properties (binary)">
+    <tdml:document>
+      <tdml:documentPart type="bits">110</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>6</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: twoByteLittleEndian
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' with littleEndian byte order
+  -->
+
+  <tdml:parserTestCase name="twoByteLittleEndian" model="bitSchema"
+    root="bit4">
+    <tdml:document>
+      <tdml:documentPart type="bits">0000000110000000</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit4>32769</bit4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: seqBit1
+    Schema: DFDL-307-one-octet.dfdl.xsd
+    Purpose: This test demonstrates that even though additional bits are added onto the document in order for it to represent a complete
+             byte, the test runner does not see this as excess data that has not been parsed (in the case of sequences) 
+  -->
+
+  <tdml:parserTestCase name="seqBit1" root="s1"
+    model="DFDL-307-one-octet.dfdl.xsd" description="Section 12 - Length Properties (binary)">
+    <tdml:document>
+      <tdml:documentPart type="bits">1111</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <s1>
+          <e3>7</e3>
+          <e4>1</e4>
+        </s1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bit2
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' with a 2-bit dataset
+  -->
+
+  <tdml:parserTestCase name="bit2" model="bitSchema"
+    root="bit2">
+    <tdml:document>
+      <tdml:documentPart type="bits">10</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit2>2</bit2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: seqBitLeftOver
+    Schema: DFDL-307-one-octet.dfdl.xsd
+    Purpose: This test demonstrates that the number of available bits (for checking for leftover data) does not include any bits added on. In this case however, the 
+                 number of significant bits is still more than what is being consumed, so parsing fails (in the case of sequences).
+  -->
+
+  <tdml:parserTestCase name="seqBitLeftOver" root="s1"
+    model="DFDL-307-one-octet.dfdl.xsd" description="Section 12 - Length Properties (binary)">
+    <tdml:document>
+      <tdml:documentPart type="bits">111101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Left over</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: bit3
+    Schema: bitSchema
+    Purpose: this test demonstrates the use of lengthUnits 'bits' with a 3-bit dataset
+  -->
+
+  <tdml:parserTestCase name="bit3" model="bitSchema"
+    root="bit3">
+    <tdml:document>
+      <tdml:documentPart type="bits">110</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bit3>6</bit3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>
+

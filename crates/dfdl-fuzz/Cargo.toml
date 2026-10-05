@@ -1,0 +1,15 @@
+[package]
+name = "dfdl-fuzz"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Fuzzing target library for DFDL engine"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core" }
+dfdl-schema = { path = "../dfdl-schema" }
+dfdl-xml = { path = "../dfdl-xml" }
+
+[lints]
+workspace = true

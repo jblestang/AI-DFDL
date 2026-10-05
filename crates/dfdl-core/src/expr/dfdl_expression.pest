@@ -1,0 +1,60 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+expression = { SOI ~ ("{" ~ expr ~ "}" | expr) ~ EOI }
+
+expr = { if_expr | logic_or }
+
+if_expr = { "if" ~ "(" ~ expr ~ ")" ~ "then" ~ expr ~ "else" ~ expr }
+
+logic_or = { logic_and ~ (or_op ~ logic_and)* }
+or_op = { "or" }
+
+logic_and = { equality ~ (and_op ~ equality)* }
+and_op = { "and" }
+
+equality = { relational ~ (eq_op ~ relational)* }
+eq_op = { "=" | "!=" | "eq" | "ne" }
+
+relational = { additive ~ (rel_op ~ additive)* }
+rel_op = { "<=" | ">=" | "<" | ">" | "lt" | "le" | "gt" | "ge" }
+
+additive = { multiplicative ~ (add_op ~ multiplicative)* }
+add_op = { "+" | "-" }
+
+multiplicative = { unary ~ (mul_op ~ unary)* }
+mul_op = { "*" | "idiv" | "div" | "mod" }
+
+unary = { unary_op ~ unary | primary }
+unary_op = { "+" | "-" | "not" }
+
+primary = { literal | fn_call | var_ref | path | "(" ~ expr ~ ")" }
+
+literal = { hex_literal | float_literal | int_literal | bool_literal | string_literal }
+hex_literal = @{ ("0x" | "0X") ~ ASCII_HEX_DIGIT+ }
+float_literal = @{ ("+" | "-")? ~ (ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* | "." ~ ASCII_DIGIT+ | ASCII_DIGIT+) ~ ("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+ | ("+" | "-")? ~ (ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* | "." ~ ASCII_DIGIT+) }
+int_literal = @{ ("+" | "-")? ~ ASCII_DIGIT+ }
+bool_literal = { "true" | "false" }
+
+string_literal = { double_quoted_string | single_quoted_string }
+double_quoted_string = @{ "\"" ~ ( "\"\"" | "\\" ~ ANY | !"\"" ~ ANY )* ~ "\"" }
+single_quoted_string = @{ "'" ~ ( "''" | "\\" ~ ANY | !"'" ~ ANY )* ~ "'" }
+
+var_ref = ${ "$" ~ (qname_ident ~ ":")? ~ qname_ident }
+
+fn_call = { fn_name ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }
+fn_name = ${ (qname_ident ~ ":")? ~ qname_ident }
+
+path = { "/"? ~ path_step ~ ("/" ~ path_step)* | "/" }
+path_step = { axis_specifier? ~ step_node ~ predicate* }
+axis_specifier = @{ "parent::" | "self::" | "child::" }
+step_node = { parent_step | self_step | wildcard_step | qname_step }
+parent_step = @{ ".." }
+self_step = @{ "." }
+wildcard_step = @{ "*" }
+qname_step = ${ (prefix ~ ":")? ~ local_name }
+prefix = @{ qname_ident }
+local_name = @{ qname_ident | "*" }
+predicate = { "[" ~ expr ~ "]" }
+
+qname_ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+

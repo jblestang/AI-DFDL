@@ -1,0 +1,1406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="EscapesTests"
+  description="Section 31 - Escape Characters" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com">
+
+  <tdml:defineSchema name="EscapesSchema">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="utf-8"
+      byteOrder="bigEndian" ignoreCase="no" textStringJustification="left"
+      textStringPadCharacter="0" textTrimKind="none" textPadKind="none"
+      documentFinalTerminatorCanBeMissing="no" nilValueDelimiterPolicy="none"
+      emptyValueDelimiterPolicy="none" initiator="" terminator=""
+      leadingSkip="0" trailingSkip="0" separator="" textBidi="no"
+      floating="no" truncateSpecifiedLengthString="no" decimalSigned="yes"
+      alignment="1" alignmentUnits="bytes" fillByte="1" occursCountKind="implicit"
+      escapeSchemeRef="" representation="text" lengthUnits="characters"
+      lengthKind="delimited" />
+
+    <dfdl:defineEscapeScheme name="table1">
+      <dfdl:escapeScheme escapeCharacter='/'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="/"
+        extraEscapedCharacters="?" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <dfdl:defineEscapeScheme name="table2">
+      <dfdl:escapeScheme escapeCharacter='/'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="%%"
+        extraEscapedCharacters="?" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    
+    <dfdl:defineEscapeScheme name="table4">
+      <dfdl:escapeScheme escapeKind="escapeBlock" escapeBlockStart="'" escapeBlockEnd="'" 
+        escapeEscapeCharacter="%%" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e1" type="ex:type1" />
+    <xs:complexType name="type1">
+      <xs:sequence dfdl:separator=";">
+        <xs:element name="element1" type="xs:string"
+          dfdl:escapeSchemeRef="ex:table1" minOccurs="1" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+
+    <xs:element name="e2" type="ex:type2" />
+    <xs:complexType name="type2">
+      <xs:sequence dfdl:separator=";">
+        <xs:element name="element2" type="xs:string" minOccurs="1" maxOccurs="unbounded" 
+          dfdl:escapeSchemeRef="ex:table2" />
+      </xs:sequence>
+    </xs:complexType>
+
+    <xs:element name="e3" type="ex:type3" />
+    <xs:complexType name="type3">
+      <xs:sequence dfdl:separator="sep">
+        <xs:element name="element3" type="xs:string" minOccurs="1" maxOccurs="unbounded" 
+          dfdl:escapeSchemeRef="ex:table2" />
+      </xs:sequence>
+    </xs:complexType>
+    
+    <xs:element name="e4" type="ex:type4" />
+    <xs:complexType name="type4">
+      <xs:sequence dfdl:separator=";">
+        <xs:element name="element4" type="xs:string" minOccurs="1" maxOccurs="unbounded" 
+          dfdl:escapeSchemeRef="ex:table3" />
+      </xs:sequence>
+    </xs:complexType>
+    
+    <xs:element name="e5" type="ex:type5" />
+    <xs:complexType name="type5">
+      <xs:sequence dfdl:separator=";">
+        <xs:element name="element5" type="xs:string" minOccurs="1" maxOccurs="unbounded" 
+          dfdl:escapeSchemeRef="ex:table4" />
+      </xs:sequence>
+    </xs:complexType>
+
+    <dfdl:defineEscapeScheme name="table3">
+      <dfdl:escapeScheme escapeKind="escapeBlock" escapeBlockStart="[" escapeBlockEnd="]" 
+        escapeEscapeCharacter="%%" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+  </tdml:defineSchema>
+
+  <!-- These tests correspond to entries in table 1 in Appendix A of the 
+    DFDL Spec
+
+         Result                                  Input
+    1.   ....................................    ....................................
+    2.   .............../.....................   ...............//.....................
+    3.   .............../..../.................  ...............//....//.................
+    4.   ...............//.....................  ...............////.....................
+    5.   /....................................   //....................................
+    6.   ..................................../   ....................................//
+    7.   /.............../.....................  //...............//.....................
+    8.   ................/..................../  ................//....................//
+    9.   ................;....................   ................/;....................
+    10.  ................/;....................  ................///;....................
+    11.  ;....................................   /;....................................
+    12.  ................?....................   ................/?....................
+
+  -->
+
+  <tdml:parserTestCase name="escape_entry1"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[unaltered text]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>unaltered text</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[....//....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>..../....</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[.//..//.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>./../.</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[.////.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>.//.</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry5"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[//escapebeginning]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>/escapebeginning</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry6"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[escapeEnd//]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>escapeEnd/</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry7"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[//....//....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>/..../....</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry8"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[....//....//]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>..../..../</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="escape_entry9"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[..../;....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>....;....</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry10"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[....///;....]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>..../;....</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry11"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[/;........]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>;........</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry12"
+    description="Section 31.1 (Appendix A) DFDL Escape Character same as dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e1">
+    <tdml:document><![CDATA[../?..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <element1>..?..</element1>
+        </e1>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- These tests correspond to entries in table 2 in Appendix A of the 
+    DFDL Spec
+
+    - Escape Character different from dfdl:escapeEscapeCharacater
+    - EscapeKind=‘escapeCharacter’, escapeCharacter=’/’, escapeEscapeCharacter=’%’, 
+    separator=’;’, extraEscapeCharacter=’?’
+
+         Result                                  Input             
+    1.   ....................................    ....................................
+    2.   .............../.....................   ...............%/.....................
+    3.   .............../..../.................  ...............%/....%/.................
+    4.   ...............//.....................  ...............%/%/.....................
+    5.   /....................................   %/....................................
+    6.   ..................................../   ....................................%/
+    7.   /.............../.....................  %/...............%/.....................
+    8.   ................/..................../  ................%/....................%/
+    9.   ................;....................   ................/;....................
+    10.  ................/;....................  ................%//;....................
+    11.  ;....................................   /;....................................
+    12.  ................?....................   ................/?....................
+    13.  ................%....................   ................%....................
+    14.  ................%/....................  ................%%/....................
+    15.  ................/%....................  ................%/%....................
+   
+    EscapeKind=‘escapeCharacter’, escapeCharacter=’/’, escapeEscapeCharacter=’%’, 
+    separator=’;’, extraEscapeCharacter=’?’
+ 
+    16.  ................sep....................   ................/sep....................
+    17.  ................/sep....................  ................%//sep....................
+    18.  sep....................................   /sep....................................
+
+  -->
+
+  <tdml:parserTestCase name="escape_entry2_1"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[unaltered text]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>unaltered text</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_2"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[....%/....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>..../....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_3"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[.%/..%/.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>./../.</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_4"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[.%/%/.]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>.//.</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_5"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[%/escapebeginning]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>/escapebeginning</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_6"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[escapeEnd%/]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>escapeEnd/</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_7"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[%/....%/....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>/..../....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry2_8"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[....%/....%/]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>..../..../</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="escape_entry2_9"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[..../;....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>....;....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_10"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[....%//;....]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>..../;....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_11"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[/;........]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>;........</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_12"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[..../?....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>....?....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_13"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[....%....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>....%....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_14"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[....%%/....]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>....%/....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_15"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e2">
+    <tdml:document><![CDATA[....%/%....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element2>..../%....</element2>
+        </e2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry2_16"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e3">
+    <tdml:document><![CDATA[..../sep....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <element3>....sep....</element3>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry2_17"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e3">
+    <tdml:document><![CDATA[....%//sep....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <element3>..../sep....</element3>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry2_18"
+    description="Section 31.2 (Appendix A) DFDL Escape Character different from dfdl:escapeEscapeCharacter"
+    model="EscapesSchema" root="e3">
+    <tdml:document><![CDATA[/sep....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <element3>sep....</element3>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+
+  31.3 Escape block with different start and end characters
+  EscapeKind=‘escapeBlock’, escapeBlockStart=’[’, escapeBlockEnd=’]’, 
+  ecsapeEscapeCharacater=’%’, separator=’;’, extraEscapeCharacter=’?’
+
+            Result                                    Input
+        1.  ....................................      ....................................
+        2.  [....................................     [[....................................]
+        3.  ]....................................     ]....................................
+        4.  ...............[.....................     ...............[.....................
+        5.  ...............].....................     ...............].....................
+        6.  ....................................]     ....................................]
+        7.  [[....................................    [[[....................................]
+        8.  ....................................]]    ....................................]]
+        9.  ................[[....................    ................[[....................
+        10. ................]]....................    ................]]....................
+        11. [....................................]    [[....................................%]]
+        12. [................]....................    [[................%]....................]
+        13. ................[....................]    ................[....................]
+        14. [...............[.....................]   [[...............[.....................%]]
+        15. [................]....................]   [[................%]....................%]]
+        16. [[....................................]   [[[....................................%]]
+        17. [....................................]]   [[....................................%]%]]
+        18. [[....................................]]  [[[....................................%]%]]
+        19. ................%....................     ................%....................
+        20. ................%%....................    ................%%....................
+        21. ................%[....................    ................%[....................
+        22. ................%]....................    ................%]....................
+        23. %[....................................    %[....................................
+        24. ....................................%]    ....................................%]
+        25. %[....................................%]  %[....................................%]
+        26. [............%........................]   [[............%........................%]]
+        27. [............%]........................]  [[............%%]........................%]]
+        28. ................;....................     [................;....................]
+        29. ................%;....................    [................%;....................]
+        30. [................;....................]   [[................;....................%]]
+        31. ................?....................     [................?....................]
+
+-->
+
+  <tdml:parserTestCase name="escape_entry3_1"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[nothing!]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>nothing!</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_2"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[...]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[...</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_3"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[]...]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>]...</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_4"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[..[..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>..[..</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_5"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[...............].....................]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>...............].....................</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_6"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[....................................]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>....................................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_7"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[[....................................]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[[....................................</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_8"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[....]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>....]]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_9"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[....[[....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>....[[....</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_10"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[....]]....]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>....]]....</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_11"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[....%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[....]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_12"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[................%]....................]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[................]....................</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_13"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[................[....................]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>................[....................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_14"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[...............[.....................%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[...............[.....................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry3_15"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[................%]....................%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[................]....................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_16"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[[....................................%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[[....................................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_17"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[....................................%]%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[....................................]]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_18"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[[....................................%]%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[[....................................]]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_19"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[..%..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>..%..</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_20"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[..%%..]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>..%%..</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_21"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[..%[..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>..%[..</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_22"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[..%]..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>..%]..</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_23"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[%[...]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>%[...</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_24"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[..%]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>..%]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_25"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[%[....................................%]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>%[....................................%]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_26"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[[............%........................%]]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[............%........................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_27"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[[[............%%]........................%]]]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[............%]........................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_28"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[................;....................]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>................;....................</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_29"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[[................%;....................]]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>................%;....................</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_30"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA[[[................;....................%]]]]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>[................;....................]</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry3_31"
+    description="Section 31.3 (Appendix A) Escape block with different start and end characters"
+    model="EscapesSchema" root="e4">
+    <tdml:document><![CDATA[[................?....................]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element4>................?....................</element4>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+
+  31.4 Escape block with same start and end characters
+  EscapeKind=‘escapeBlock’, escapeBlockStart=’ &apos;’, escapeBlockEnd=’ &apos;’, 
+  escapeEscapeCharacter=’%’, separator=’;’, extraEscapeCharacter=’?’
+
+          Result                                    Input
+       1.  ....................................      ....................................
+       2.  '....................................     '%'....................................'
+       3.  ...............'.....................     ...............'.....................
+       4.  ....................................'     ....................................'
+       5.  ''....................................    '%'%'....................................'
+       6.  ....................................''    ....................................''
+       7.  ................''....................    ................''....................
+       8.  '....................................'    '%'....................................%''
+       9.  '................'....................     '%'................%'....................'
+       10. ................'....................'    ................'....................'
+       11. '...............'.....................'   '%'...............%'.....................%''
+       12. ''....................................'   '%'%'....................................%''
+       13. '....................................''   '%'....................................%'%''
+       14. ''....................................''  '%'%'....................................%'%''
+       15. ................%....................     ................%....................
+       16. ................%%....................    ................%%....................
+       17. ................%'....................    ................%'....................
+       18. %'....................................    %'....................................
+       19. ....................................%'    ....................................%'
+       20. '....................................%'   '%'....................................%%''
+       21. %'....................................%'  %'....................................%'
+       22. '............%........................'   '%'............%........................%''
+       23. '............%'........................'  '%'............%%'........................%''
+       24. ................;....................     '................;....................'
+       25. ................%;....................    '................%;....................'
+       26. '................;....................'   '%'................;....................%''
+       27. ................?....................     '................?....................'
+
+-->
+
+  <tdml:parserTestCase name="escape_entry4_1"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[nochange]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>nochange</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_2"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'..']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'..</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_3"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[...'...]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>...'...</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_4"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[....']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>....'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_5"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'%'....................................']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>''....................................</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_6"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[....'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>....''</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_7"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[...''...]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>...''...</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_8"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'....................................%'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'....................................'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_9"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'................%'....................']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'................'....................</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_10"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[..'..']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>..'..'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_11"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'...............%'.....................%'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'...............'.....................'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_12"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'%'....................................%'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>''....................................'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_13"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'....................................%'%'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'....................................''</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_14"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'%'....................................%'%'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>''....................................''</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_15"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[..%..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>..%..</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_16"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[..%%..]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>..%%..</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_17"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[...%'...]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>...%'...</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_18"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[%'...]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>%'...</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_19"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[....................................%']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>....................................%'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  
+  <tdml:parserTestCase name="escape_entry4_20"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA['%'....................................%%'']]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'....................................%'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="escape_entry4_21"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA[%'....................................%']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>%'....................................%'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_22"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['%'............%........................%'']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'............%........................'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_23"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA['%'............%%'........................%'']]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'............%'........................'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_24"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['................;....................']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>................;....................</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_25"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA['................%;....................']]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>................%;....................</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_26"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><tdml:documentPart type="text" replaceDFDLEntities="false"><![CDATA['%'................;....................%'']]></tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>'................;....................'</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escape_entry4_27"
+    description="Section 31.4 (Appendix A) Escape block with same start and end characters"
+    model="EscapesSchema" root="e5">
+    <tdml:document><![CDATA['................?....................']]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <element5>................?....................</element5>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+</tdml:testSuite>

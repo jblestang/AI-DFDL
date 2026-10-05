@@ -1,0 +1,15 @@
+[package]
+name = "dfdl-std"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Optional std::io adapters and host integrations for DFDL engine"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", features = ["std"] }
+dfdl-schema = { path = "../dfdl-schema", features = ["std"] }
+dfdl-xml = { path = "../dfdl-xml", features = ["std"] }
+
+[lints]
+workspace = true

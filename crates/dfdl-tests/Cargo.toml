@@ -1,0 +1,16 @@
+[package]
+name = "dfdl-tests"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Integration and conformance test suite for DFDL engine"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", features = ["std"] }
+dfdl-schema = { path = "../dfdl-schema" }
+dfdl-xml = { path = "../dfdl-xml" }
+dfdl-fuzz = { path = "../dfdl-fuzz" }
+
+[lints]
+workspace = true

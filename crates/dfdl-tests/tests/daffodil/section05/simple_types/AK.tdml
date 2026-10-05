@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<testSuite suiteName="AK" xmlns="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com"
+  defaultRoundTrip="true">
+
+  <parserTestCase name="AK000" root="list" model="AK.dfdl.xsd"
+    description="Simple Binary with signed and usigned types - DFDL-5-020R"
+    roundTrip="twoPass">
+    <document>
+      <documentPart type="byte">ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff</documentPart>
+    </document>
+    <infoset>
+      <dfdlInfoset>
+        <ex:list>
+          <a xsi:type="xsd:byte">-1</a>
+          <b xsi:type="xsd:unsignedByte">255</b>
+          <c xsi:type="xsd:short">-1</c>
+          <d xsi:type="xsd:unsignedShort">65535</d>
+          <e xsi:type="xsd:int">-1</e>
+          <f xsi:type="xsd:unsignedInt">4294967295</f>
+          <g xsi:type="xsd:long">-1</g>
+          <h xsi:type="xsd:unsignedLong">18446744073709551615</h>
+        </ex:list>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="AK001" root="list" model="AK.dfdl.xsd"
+    description="Simple Binary with signed and usigned types - DFDL-5-020R"
+    roundTrip="twoPass">
+    <document>
+      <documentPart type="byte">7f7f7fff7fffffff7fffffff7fffffff7fffffffffffffff7fffffffffffffff</documentPart>
+    </document>
+    <infoset>
+      <dfdlInfoset>
+        <ex:list>
+          <a xsi:type="xsd:byte">127</a>
+          <b xsi:type="xsd:unsignedByte">127</b>
+          <c xsi:type="xsd:short">32767</c>
+          <d xsi:type="xsd:unsignedShort">32767</d>
+          <e xsi:type="xsd:int">2147483647</e>
+          <f xsi:type="xsd:unsignedInt">2147483647</f>
+          <g xsi:type="xsd:long">9223372036854775807</g>
+          <h xsi:type="xsd:unsignedLong">9223372036854775807</h>
+        </ex:list>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+</testSuite>

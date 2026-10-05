@@ -1,0 +1,856 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="InitiatedContent" description="Section 15 - ChoiceGroups"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com" 
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="s1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+    <dfdl:defineFormat name="def">
+      <dfdl:format initiatedContent="yes"/>
+    </dfdl:defineFormat>
+
+    <xs:element name="e1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s" dfdl:lengthKind="implicit"
+            minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind='parsed'>
+            <xs:complexType>
+              <xs:choice dfdl:ref="def">
+                <xs:element name="s1" dfdl:initiator="[s1:"
+                  type="xs:int" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+                <xs:element name="s2" dfdl:initiator="[s2:"
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e1r" dfdl:lengthKind="implicit"><!-- same but with minOccurs 2 on the array -->
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s" dfdl:lengthKind="implicit"
+            minOccurs="2" maxOccurs="unbounded" dfdl:occursCountKind='implicit'>
+            <xs:complexType>
+              <xs:choice dfdl:ref="def">
+                <xs:element name="s1" dfdl:initiator="[s1:"
+                  type="xs:int" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+                <xs:element name="s2" dfdl:initiator="[s2:"
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e2" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:choice>
+            <xs:element name="x1" dfdl:lengthKind="implicit">
+              <xs:complexType>
+                <xs:choice dfdl:initiatedContent="yes">
+                  <xs:element name="a1" dfdl:initiator="["
+                    type="xs:int" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                    dfdl:length="{ 3 }" />
+                  <xs:element name="a2" dfdl:initiator="["
+                    type="xs:string" dfdl:terminator="]"
+                    dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+                </xs:choice>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="x2" type="xs:string"
+              dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e2WithoutInitiatedContent"
+      dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:choice>
+            <xs:element name="x1" dfdl:lengthKind="implicit">
+              <xs:complexType>
+                <xs:choice dfdl:initiatedContent="no">
+                  <xs:element name="a1" dfdl:initiator="["
+                    type="xs:int" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                    dfdl:length="{ 3 }" />
+                  <xs:element name="a2" dfdl:initiator="["
+                    type="xs:string" dfdl:terminator="]"
+                    dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+                </xs:choice>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="x2" type="xs:string"
+              dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e1a" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s" dfdl:lengthKind="implicit"
+            minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind='parsed'>
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="yes">
+                <xs:element name="s1" type="xs:int"
+                  dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+                <xs:element name="s2" dfdl:initiator="[s2:"
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="s1" type="xs:int" dfdl:terminator="]"
+      dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+    <xs:element name="e1b" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s" dfdl:lengthKind="implicit"
+            minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind='parsed'>
+            <xs:complexType>
+              <xs:choice>
+                <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:choice initiatedContent="yes"/>
+                </xs:appinfo></xs:annotation>
+                <xs:element ref="ex:s1" />
+                <xs:element name="s2" dfdl:initiator="[s2:"
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e3" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%WSP;"
+          dfdl:separatorPosition="infix">
+          <xs:element name="x" dfdl:lengthKind="implicit"
+            maxOccurs="unbounded">
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="yes">
+                <xs:element name="a1" dfdl:initiator="["
+                  type="xs:int" dfdl:lengthKind="delimited" />
+                <xs:element name="a2" dfdl:initiator="("
+                  type="xs:float" dfdl:lengthKind="delimited" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e4" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%WSP;"
+          dfdl:separatorPosition="infix">
+          <xs:element name="x" dfdl:lengthKind="implicit"
+            maxOccurs="unbounded">
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="no">
+                <xs:element name="a1" dfdl:initiator="["
+                  type="xs:int" dfdl:lengthKind="delimited" />
+                <xs:element name="a2" dfdl:initiator="["
+                  type="xs:float" dfdl:lengthKind="delimited" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e5" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="x1" dfdl:lengthKind="implicit">
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="yes">
+                <xs:element name="a1" dfdl:initiator="["
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+                <xs:element name="a2" dfdl:initiator="["
+                  type="xs:int" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="x2" type="xs:string"
+            dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e6" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s" dfdl:lengthKind="implicit"
+            minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind='parsed'>
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="yes">
+                <xs:element name="s1" dfdl:initiator="" type="xs:int"
+                  dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+                <xs:element name="s2" dfdl:initiator="[s2:"
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+
+
+  <tdml:parserTestCase name="initiatedContentChoice1"
+    description="initiatedContent='yes' - DFDL-15-003R" model="s1" root="e1">
+    <tdml:document><![CDATA[[s2:abc][s1:123]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <s>
+            <s2>abc</s2>
+          </s>
+          <s>
+            <s1>123</s1>
+          </s>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice2"
+    description="parsing error in branch - DFDL-15-003R" model="s1"
+    root="e1r">
+    <tdml:document><![CDATA[[s2:abc][s1:noi]]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>noi</tdml:error>
+      <tdml:error>noi</tdml:error>
+      <tdml:error>xs:int</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice3"
+    description="test that insures initiatedContent the initiator behaves as a discriminator and cuts off other choice alternatives. DFDL-15-003R"
+    model="s1" root="e2">
+    <tdml:document><![CDATA[[abc]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <x2>[abc]</x2>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice4"
+    description="backtracking occurs - DFDL-15-003R." model="s1"
+    root="e2WithoutInitiatedContent">
+    <tdml:document><![CDATA[[abc]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2WithoutInitiatedContent>
+          <x1>
+            <a2>abc</a2>
+          </x1>
+        </e2WithoutInitiatedContent>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice5"
+    description="one of branches is not initiated - DFDL-15-003R" model="s1"
+    root="e1a">
+    <tdml:document><![CDATA[[s2:abc]123]]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>initiator</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice6"
+    description="initiatedContent with delimited elements - - DFDL-15-003R"
+    model="s1" root="e3"
+    roundTrip="twoPass">
+    <tdml:document><![CDATA[[1789 (3.25]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <x>
+            <a1>1789</a1>
+          </x>
+          <x>
+            <a2>3.25</a2>
+          </x>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice7"
+    description="same as initiatedConten6 except initiatedContent='no' - - DFDL-15-003R"
+    model="s1" root="e4"
+    roundTrip="twoPass">
+    <tdml:document><![CDATA[[1789 [3.25]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <x>
+            <a1>1789</a1>
+          </x>
+          <x>
+            <a2>3.25</a2>
+          </x>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice8"
+    description="First choice branch is selected because it is a string type - - DFDL-15-003R"
+    model="s1" root="e5">
+    <tdml:document><![CDATA[[123][abc]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <x1>
+            <a1>123</a1>
+          </x1>
+          <x2>[abc]</x2>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice9"
+    description="one of branches is not initiated, an element reference - DFDL-15-003R"
+    model="s1" root="e1b">
+    <tdml:document><![CDATA[[s2:abc]123]]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>initiator</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentChoice10"
+    description="one of branches is not initiated - DFDL-15-003R" model="s1"
+    root="e6">
+    <tdml:document><![CDATA[[s2:abc]123]]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>initiator</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="s2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+    <xs:element name="e" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%WSP+;"
+          dfdl:separatorPosition="infix">
+          <xs:element name="s" minOccurs="0" maxOccurs="unbounded"
+            dfdl:occursCountKind="parsed" dfdl:lengthKind="implicit">
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="no">
+
+                <xs:element name="t0" type="xs:int"
+                  dfdl:initiator="t0:" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict" />
+                <xs:element name="t1" type="xs:int"
+                  dfdl:initiator="t1:" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict" />
+                <xs:element name="t2" type="xs:int"
+                  dfdl:initiator="t2:" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict" />
+                <xs:element name="t2f" type="xs:float"
+                  dfdl:initiator="t2:" dfdl:textNumberPattern="###.0" dfdl:textNumberCheckPolicy="strict" />
+                <xs:element name="t3" type="xs:int"
+                  dfdl:initiator="t3:" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict" />
+                <xs:element name="t4" type="xs:int"
+                  dfdl:initiator="t4:" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict" />
+                <xs:element name="other" type="xs:string" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="f" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%WSP+;"
+          dfdl:separatorPosition="infix">
+          <xs:element name="s" minOccurs="0" maxOccurs="unbounded"
+            dfdl:occursCountKind="parsed" dfdl:lengthKind="implicit">
+            <xs:complexType>
+              <xs:choice dfdl:initiatedContent="yes">
+                <xs:element name="t0" type="xs:int" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict"
+                  dfdl:initiator="t0:" />
+                <xs:element name="t1" type="xs:int" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict"
+                  dfdl:initiator="t1:" />
+                <xs:element name="t2" type="xs:int" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict"
+                  dfdl:initiator="t2:" />
+                <!-- t2f can never happen because of the initiator.and initiatedContent -->
+                <xs:element name="t2f" type="xs:float" dfdl:textNumberPattern="##0.0" dfdl:textNumberCheckPolicy="strict"
+                  dfdl:initiator="t2:" />
+                <xs:element name="t3" type="xs:int" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict"
+                  dfdl:initiator="t3:" />
+                <xs:element name="t4" type="xs:int" dfdl:textNumberPattern="##0" dfdl:textNumberCheckPolicy="strict"
+                  dfdl:initiator="t4:" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="leftOver" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="arrayOfChoice"
+    description="Somewhat realistic example of array of choice - DFDL-15-003R"
+    model="s2" root="e">
+    <tdml:document><![CDATA[t4:400 t1:100 otherStuff t2:200.0]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e>
+          <s>
+            <t4>400</t4>
+          </s>
+          <s>
+            <t1>100</t1>
+          </s>
+          <s>
+            <other>otherStuff</other>
+          </s>
+          <s>
+            <t2f>200.0</t2f>
+          </s>
+        </e>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="arrayOfChoice2"
+    description="Somewhat realistic example of array of choice - DFDL-15-003R"
+    model="s2" root="f">
+    <tdml:document><![CDATA[t4:400 t1:100 t2:200.0]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <f>
+          <s>
+            <t4>400</t4>
+          </s>
+          <s>
+            <t1>100</t1>
+          </s>
+          <leftOver>t2:200.0</leftOver>
+        </f>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="nestedDiscriminator1">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="e">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="msg" type="ex:msgType" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:complexType name="msgType">
+      <xs:choice dfdl:initiatedContent="yes">
+        <xs:element name="msg1" dfdl:initiator="msg1:">
+          <!-- Finding the initator above.... -->
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="ex:field1" minOccurs="0"
+                maxOccurs="1" />
+              <!-- ... should not affect the parsing of field1 here. In particular,
+                zero found is legal -->
+              <xs:element ref="ex:field2" maxOccurs="2" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:element name="field1" type="xs:int" dfdl:terminator=";" />
+    <xs:element name="field2" type="xs:string"
+      dfdl:terminator=";" />
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="discriminatorNesting1"
+    description="baseline for discriminator nesting tests" model="nestedDiscriminator1"
+    root="e">
+
+    <tdml:document><![CDATA[msg1:123;def;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e>
+          <msg>
+            <msg1>
+              <field1>123</field1>
+              <field2>def</field2>
+            </msg1>
+          </msg>
+        </e>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="discriminatorNesting2"
+    description="tests that an outer discriminator doesn't causes an inner choice to be affected."
+    model="nestedDiscriminator1" root="e">
+
+    <tdml:document><![CDATA[msg1:abc;456;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e>
+          <msg>
+            <msg1>
+              <field2>abc</field2>
+              <field2>456</field2>
+            </msg1>
+          </msg>
+        </e>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="Lesson5_choice_state"
+    description="choice with initiated content - DFDL-15-003R"
+    model="choice.dfdl.xsd" root="address">
+
+    <tdml:document><![CDATA[[house:118*street:Ridgewood Circle*city:Rochester*state:NY]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+          <address> 
+            <houseNumber>118</houseNumber>
+            <street>Ridgewood Circle</street>
+            <city>Rochester</city>
+            <jurisdiction><state>NY</state></jurisdiction>
+          </address>
+        </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+    
+    <tdml:parserTestCase name="Lesson5_choice_county"
+      description="choice with initiated content - DFDL-15-003R"
+      model="choice.dfdl.xsd" root="address">
+
+    <tdml:document><![CDATA[[house:25*street:The Hundred*city:Romsey*county:Hampshire]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+          <address> 
+            <houseNumber>25</houseNumber>
+            <street>The Hundred</street>
+            <city>Romsey</city>
+            <jurisdiction><county>Hampshire</county></jurisdiction>
+          </address>
+        </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="Lesson5_choice_province"
+      description="choice with initiated content - DFDL-15-003R"
+      model="choice.dfdl.xsd" root="address">
+
+    <tdml:document><![CDATA[[house:279*street:Lakeside Road*city:Toronto*province:Ontario]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+          <address> 
+            <houseNumber>279</houseNumber>
+            <street>Lakeside Road</street>
+            <city>Toronto</city>
+            <jurisdiction><province>Ontario</province></jurisdiction>
+          </address>
+        </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse_initiatedContentChoice1"
+    description="unparse - initiatedContent='yes' - DFDL-15-003R" model="s1" root="e1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>
+          <ex:s>
+            <ex:s2>abc</ex:s2>
+          </ex:s>
+          <ex:s>
+            <ex:s1>123</ex:s1>
+          </ex:s>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[[s2:abc][s1:123]]]></tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="s3">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+    <dfdl:defineFormat name="def">
+      <dfdl:format initiatedContent="yes"/>
+    </dfdl:defineFormat>
+
+    <xs:element name="e1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s" dfdl:lengthKind="implicit"
+            minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind='parsed'>
+            <xs:complexType>
+              <xs:choice dfdl:ref="def">
+                <xs:element name="s1" dfdl:initiator="[s1:"
+                  type="xs:int" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+                <xs:group ref="group1"/>
+                <xs:element name="s2" dfdl:initiator="[s2:"
+                  type="xs:string" dfdl:terminator="]" dfdl:lengthKind="explicit"
+                  dfdl:length="{ 3 }" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:group name="group1">
+      <xs:choice dfdl:initiator="[g1:" dfdl:terminator="]">
+        <xs:choice>
+          <xs:element name="c1" type="xs:int" dfdl:lengthKind="explicit"
+            dfdl:length="{ 1 }">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:discriminator>{. eq 1}</dfdl:discriminator>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="c2" type="xs:int" dfdl:lengthKind="explicit"
+            dfdl:length="{ 1 }">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:discriminator>{. eq 2}</dfdl:discriminator>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+        </xs:choice>
+        <xs:element name="c3" type="xs:int" dfdl:lengthKind="explicit"
+          dfdl:length="{ 1 }">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:discriminator>{. eq 3}</dfdl:discriminator>
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:element>
+      </xs:choice>
+    </xs:group>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="initiatedContentNestedChoices1"
+    description="initiatedContent='yes' - DFDL-15-003R" model="s3" root="e1">
+    <tdml:document><![CDATA[[s2:abc][g1:3][s1:123]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <s>
+            <s2>abc</s2>
+          </s>
+          <s>
+            <c3>3</c3>
+          </s>
+          <s>
+            <s1>123</s1>
+          </s>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentNestedChoices2"
+    description="initiatedContent='yes' - DFDL-15-003R" model="s3" root="e1">
+    <tdml:document><![CDATA[[s2:abc][g1:2][s1:123]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <s>
+            <s2>abc</s2>
+          </s>
+          <s>
+            <c2>2</c2>
+          </s>
+          <s>
+            <s1>123</s1>
+          </s>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="s4" elementFormDefault="unqualified">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    
+    <dfdl:format ref="ex:GeneralFormat" 
+      occursCountKind='parsed'
+      lengthKind="delimited"/>
+    
+    <xs:element name="r1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice> <!-- should not be discriminated -->
+          <xs:choice dfdl:initiatedContent="yes"> <!-- should be discriminated -->
+            <!--
+              This element is OCK 'implicit', minOccurs 1, with
+              initiatedContent. Because implicit minOcurrs 1, the first element
+              is not a point of uncertainty. So when we successfully parse the
+              initiator of the first element, the initiated content
+              discriminates inner choice. When we attempt to parse a second "e"
+              element and it fails, we backtrack to the outer choice, which
+              should not be discriminated, and then parse that data as the
+              "correct" element.
+            -->
+            <xs:element name="e" type="xs:int" dfdl:initiator="+" dfdl:terminator=";"
+               minOccurs="1" maxOccurs="2" dfdl:occursCountKind="implicit"/>
+            <xs:element name="incorrect" type="xs:string" dfdl:initiator="+"/>
+          </xs:choice>
+          <xs:element name="correct" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r2" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice> <!-- should not be discriminated -->
+          <xs:choice dfdl:initiatedContent="yes"> <!-- should be discriminated -->
+            <!--
+              This element is OCK 'fixed' with initiatedContent. Because fixed
+              occurences, no elements are points of uncertainties. There is only
+              the choice. So when we successfully parse the initiator of the
+              first element, the initiated content discriminates inner choice.
+              When we attempt to parse a second "e", it should not discriminate
+              the outer choice. If we then fail to parse a thrid "e", we
+              backtrack to the outer choice, which should not be discriminated,
+              and then parse that data as the "correct" element.
+            -->
+            <xs:element name="e" type="xs:int" dfdl:initiator="+" dfdl:terminator=";"
+               minOccurs="4" maxOccurs="4" dfdl:occursCountKind="fixed"/>
+            <xs:element name="incorrect" type="xs:string" dfdl:initiator="+"/>
+          </xs:choice>
+          <xs:element name="correct" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r3" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice> <!-- should not be discriminated -->
+          <xs:choice dfdl:initiatedContent="yes"> <!-- should be discriminated -->
+            <!--
+              This element is OCK 'parsed', minOccurs 1, with initiatedContent.
+              Even though minOccurs 1, because OKC is parsed the first element
+              is a point of uncertainty. So when we successfully parse the
+              initiator of the first element, the first element PoU is resolved
+              as well as the inner choice PoU. When that first parse fails, we
+              backtrack to the outer choice, which should not be discriminated,
+              and then parse that data as the "correct" element.
+            -->
+            <xs:element name="e" type="xs:int" dfdl:initiator="+" dfdl:terminator=";"
+               minOccurs="1" maxOccurs="2" dfdl:occursCountKind="parsed"/>
+            <xs:element name="incorrect" type="xs:string" dfdl:initiator="+"/>
+          </xs:choice>
+          <xs:element name="correct" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+  </tdml:defineSchema> 
+  
+  <tdml:parserTestCase name="arrayOptionalChildDiscriminatesElementAndChoice1"
+    model="s4"
+    description="Test array children's initiators discriminate enclosing choice properly.">
+    <tdml:document><![CDATA[+1;+a;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r1>
+          <correct>+1;+a;</correct>
+        </r1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>  
+
+  <tdml:parserTestCase name="fixedArrayInitiatedContentDiscriminatesChoice"
+    model="s4"
+    description="Test array children's initiators discriminate enclosing choice properly.">
+    <tdml:document><![CDATA[+1;+2;+a;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r2>
+          <correct>+1;+2;+a;</correct>
+        </r2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="parsedArrayMin1InitiatedContentDiscriminatesChoice"
+    model="s4"
+    description="Test array children's initiators discriminate enclosing choice properly.">
+    <tdml:document><![CDATA[+a;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r3>
+          <correct>+a;</correct>
+        </r3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

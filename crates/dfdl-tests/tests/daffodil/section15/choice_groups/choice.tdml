@@ -1,0 +1,2102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="choice" description="Tests for choice construct"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset" xmlns:ex="http://example.com"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns="http://example.com">
+
+  <tdml:defineSchema name="basic">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+           <xs:choice>
+             <xs:element name="int" type="xs:int" dfdl:lengthKind="delimited" />
+             <xs:element name="flt" type="xs:float" dfdl:lengthKind="delimited" />
+             <xs:element name="str" type="xs:string" dfdl:lengthKind="delimited" />
+           </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:choice>
+            <xs:element name="inty" type="xs:int"
+              dfdl:lengthKind="delimited" />
+            <xs:element name="stringy" type="xs:string"
+              dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="ch2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="redOrBlue" minOccurs="0" dfdl:occursCountKind="implicit">
+            <xs:complexType>
+              <xs:choice>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="basic" root="ch1"
+    model="basic"
+    description="simplest imaginable test of choice. No asserts, no discriminators - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[A]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:stringy>A</ex:stringy>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+   Test Name: choice_noBranch
+   Schema: basic
+   Purpose: This test demonstrates the SDE where you have a choice with no branches.
+  -->
+
+  <tdml:parserTestCase name="choice_noBranch" root="ch2"
+                       model="basic">
+    <tdml:document>red</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>choice element must contain one or more branches</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choice2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+  
+    <xs:group name="simpleGroup">
+      <xs:sequence dfdl:separator=".">
+        <xs:element name="string" type="xs:string" dfdl:lengthKind="delimited"/>
+        <xs:element name="int" type="xs:int" dfdl:lengthKind="delimited"/>
+      </xs:sequence>
+    </xs:group>
+    <xs:group name="simpleGroup2">
+      <xs:sequence dfdl:separator=",">
+        <xs:element name="string" type="xs:string" dfdl:lengthKind="delimited"/>
+        <xs:element name="int" type="xs:int" dfdl:lengthKind="delimited" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:complexType name="ctype">
+      <xs:choice>
+        <xs:element name="inty" type="xs:int"
+          dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+        <xs:element name="floaty" type="xs:float"
+          dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+        <xs:element name="stringy" type="xs:string"
+          dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:element name="ctype2">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="a">
+            <xs:complexType>
+              <xs:group ref="ex:simpleGroup" />
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="b">
+            <xs:complexType>
+              <xs:group ref="ex:simpleGroup2" />
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="a" type="ex:ctype"
+            dfdl:lengthKind="implicit" maxOccurs="unbounded" minOccurs="0"
+            dfdl:occursCountKind="parsed" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: choiceOfGroupRefs
+        Schema: choice2 
+          Root: ctype2
+       Purpose: This test demonstrates that you can have a choice with group references as branches
+-->
+  
+  <tdml:parserTestCase name="choiceOfGroupRefs" root="ctype2"
+    model="choice2"
+    description="Section 15 - Choice Groups - group refs as branches- DFDL-15-005R.">
+
+    <tdml:document><![CDATA[string.147]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ctype2>
+          <a>
+            <string>string</string>
+            <int>147</int>
+          </a>
+        </ctype2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choice2" root="ch1"
+    model="choice2"
+    description="Many choices one after another. 3 way branches - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[3.5AAA]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:floaty>3.5</ex:floaty>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>AAA</ex:stringy>
+          </ex:a>
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choice3" root="ch1"
+    model="choice2"
+    description="Many choices one after another. 3 way branches - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[999888777]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:inty>999</ex:inty>
+          </ex:a>
+          <ex:a>
+            <ex:inty>888</ex:inty>
+          </ex:a>
+          <ex:a>
+            <ex:inty>777</ex:inty>
+          </ex:a>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choice4" root="ch1"
+    model="choice2"
+    description="Many choices one after another. 3 way branches - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[3.54.65.7]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:floaty>3.5</ex:floaty>
+          </ex:a>
+          <ex:a>
+            <ex:floaty>4.6</ex:floaty>
+          </ex:a>
+          <ex:a>
+            <ex:floaty>5.7</ex:floaty>
+          </ex:a>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choice5" root="ch1"
+    model="choice2"
+    description="Many choices one after another. 3 way branches - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[AAABBBCCC]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:stringy>AAA</ex:stringy>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>BBB</ex:stringy>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>CCC</ex:stringy>
+          </ex:a>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="choice6" root="ch1"
+    model="choice2"
+    description="Many choices one after another. 3 way branches - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[999AAA777]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:inty>999</ex:inty>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>AAA</ex:stringy>
+          </ex:a>
+          <ex:a>
+            <ex:inty>777</ex:inty>
+          </ex:a>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choiceSch3">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="ch1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:choice>
+            <xs:element name="inty" type="xs:int"
+              dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+            <xs:element name="floaty" type="xs:float"
+              dfdl:lengthKind="explicit" dfdl:length="{ 3 }" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="choiceFail1" root="ch1"
+    model="choiceSch3"
+    description="Many choices one after another. 3 way branches - DFDL-15-001R.">
+
+    <tdml:document><![CDATA[AAA]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+      <tdml:error>xs:int</tdml:error>
+      <tdml:error>xs:float</tdml:error>
+      <tdml:error>AAA</tdml:error>
+      <tdml:error>Alternative failed</tdml:error>
+      <tdml:error>All choice alternatives failed</tdml:error>
+
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="choiceDelim">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:complexType name="ctype">
+      <xs:choice>
+        <xs:element name="inty" type="xs:int" />
+        <xs:element name="floaty" type="xs:float" />
+        <xs:element name="stringy" type="xs:string" dfdl:textTrimKind='padChar' dfdl:textStringPadCharacter="%SP;"/>
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="a" type="ex:ctype" maxOccurs="unbounded"
+            minOccurs="0" dfdl:occursCountKind="parsed" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="choiceDelim1" root="ch1"
+    model="choiceDelim"
+    description="Many choices one after another with delimited lengthKinds. 3 way branches. - DFDL-15-001R">
+
+    <tdml:document><![CDATA[3.5,AAA,999]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:floaty>3.5</ex:floaty>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>AAA</ex:stringy>
+          </ex:a>
+          <ex:a>
+            <ex:inty>999</ex:inty>
+          </ex:a>
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="choiceDelim2" root="ch1"
+    model="choiceDelim"
+    description="varied length delimited lengthKinds. 5 way branches. - DFDL-15-001R">
+
+    <tdml:document><![CDATA[1.2,ABC,-12,567,END]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:floaty>1.2</ex:floaty>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>ABC</ex:stringy>
+          </ex:a>
+          <ex:a>
+            <ex:inty>-12</ex:inty>
+          </ex:a>
+          <ex:a>
+            <ex:inty>567</ex:inty>
+          </ex:a>
+          <ex:a>
+            <ex:stringy>END</ex:stringy>
+          </ex:a>
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="choiceDelimFloat" root="ch1"
+    model="choiceDelim" description="1 way branches. - DFDL-15-001R">
+
+    <tdml:document><![CDATA[8.9]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:floaty>8.9</ex:floaty>
+          </ex:a>
+
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="choiceDelimString"
+    root="ch1" model="choiceDelim"
+    description="1 way branches, string only with many spaces inserted after value. - DFDL-15-001R">
+
+    <tdml:document><![CDATA[$40                                                        ]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:stringy>$40</ex:stringy>
+          </ex:a>
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choiceDelimStringwSp"
+    root="ch1" model="choiceDelim"
+    description="1 way branches, string only with many spaces between characters after value. - DFDL-15-001R">
+
+    <tdml:document><![CDATA[^ $        9]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:stringy>^ $        9</ex:stringy>
+          </ex:a>
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="choiceDelimInt" root="ch1"
+    model="choiceDelim" description="1 way branches. - DFDL-15-001R">
+
+    <tdml:document><![CDATA[-54]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>
+            <ex:inty>-54</ex:inty>
+          </ex:a>
+
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="nestedChoice1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:complexType name="intFloatOrString">
+      <xs:choice>
+        <xs:element name="inty" type="xs:int" />
+        <xs:element name="floaty" type="xs:float" />
+        <xs:element name="stringy" type="xs:string" />
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:complexType name="intOrFloat">
+      <xs:choice>
+        <xs:element name="inty" type="xs:int" />
+        <xs:element name="floaty" type="xs:float" />
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:choice>
+            <xs:element name="as">
+              <xs:complexType>
+                <xs:sequence dfdl:separator=",">
+                  <xs:element name="a" type="ex:intOrFloat"
+                    maxOccurs="3" minOccurs="3" dfdl:occursCountKind="fixed" />
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="bs">
+              <xs:complexType>
+                <xs:sequence dfdl:separator=",">
+                  <xs:element name="b" type="ex:intFloatOrString"
+                    maxOccurs="3" minOccurs="3" dfdl:occursCountKind="fixed" />
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="nestedChoice1" root="ch1"
+    model="nestedChoice1" description="Nested choices, deep backtracking - DFDL-15-001R.">
+
+    <!-- The AAA at the end causes the whole thing to unwind and choose element
+      b which allows for strings as the 3rd alternative. -->
+    <tdml:document><![CDATA[3.5,999,AAA]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:bs>
+            <ex:b>
+              <ex:floaty>3.5</ex:floaty>
+            </ex:b>
+            <ex:b>
+              <ex:inty>999</ex:inty>
+            </ex:b>
+            <ex:b>
+              <ex:stringy>AAA</ex:stringy>
+            </ex:b>
+          </ex:bs>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+
+
+
+  <tdml:parserTestCase name="nestedChoice2" root="ch1"
+    model="nestedChoice1" description="Nested choices, with no backtracking - DFDL-15-001R.">
+
+    <!-- one negative integer, float and integer. -->
+    <tdml:document><![CDATA[-12,2.0,000]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:as>
+            <ex:a>
+              <ex:inty>-12</ex:inty>
+            </ex:a>
+            <ex:a>
+              <ex:floaty>2.0</ex:floaty>
+            </ex:a>
+            <ex:a>
+              <ex:inty>0</ex:inty>
+            </ex:a>
+          </ex:as>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nestedChoiceAllFloat"
+    root="ch1" model="nestedChoice1"
+    description="Nested choices - all floats, with no backtracking - DFDL-15-001R.">
+
+    <!-- three floats. -->
+    <tdml:document><![CDATA[5.1,9.9,1.7]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:as>
+            <ex:a>
+              <ex:floaty>5.1</ex:floaty>
+            </ex:a>
+            <ex:a>
+              <ex:floaty>9.9</ex:floaty>
+            </ex:a>
+            <ex:a>
+              <ex:floaty>1.7</ex:floaty>
+            </ex:a>
+          </ex:as>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nestedChoiceAllInt"
+    root="ch1" model="nestedChoice1"
+    description="Nested choices - all Integers, with no backtracking - DFDL-15-001R.">
+
+    <!-- three integers. -->
+    <tdml:document><![CDATA[000,000,000]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:as>
+            <ex:a>
+              <ex:inty>0</ex:inty>
+            </ex:a>
+            <ex:a>
+              <ex:inty>0</ex:inty>
+            </ex:a>
+            <ex:a>
+              <ex:inty>0</ex:inty>
+            </ex:a>
+          </ex:as>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="nestedChoice2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:complexType name="String">
+      <xs:choice>
+        <xs:element name="stringy" type="xs:string" />
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:complexType name="intOrFloat">
+      <xs:choice>
+        <xs:element name="inty" type="xs:int" />
+        <xs:element name="floaty" type="xs:float" />
+      </xs:choice>
+    </xs:complexType>
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:choice>
+            <xs:element name="as">
+              <xs:complexType>
+                <xs:sequence dfdl:separator=",">
+                  <xs:element name="a" type="ex:intOrFloat"
+                    maxOccurs="3" minOccurs="3" dfdl:occursCountKind="fixed" />
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="bs">
+              <xs:complexType>
+                <xs:sequence dfdl:separator=",">
+                  <xs:element name="b" type="ex:String"
+                    maxOccurs="3" minOccurs="3" dfdl:occursCountKind="fixed" />
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+  </tdml:defineSchema>
+
+
+
+  <tdml:parserTestCase name="nestedChoiceAllString"
+    root="ch1" model="nestedChoice2"
+    description="Nested choices - all strings, with no backtracking - DFDL-15-001R.">
+
+    <!-- three strings with special characters, a number and decimal point 
+      . -->
+    <tdml:document><![CDATA[X4Z,^^#,5.5]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:bs>
+            <ex:b>
+              <ex:stringy>X4Z</ex:stringy>
+            </ex:b>
+            <ex:b>
+              <ex:stringy>^^#</ex:stringy>
+            </ex:b>
+            <ex:b>
+              <ex:stringy>5.5</ex:stringy>
+            </ex:b>
+          </ex:bs>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="choiceInSequenceWithSeparators">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="/" dfdl:separatorPosition="prefix">
+          <xs:element name="a" type="xs:string"/>
+          <xs:choice>
+            <xs:element name="foo" type="xs:int" dfdl:terminator=";"/>
+            <xs:element name="bar" type="xs:string" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="choiceInSequenceWithSeparators1"
+    root="ch1" model="choiceInSequenceWithSeparators"
+    description="Choice inside a sequence with separators - first choice">
+
+    <tdml:document><![CDATA[/abc/1;]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>abc</ex:a>
+          <ex:foo>1</ex:foo>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="choiceInSequenceWithSeparators2"
+    root="ch1" model="choiceInSequenceWithSeparators"
+    description="Choice inside a sequence with separators - second choice">
+  
+    <tdml:document><![CDATA[/abc/def]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>abc</ex:a>
+          <ex:bar>def</ex:bar>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="sequenceInChoiceInSequenceWithSeparators">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="/" dfdl:separatorPosition="prefix">
+          <xs:element name="a" type="xs:string"/>
+          <xs:choice>
+            <xs:element name="test">
+              <xs:complexType>
+                <xs:sequence dfdl:separator="-" dfdl:separatorPosition="prefix">
+                  <xs:element name="foo" type="xs:int" dfdl:terminator=";"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="bar" type="xs:string" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="sequenceInChoiceInSequenceWithSeparators1"
+    root="ch1" model="sequenceInChoiceInSequenceWithSeparators"
+    description="Sequence inside a choice inside a sequence with separators - first choice">
+
+    <tdml:document><![CDATA[/abc/-1;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>abc</ex:a>
+          <ex:test>
+            <ex:foo>1</ex:foo>
+          </ex:test>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="sequenceInChoiceInSequenceWithSeparators2"
+    root="ch1" model="sequenceInChoiceInSequenceWithSeparators"
+    description="Sequence inside a choice inside a sequence with separators - second choice">
+
+    <tdml:document><![CDATA[/abc/def]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>abc</ex:a>
+          <ex:bar>def</ex:bar>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="sequenceInChoiceInSequenceWithSameSeparators">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="/" dfdl:separatorPosition="prefix">
+          <xs:element name="a" type="xs:string"/>
+          <xs:choice>
+            <xs:element name="test">
+              <xs:complexType>
+                <xs:sequence dfdl:separator="/" dfdl:separatorPosition="prefix">
+                  <xs:element name="foo" type="xs:int" dfdl:terminator=";"/>
+                </xs:sequence>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="bar" type="xs:string" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="sequenceInChoiceInSequenceWithSameSeparators1"
+    root="ch1" model="sequenceInChoiceInSequenceWithSameSeparators"
+    description="Sequence inside a choice inside a sequence with separators - first choice">
+
+    <tdml:document><![CDATA[/abc//1;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>abc</ex:a>
+          <ex:test>
+            <ex:foo>1</ex:foo>
+          </ex:test>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="sequenceInChoiceInSequenceWithSameSeparators2"
+    root="ch1" model="sequenceInChoiceInSequenceWithSameSeparators"
+    description="Sequence inside a choice inside a sequence with separators - second choice">
+
+    <tdml:document><![CDATA[/abc/def]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:a>abc</ex:a>
+          <ex:bar>def</ex:bar>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="choiceWithInitsAndTerms">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:choice dfdl:initiator="(" dfdl:terminator=")">
+          <xs:element name="int" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+          <xs:element name="str" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="ch2">
+      <xs:complexType>
+        <xs:choice dfdl:initiator="(" dfdl:terminator=")">
+          <xs:sequence>
+            <xs:element name="int1" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+            <xs:element name="int2" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+          </xs:sequence>
+          <xs:element name="str" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="ch3">
+      <xs:complexType>
+        <xs:choice dfdl:initiator="(" dfdl:terminator=")">
+          <xs:sequence>
+            <xs:choice dfdl:initiator="[" dfdl:terminator="]">
+              <xs:element name="int1" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+              <xs:element name="str1" type="xs:string"/>
+            </xs:choice>
+            <xs:element name="str2" type="xs:string"/>
+          </xs:sequence>
+          <xs:element name="int2" type="xs:int"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="choiceWithInitsAndTermsInt"
+    root="ch1" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms - int choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[(1)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1><ex:int>1</ex:int></ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choiceWithInitsAndTermsStr"
+    root="ch1" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms - str choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[(foo)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1><ex:str>foo</ex:str></ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choiceWithInitsAndTermsError"
+    root="ch1" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms - terminator not found, first branch is matched - DFDL-15-004R">
+
+    <tdml:document><![CDATA[(1foo)]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>not found</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choiceWithInitsAndTermsSeqInt"
+    root="ch2" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms and sequence - seq choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[(12)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch2>
+          <ex:int1>1</ex:int1>
+          <ex:int2>2</ex:int2>
+        </ex:ch2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choiceWithInitsAndTermsSeqStr"
+    root="ch2" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms and sequence - str choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[(foo)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch2>
+          <ex:str>foo</ex:str>
+        </ex:ch2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nestedChoiceWithInitsAndTermsNestedInt"
+    root="ch3" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms and sequence with a nested choice with delimiters- nested int choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[([1]foo)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch3>
+          <ex:int1>1</ex:int1>
+          <ex:str2>foo</ex:str2>
+        </ex:ch3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nestedChoiceWithInitsAndTermsNestedStr"
+    root="ch3" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms and sequence with a nested choice with delimiters- nested str choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[([foo]bar)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch3>
+          <ex:str1>foo</ex:str1>
+          <ex:str2>bar</ex:str2>
+        </ex:ch3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="nestedChoiceWithInitsAndTermsInt"
+    root="ch3" model="choiceWithInitsAndTerms"
+    description="Choice with initiators and terms and sequence with a nested choice with delimiters- str choice - DFDL-15-004R">
+
+    <tdml:document><![CDATA[(1)]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch3>
+          <ex:int2>1</ex:int2>
+        </ex:ch3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choiceWithSequence">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:choice>
+          <xs:sequence>
+            <xs:element name="int1" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+            <xs:element name="int2" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+          </xs:sequence>
+          <xs:element name="str" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+  
+<!--
+     Test Name: choiceWithSequence1
+        Schema: ch1
+          Root: choiceWithSequence
+       Purpose: This test demonstrates that a choice can contain a sequence
+-->
+
+  <tdml:parserTestCase name="choiceWithSequence1"
+    root="ch1" model="choiceWithSequence"
+    description="Choice with sequence - first choice">
+
+    <tdml:document><![CDATA[12]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:int1>1</ex:int1>
+          <ex:int2>2</ex:int2>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+<!--
+     Test Name: choiceWithSequence2
+        Schema: ch1
+          Root: choiceWithSequence
+       Purpose: This test demonstrates that a choice can contain a sequence. In this case the second branch,
+                which is not a sequence, is applicable and therefore selected.
+-->
+
+  <tdml:parserTestCase name="choiceWithSequence2"
+    root="ch1" model="choiceWithSequence"
+    description="Choice with sequence - second choice">
+
+    <tdml:document><![CDATA[1str]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:str>1str</ex:str>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choiceWithChoice">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:choice>
+          <xs:choice>
+            <xs:element name="int" type="xs:int"/>
+            <xs:element name="float" type="xs:float"/>
+          </xs:choice>
+          <xs:element name="str" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+  
+  <!--
+     Test Name: choiceWithChoiceInt
+        Schema: ch1
+          Root: choiceWithChoice
+       Purpose: This test demonstrates that a choice can contain a choice. In this case the first branch of the outer
+                choice is selected, and the first branch within that nested choice.
+  -->
+
+  <tdml:parserTestCase name="choiceWithChoiceInt"
+    root="ch1" model="choiceWithChoice"
+    description="Choice with choice - int choice">
+
+    <tdml:document><![CDATA[12]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:int>12</ex:int>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: choiceWithChoiceFloat
+        Schema: ch1
+          Root: choiceWithChoice
+       Purpose: This test demonstrates that a choice can contain a choice. In this case the first branch of the outer
+                choice is selected, and the second branch within that nested choice.
+  -->
+  
+  <tdml:parserTestCase name="choiceWithChoiceFloat"
+    root="ch1" model="choiceWithChoice"
+    description="Choice with choice - float choice">
+
+    <tdml:document><![CDATA[1.2]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:float>1.2</ex:float>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: choiceWithChoiceString
+        Schema: ch1
+          Root: choiceWithChoice
+       Purpose: This test demonstrates that a choice can contain a choice. In this case the second branch of the outer
+                choice is selected.
+  -->
+  
+  <tdml:parserTestCase name="choiceWithChoiceString"
+    root="ch1" model="choiceWithChoice"
+    description="Choice with choice - string choice">
+
+    <tdml:document><![CDATA[1.2mm]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:str>1.2mm</ex:str>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choiceWithArray">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="int" type="xs:int" minOccurs="4" maxOccurs="10" dfdl:occursCountKind="implicit" dfdl:terminator=";"/>
+          <xs:element name="float" type="xs:float" minOccurs="4" maxOccurs="10" dfdl:occursCountKind="implicit" dfdl:terminator=";"/>
+          <xs:element name="str" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+  
+  <!--
+     Test Name: choiceWithArrayInts
+        Schema: ch1
+          Root: choiceWithArray
+       Purpose: This test demonstrates that a choice can contain an array of elements. In this case
+                all of the elements are ints
+  -->
+
+  <tdml:parserTestCase name="choiceWithArrayInts"
+    root="ch1" model="choiceWithArray"
+    description="Choice with array - ints">
+
+    <tdml:document><![CDATA[1;2;3;4;5;6;7;8;9;]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:int>1</ex:int>
+          <ex:int>2</ex:int>
+          <ex:int>3</ex:int>
+          <ex:int>4</ex:int>
+          <ex:int>5</ex:int>
+          <ex:int>6</ex:int>
+          <ex:int>7</ex:int>
+          <ex:int>8</ex:int>
+          <ex:int>9</ex:int>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: choiceWithArrayFloats
+        Schema: ch1
+          Root: choiceWithArray
+       Purpose: This test demonstrates that a choice can contain an array of elements. In this case
+                the elements are all interpreted as floats, because one of the elements is a float.
+  -->
+
+  <tdml:parserTestCase name="choiceWithArrayFloats"
+    root="ch1" model="choiceWithArray"
+    description="Choice with array - floats">
+
+    <tdml:document><![CDATA[1;2;3.3;4;5;6;7;8;9;]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:float>1.0</ex:float>
+          <ex:float>2.0</ex:float>
+          <ex:float>3.3</ex:float>
+          <ex:float>4.0</ex:float>
+          <ex:float>5.0</ex:float>
+          <ex:float>6.0</ex:float>
+          <ex:float>7.0</ex:float>
+          <ex:float>8.0</ex:float>
+          <ex:float>9.0</ex:float>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+  
+  <!--
+     Test Name: choiceWithArrayString
+        Schema: ch1
+          Root: choiceWithArray
+       Purpose: This test demonstrates that the parser was able to determine the correct branch even though the other
+                branches would have been viable options up until the 'a'
+  -->
+
+  <tdml:parserTestCase name="choiceWithArrayString"
+    root="ch1" model="choiceWithArray"
+    description="Choice with array - string">
+
+    <tdml:document><![CDATA[1;2;a;4;5;6;7;8;9;]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:ch1>
+          <ex:str>1;2;a;4;5;6;7;8;9;</ex:str>
+        </ex:ch1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choice_minOccurs" root="choice_minOccur"
+    model="minMaxChoice.dfdl.xsd"
+    description="Section 15 - Choice Groups - Verify that minOccurs is not allowed on choice groups.">
+
+    <tdml:document><![CDATA[string.147]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Attribute 'minOccurs' is not allowed to appear in element 'xs:choice'</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="choice_maxOccurs" root="choice_maxOccur"
+    model="minMaxChoice.dfdl.xsd"
+    description="Section 15 - Choice Groups - Verify that maxOccurs is not allowed on choice groups.">
+
+    <tdml:document><![CDATA[string.147]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Attribute 'maxOccurs' is not allowed to appear in element 'xs:choice'</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="optionalChoices">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+      <xs:complexType name="redSeq">
+        <xs:sequence dfdl:separator="/" dfdl:separatorPosition="prefix" dfdl:separatorSuppressionPolicy="trailingEmptyStrict">
+          <xs:element name="descrip" type="xs:string"/>
+        </xs:sequence>
+      </xs:complexType>
+
+      <xs:complexType name="blueSeq">
+        <xs:sequence dfdl:separator="/" dfdl:separatorPosition="prefix" dfdl:separatorSuppressionPolicy="trailingEmptyStrict">
+          <xs:element name="descrip" type="xs:string"/>
+        </xs:sequence>
+      </xs:complexType>
+
+      <xs:element name="e1">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="/%NL;" dfdl:separatorPosition="postfix" dfdl:separatorSuppressionPolicy="trailingEmptyStrict">
+            <xs:element name="redOrBlue" minOccurs="0" dfdl:occursCountKind="implicit">
+              <xs:complexType>
+                <xs:choice>
+                  <xs:element name="red" type="ex:redSeq" dfdl:initiator="red" dfdl:occursCountKind="implicit"/>
+                  <xs:element name="blue" type="ex:blueSeq" dfdl:initiator="blue" dfdl:occursCountKind="implicit"/>
+                </xs:choice>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="moreInfo" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="e2">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="/%NL;" dfdl:separatorPosition="postfix" dfdl:separatorSuppressionPolicy="trailingEmptyStrict">
+            <xs:element name="redOrBlue" minOccurs="0" dfdl:occursCountKind="implicit">
+              <xs:complexType>
+                <xs:choice>
+                  <xs:element name="blue" minOccurs="0" type="ex:blueSeq" dfdl:initiator="blue" dfdl:occursCountKind="implicit"/>
+                  <xs:element name="red" type="ex:redSeq" dfdl:initiator="red" dfdl:occursCountKind="implicit"/>
+                </xs:choice>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="moreInfo" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="e3">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="/%NL;" dfdl:separatorPosition="postfix" dfdl:separatorSuppressionPolicy="trailingEmptyStrict">
+            <xs:element name="redOrBlue" minOccurs="0" dfdl:occursCountKind="implicit">
+              <xs:complexType>
+                <xs:choice>
+                  <xs:element name="blue" type="ex:blueSeq" minOccurs="0" dfdl:initiator="blue" dfdl:occursCountKind="implicit"/>
+                  <xs:element name="red" type="ex:redSeq" minOccurs="0" dfdl:initiator="red" dfdl:occursCountKind="implicit"/>
+                </xs:choice>
+              </xs:complexType>
+            </xs:element>
+            <xs:element name="moreInfo" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+       Test Name: optionalChoice01
+       Schema: optionalChoices
+       Purpose: This test demonstrates the scenario where you have a choice of two initiated elements in an optional choice. In this case the first element should be selected.
+  -->
+  
+  <tdml:parserTestCase name="optionalChoice01" root="e1"
+    model="optionalChoices">
+    <tdml:document><![CDATA[red/is a color/
+it sure is/
+]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <e1>
+          <redOrBlue>
+            <red>
+              <descrip>is a color</descrip>
+            </red>
+          </redOrBlue>
+          <moreInfo>it sure is</moreInfo>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: optionalChoice02
+     Schema: optionalChoices
+     Purpose: This test demonstrates the scenario where you have a choice of two initiated elements in an optional choice. In this case the second element should be selected.
+-->
+  
+  <tdml:parserTestCase name="optionalChoice02" root="e1"
+    model="optionalChoices">
+    <tdml:document><![CDATA[blue/is also a color/
+it sure is/
+]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <e1>
+          <redOrBlue>
+            <blue>
+              <descrip>is also a color</descrip>
+            </blue>
+          </redOrBlue>
+          <moreInfo>it sure is</moreInfo>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: optionalChoice03
+     Schema: optionalChoices
+     Purpose: This test demonstrates the scenario where you have a choice of optional elements. This should result in a Schema Definition Error.
+-->
+  
+  <tdml:parserTestCase name="optionalChoice03" root="e2"
+    model="optionalChoices">
+    <tdml:document><![CDATA[blue/is a color/
+it sure is/
+]]></tdml:document>
+
+    <tdml:errors>
+    <tdml:error>Schema Definition Error</tdml:error>
+    <tdml:error>Branch of choice</tdml:error>
+    <tdml:error>non-optional</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: optionalChoice04
+     Schema: optionalChoices
+     Purpose: This test demonstrates the scenario where you have a choice of optional elements. This should result in a Schema Definition Error.
+-->
+  
+  <tdml:parserTestCase name="optionalChoice04" root="e2"
+    model="optionalChoices">
+    <tdml:document><![CDATA[red/is also a color/
+it sure is/
+]]></tdml:document>
+
+    <tdml:errors>
+    <tdml:error>Schema Definition Error</tdml:error>
+    <tdml:error>Branch of choice</tdml:error>
+    <tdml:error>non-optional</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: optionalChoice05
+     Schema: optionalChoices
+     Purpose: This test demonstrates the scenario where you have a choice of optional elements. This should result in a Schema Definition Error.
+-->
+  
+  <tdml:parserTestCase name="optionalChoice05" root="e3"
+    model="optionalChoices">
+    <tdml:document><![CDATA[blue/is a color/
+it sure is/
+]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Branch of choice</tdml:error>
+      <tdml:error>must be non-optional</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="invalidChoices">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:choice>
+            <xs:element name="inty" type="xs:int"
+              dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ 5 }" />
+            <xs:element name="stringy" type="xs:string"
+              dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: choice_with_inputvaluecalc
+     Schema: invalidChoices
+     Purpose: This test demonstrates the scenario where you have a choice of with an inputValueCalc. This should result in a Schema Definition Error.
+-->
+
+  <tdml:parserTestCase name="choice_with_inputvaluecalc" root="ch1"
+    model="invalidChoices">
+    <tdml:document><![CDATA[test]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Branch of choice</tdml:error>
+      <tdml:error>cannot have the dfdl:inputValueCalc property</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="direct_dispatch_1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="dd1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:element dfdl:choiceBranchKey="1" name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+            <xs:element dfdl:choiceBranchKey="2" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice>
+            <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+              <xs:element dfdl:choiceBranchKey="1" name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+              <xs:element dfdl:choiceBranchKey="2" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+            </xs:choice>
+            <xs:element name="defaulty" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd_missing_branch_key">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:element dfdl:choiceBranchKey="1" name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+            <xs:element name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd_duplicate_branch_keys">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:element dfdl:choiceBranchKey="foo" name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+            <xs:element dfdl:choiceBranchKey="foo" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd_choice_branch_key_on_global_element">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:element ref="ex:inty" />
+            <xs:element ref="ex:stringy" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element dfdl:choiceBranchKey="1" name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+    <xs:element dfdl:choiceBranchKey="2" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+    
+    <xs:element name="dd_choice_branch_key_on_global_group_child">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:group ref="ex:intyGroup" />
+            <xs:group ref="ex:stringyGroup" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:group name="intyGroup">
+      <xs:sequence dfdl:choiceBranchKey="1">
+        <xs:element name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:group name="stringyGroup">
+      <xs:sequence dfdl:choiceBranchKey="2">
+        <xs:element name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="dd_choice_dispatch_with_initiated_content">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }" dfdl:initiatedContent="yes">
+            <xs:element dfdl:choiceBranchKey="1" dfdl:initiator="int:" name="inty" type="xs:int" dfdl:lengthKind="delimited" />
+            <xs:element dfdl:choiceBranchKey="2" dfdl:initiator="str:" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd3">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch1" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch1 }">
+            <xs:element dfdl:choiceBranchKey="1" name="inty1" type="xs:int" dfdl:lengthKind="delimited" />
+            <xs:element dfdl:choiceBranchKey="2" name="stringy1" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+          <xs:element name="branch2" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch2 }">
+            <xs:element dfdl:choiceBranchKey="1" name="inty2" type="xs:int" dfdl:lengthKind="delimited" />
+            <xs:element dfdl:choiceBranchKey="2" name="stringy2" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd4">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:element dfdl:choiceBranchKey="1" name="inty" type="xs:int" dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:discriminator>{ fn:false() }</dfdl:discriminator>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+            <xs:element dfdl:choiceBranchKey="2" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd5">
+      <xs:complexType>
+        <xs:choice>
+          <xs:sequence dfdl:separator=";">
+            <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+            <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+              <xs:sequence dfdl:choiceBranchKey="1">
+                <xs:element name="inty1" type="xs:int" dfdl:lengthKind="delimited">
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:discriminator>{ fn:true() }</dfdl:discriminator>
+                    </xs:appinfo>
+                  </xs:annotation>
+                </xs:element>
+                <xs:element name="inty2" type="xs:int" dfdl:lengthKind="delimited" />
+              </xs:sequence>
+              <xs:element dfdl:choiceBranchKey="2" name="stringy" type="xs:string" dfdl:lengthKind="delimited" />
+            </xs:choice>
+          </xs:sequence>
+          <xs:element name="longstring" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="7" />
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd6">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:element ref="ex:inty1" dfdl:choiceBranchKey="1" />
+            <xs:element ref="ex:stringy1" dfdl:choiceBranchKey="2" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="inty1" type="xs:int" dfdl:lengthKind="delimited" />
+    <xs:element name="stringy1" type="xs:string" dfdl:lengthKind="delimited" />
+
+    <xs:element name="dd7">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="delimited" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:group ref="ex:inty1g1" dfdl:choiceBranchKey="1" />
+            <xs:group ref="ex:stringy1g1" dfdl:choiceBranchKey="2" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:group name="inty1g1">
+      <xs:sequence>
+        <xs:element name="inty1" type="xs:int" dfdl:lengthKind="delimited" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:group name="stringy1g1">
+      <xs:sequence>
+        <xs:element name="stringy1" type="xs:string" dfdl:lengthKind="delimited" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="dd8">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="branch" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:branch }">
+            <xs:sequence dfdl:choiceBranchKey="0" />
+            <xs:element ref="inty1" dfdl:choiceBranchKey="1" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:group name="groupOfChoice">
+      <xs:sequence>
+        <xs:element name="key" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+        <xs:choice dfdl:choiceDispatchKey="{ ./ex:key }">
+          <xs:sequence dfdl:choiceBranchKey="a">
+            <xs:element name="elt_a" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3" />
+          </xs:sequence>
+          <xs:sequence dfdl:choiceBranchKey="b">
+            <xs:element name="elt_b" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3" />
+            <xs:element name="elt_c" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3"
+              minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression" dfdl:occursCount="{ if (fn:exists(../ex:elt_b)) then 1 else 0 }" />
+          </xs:sequence>
+        </xs:choice>
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="dd9">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="prev" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:group ref="groupOfChoice" />
+          <xs:element name="post" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="dd10">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="prev" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:element name="key" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:choice dfdl:choiceDispatchKey="{ ./ex:key }">
+            <xs:sequence dfdl:choiceBranchKey="a">
+              <xs:element name="elt_a" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3" />
+            </xs:sequence>
+            <xs:sequence dfdl:choiceBranchKey="b">
+              <xs:element name="elt_b" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3" />
+              <xs:element name="elt_c" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3"
+                minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression" dfdl:occursCount="{ if (fn:exists(../ex:elt_b)) then 1 else 0 }" />
+            </xs:sequence>
+          </xs:choice>
+          <xs:element name="post" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="direct_dispatch_01" root="dd1"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R.">
+    <tdml:document><![CDATA[1;5]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd1>
+          <ex:branch>1</ex:branch>
+          <ex:inty>5</ex:inty>
+        </ex:dd1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_02" root="dd1"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R.">
+    <tdml:document><![CDATA[2;string]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd1>
+          <ex:branch>2</ex:branch>
+          <ex:stringy>string</ex:stringy>
+        </ex:dd1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_03" root="dd1"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. Chooses the correct branch, but the branch fails to parse">
+    <tdml:document><![CDATA[1;fail]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>Choice dispatch branch failed</tdml:error>
+      <tdml:error>Unable to parse</tdml:error>
+      <tdml:error>xs:int</tdml:error>
+      <tdml:error>fail</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_04" root="dd1"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. Dispatch key does not match of the branch keys">
+    <tdml:document><![CDATA[badkey;fail]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>Choice dispatch key</tdml:error>
+      <tdml:error>badkey</tdml:error>
+      <tdml:error>failed to match</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_05" root="dd1"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. Dispatch key returns empty string">
+    <tdml:document><![CDATA[;default]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Runtime Schema Definition Error</tdml:error>
+      <tdml:error>Non-empty string required</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_06" root="dd2"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. Dispatch key does not match, so backtrack.">
+    <tdml:document><![CDATA[10;default]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd2>
+          <ex:branch>10</ex:branch>
+          <ex:defaulty>default</ex:defaulty>
+        </ex:dd2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_07" root="dd_missing_branch_key"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. SDE, require choiceBranchKey when choiceDispatchKey is defined.">
+    <tdml:document><![CDATA[10;default]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>choiceBranchKey</tdml:error>
+      <tdml:error>choiceBranchKeyRanges</tdml:error>
+      <tdml:error>defined</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_08" root="dd_duplicate_branch_keys"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. SDE, non-unique choiceBranchKeys">
+    <tdml:document><![CDATA[10;default]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>choiceBranchKey</tdml:error>
+      <tdml:error>not unique</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>inty</tdml:error>
+      <tdml:error>stringy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_09" root="dd_choice_branch_key_on_global_element"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. SDE, choiceBranchKey defined on global element">
+    <tdml:document><![CDATA[10;default]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>choiceBranchKey</tdml:error>
+      <tdml:error>global element</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_10" root="dd_choice_branch_key_on_global_group_child"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. SDE, choiceBranchKey defined the child seq/choice of a global group declaration">
+    <tdml:document><![CDATA[10;default]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>global group definition</tdml:error>
+      <tdml:error>choice</tdml:error>
+      <tdml:error>sequence</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_11" root="dd_choice_dispatch_with_initiated_content"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. SDE, choiceDispatchKey is defined with initiatedContent='yes'">
+    <tdml:document><![CDATA[10;default]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>initiatedContent</tdml:error>
+      <tdml:error>choiceDispatchKey</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_12" root="dd3"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. SDE, multiple dispatch choices in the same sequence">
+    <tdml:document><![CDATA[1;5;2;five]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd3>
+          <ex:branch1>1</ex:branch1>
+          <ex:inty1>5</ex:inty1>
+          <ex:branch2>2</ex:branch2>
+          <ex:stringy2>five</ex:stringy2>
+        </ex:dd3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_13" root="dd4"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. discriminator in dispatched branch fails, causing parse error">
+    <tdml:document><![CDATA[1;5]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>Choice dispatch branch failed</tdml:error>
+      <tdml:error>Assertion Failed</tdml:error>
+      <tdml:error>fn:false()</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!-- This test shows that if there is a discriminator inside a dispatch
+       choice, then that discriminator applies to an outer point of
+       uncertainty. If it did not apply to the outer POU (and thus was
+       ignored), then this test would result in
+       <longstring>1;5;foo</longstring> rather than causing a parse error -->
+  <tdml:parserTestCase name="direct_dispatch_14" root="dd5"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. discriminator in dispatched branch passes, but later element fails">
+    <tdml:document><![CDATA[1;5;foo]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>All choice alternatives failed</tdml:error>
+      <tdml:error>Choice dispatch branch failed</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_15" root="dd6"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. choice branch key on element ref">
+    <tdml:document><![CDATA[1;5]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd6>
+          <ex:branch>1</ex:branch>
+          <ex:inty1>5</ex:inty1>
+        </ex:dd6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_16" root="dd7"
+    model="direct_dispatch_1"
+    description="simple case of direct dispatch - DFDL-15-001R. choice branch key on group ref">
+    <tdml:document><![CDATA[2;5]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd7>
+          <ex:branch>2</ex:branch>
+          <ex:stringy1>5</ex:stringy1>
+        </ex:dd7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="direct_dispatch_17" root="dd8"
+    model="direct_dispatch_1"
+    description="direct dispatch to empty branch">
+    <tdml:document><![CDATA[0]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd8>
+          <ex:branch>0</ex:branch>
+        </ex:dd8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="dispatch_group_choice" root="dd9"
+    model="direct_dispatch_1" roundTrip="true"
+    description="simple case of direct dispatch - DFDL-15-001R. Uses group containing a choice with direct dispatch">
+    <tdml:document><![CDATA[0bbbbccc1]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd9>
+          <ex:prev>0</ex:prev>
+          <ex:key>b</ex:key>
+          <ex:elt_b>bbb</ex:elt_b>
+          <ex:elt_c>ccc</ex:elt_c>
+          <ex:post>1</ex:post>
+        </ex:dd9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="dispatch_group_choice_2" root="dd10"
+    model="direct_dispatch_1" roundTrip="true"
+    description="simple case of direct dispatch - DFDL-15-001R. Uses group containing a choice with direct dispatch">
+    <tdml:document><![CDATA[0bbbbccc1]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd10>
+          <ex:prev>0</ex:prev>
+          <ex:key>b</ex:key>
+          <ex:elt_b>bbb</ex:elt_b>
+          <ex:elt_c>ccc</ex:elt_c>
+          <ex:post>1</ex:post>
+        </ex:dd10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="dispatch_group_choice_3" root="dd10"
+    model="direct_dispatch_1" roundTrip="true"
+    description="simple case of direct dispatch - DFDL-15-001R. Uses group containing a choice with direct dispatch">
+    <tdml:document><![CDATA[0aaaa1]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:dd10>
+          <ex:prev>0</ex:prev>
+          <ex:key>a</ex:key>
+          <ex:elt_a>aaa</ex:elt_a>
+          <ex:post>1</ex:post>
+        </ex:dd10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

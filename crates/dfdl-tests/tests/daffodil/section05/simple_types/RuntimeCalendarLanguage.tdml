@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="RuntimeCalendarLanguage" description="Section 13.11 - Properties specific to Calendar with Text or Binary Representation" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com" 
+  xmlns:tns="http://example.com" xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="s1" elementFormDefault="unqualified">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" calendarPatternKind="explicit"/>
+
+    <xs:element name="r">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="lang" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="2"/>
+          <xs:element name="variant" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"/>
+          <xs:element name="date" type="xs:date" dfdl:calendarPattern="EEEE MMM yyyy" 
+          dfdl:calendarLanguage="{ fn:concat(../lang, '-', ../variant) }" 
+          dfdl:lengthKind="delimited" dfdl:encoding="utf-8"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: runtimeCalendarLanguage1
+        Schema: s1
+          Root: r
+       Purpose: This test demonstrates setting the calendarLanguage property at runtime to German.
+-->
+  <tdml:parserTestCase name="runtimeCalendarLanguage1" root="r" model="s1" 
+  description="Section 13 Simple Types - calendarLanguage - DFDL-13-145R">
+
+    <tdml:document><![CDATA[de1996Freitag März 2013]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r>
+          <lang>de</lang>
+          <variant>1996</variant>
+          <date>2013-03-01</date>
+        </r>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: invalidCalendarLanguage1
+        Schema: s1
+          Root: r
+       Purpose: This test demonstrates setting the calendarLanguage property at runtime to 
+                an invalid value results in a Schema Definition Error.
+-->
+  <tdml:parserTestCase name="invalidCalendarLanguage1" root="r" model="s1" 
+  description="Section 13 Simple Types - calendarLanguage - DFDL-13-145R">
+
+    <tdml:document><![CDATA[f@1234Freitag März 2013]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>dfdl:calendarLanguage property syntax error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="s2" elementFormDefault="unqualified">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" calendarPatternKind="explicit"/>
+
+    <xs:element name="r">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="lang" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="2"/>
+          <xs:element name="variant" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"/>
+          <xs:element name="date" type="xs:date" dfdl:calendarPattern="EEEE MMMM yyyy" 
+          dfdl:calendarLanguage="{ fn:concat(../lang, '-', ../variant) }" 
+          dfdl:lengthKind="delimited" dfdl:encoding="utf-8" 
+          dfdl:outputValueCalc="{ xs:date(../dateString) }"/>
+          <xs:element name="dateString" type="xs:string" dfdl:lengthKind="delimited"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+
+<!--
+     Test Name: unparseRuntimeCalendarLanguageOVC
+        Schema: s2
+          Root: r
+       Purpose: This test demonstrates setting the calendarLanguage property at runtime with unparse.
+-->
+  <tdml:unparserTestCase name="unparseRuntimeCalendarLanguageOVC" root="r" model="s2" 
+  description="Section 13 Simple Types - calendarLanguage - DFDL-13-145R">
+
+    <tdml:document><![CDATA[de,1996,Freitag März 2013,2013-03-01]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <tns:r>
+          <lang>de</lang>
+          <variant>1996</variant>
+          <date>2013-03-01</date>
+          <dateString>2013-03-01</dateString>
+        </tns:r>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+   <tdml:tutorial>
+      <p>This test is specifically designed to fail if the value of calendar language is not
+        being cached on the infoset element. By the time the outputValueCalc completes and
+        we're ready to actually unparse the date element, the calendar language will have been
+        set to something entirely different (at runtime). So if the right calendar language
+        is not restored, the test will fail.
+      </p>
+      <p>
+        The way it works is that the outputValueCalc element is followed by a regular element, but it
+        is also one that gets the calendarLanguage at runtime from data. This will get unparsed normally,
+        and when we finally are able to come back to satisfy the outputValueCalc, an element will
+        have been unparsed using a different calendarLanguage value than the outputValueCalc'ed element
+        needs.
+      </p>
+    </tdml:tutorial>
+
+  <tdml:defineSchema name="s3" elementFormDefault="unqualified">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" calendarPatternKind="explicit"/>
+
+     <xs:element name="r">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="lang" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="2"/>
+          <xs:element name="variant" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"
+            dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" />
+          <xs:element name="date" type="xs:date" dfdl:calendarPattern="EEEE MMMM yyyy" 
+          dfdl:calendarLanguage="{ fn:concat(../lang, '-', ../variant) }" 
+          dfdl:lengthKind="delimited" dfdl:encoding="utf-8" 
+          dfdl:outputValueCalc="{ xs:date(../dateString) }"/>
+          <xs:element name="lang2" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="2"/>
+          <xs:element name="variant2" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"
+            dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" />
+          <xs:element name="date2" type="xs:date" dfdl:calendarPattern="EEEE MMMM yyyy" 
+          dfdl:calendarLanguage="{ fn:concat(../lang2, '-', ../variant2) }" 
+          dfdl:lengthKind="delimited" dfdl:encoding="utf-8"/>
+          <xs:element name="dateString" type="xs:string" dfdl:lengthKind="delimited"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+
+<!--
+     Test Name: unparseRuntimeCalendarLanguageOVCCacheCheck
+        Schema: s3
+          Root: r
+       Purpose: This test demonstrates setting the calendarLanguage property at runtime with unparse.
+-->
+  <tdml:unparserTestCase name="unparseRuntimeCalendarLanguageOVCCacheCheck" root="r" model="s3" description="Section 13 Simple Types - calendarLanguage - DFDL-13-145R">
+
+    <tdml:document><![CDATA[de,1996,Freitag März 2013,en,us  ,Friday March 2013,2013-03-01]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <tns:r>
+          <lang>de</lang>
+          <variant>1996</variant>
+          <date>2013-03-01</date>
+          <lang2>en</lang2>
+          <variant2>us</variant2>
+          <date2>2013-03-01</date2>
+          <dateString>2013-03-01</dateString>
+        </tns:r>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

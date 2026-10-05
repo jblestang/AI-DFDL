@@ -1,0 +1,595 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="SimpleTypesUnparse" description="Section 5 - simple types unparsing"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com" xmlns:tns="http://example.com"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="SimpleTypes-binary">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" fillByte="%#r20;" representation="binary" lengthUnits="bytes" />
+    <dfdl:defineVariable name="FOUR" type="xs:int" defaultValue="4" external="false" />
+
+    <xs:element name="hb_01" type="xs:hexBinary" dfdl:lengthKind="explicit" dfdl:length="4" />
+    <xs:element name="hb_02" type="xs:hexBinary" dfdl:lengthKind="explicit" dfdl:length="{ $FOUR }" />
+    <xs:element name="hb_03" type="xs:hexBinary" dfdl:fillByte="1" dfdl:lengthKind="explicit" dfdl:length="5" />
+    <xs:element name="hb_04" type="xs:hexBinary" dfdl:fillByte="b" dfdl:lengthKind="explicit" dfdl:length="2" />
+    <xs:element name="hb_05" dfdl:fillByte="b" dfdl:lengthKind="delimited" dfdl:encoding="ISO-8859-1">
+      <xs:simpleType>
+        <xs:restriction base="xs:hexBinary">
+          <xs:minLength value="10"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+    <xs:element name="hb_06" dfdl:fillByte="0" dfdl:lengthKind="delimited" dfdl:encoding="ISO-8859-1">
+      <xs:simpleType>
+        <xs:restriction base="xs:hexBinary">
+          <xs:minLength value="2"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+    <xs:element name="hb_07" dfdl:fillByte="a" dfdl:lengthKind="implicit" dfdl:encoding="ISO-8859-1">
+      <xs:simpleType>
+        <xs:restriction base="xs:hexBinary">
+          <xs:minLength value="3"/>
+          <xs:maxLength value="3"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+
+  <xs:element name="ehb_08">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="hb_08" type="xs:hexBinary" dfdl:fillByte="a" dfdl:lengthKind="explicit" dfdl:length="1" dfdl:outputValueCalc="{ xs:hexBinary('a1') }"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ehb_09">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="hb_09" type="xs:hexBinary" dfdl:fillByte="a" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:outputValueCalc="{ dfdl:hexBinary(xs:short(208)) }"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ehb_10">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="hb_10" type="xs:hexBinary" dfdl:fillByte="a" dfdl:lengthKind="explicit" dfdl:length="1" dfdl:outputValueCalc="{ dfdl:hexBinary(5) }"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ehb_11">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="hb_11" type="xs:hexBinary" dfdl:fillByte="a" dfdl:lengthKind="explicit" dfdl:length="1" dfdl:outputValueCalc="{ dfdl:hexBinary('a1') }"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="hb_12">
+    <xs:complexType>
+      <xs:sequence dfdl:separator=",">
+        <xs:element name="input" type="xs:string" dfdl:lengthKind="delimited"/>
+        <xs:element name="out" type="xs:hexBinary" dfdl:fillByte="a" dfdl:lengthKind="explicit" dfdl:length="1" dfdl:outputValueCalc="{ dfdl:hexBinary(xs:byte(../ex:input)) }"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ehb_13">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="hb_13" type="xs:hexBinary" dfdl:fillByte="0" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:outputValueCalc="{ dfdl:hexBinary(-2) }"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+    
+    <xs:element name="hb_14">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="hb_14" type="xs:hexBinary" dfdl:fillByte="0" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:outputValueCalc="{ dfdl:hexBinary(-2084) }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="hb_15" dfdl:fillByte="a" dfdl:lengthKind="implicit">
+      <xs:simpleType>
+        <xs:restriction base="xs:hexBinary">
+          <xs:minLength value="3"/>
+          <xs:maxLength value="4"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+    
+    <xs:element name="hb_16" type="xs:hexBinary" dfdl:fillByte="0" dfdl:lengthKind="delimited" dfdl:encoding="ISO-8859-1"/>
+
+    <xs:element name="float_01" type="xs:float" />
+    <xs:element name="double_01" type="xs:double" />
+    <xs:element name="integer_01" type="xs:int"
+      dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="8" />
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: hexBinary_unparse_01
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type 
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_01" root="hb_01"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_01>A1B1C1D1</ex:hb_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1b1c1d1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: hexBinary_unparse_02
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with more data in the infoset than the specified length
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_02" root="hb_01"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_01>A1B1C1D1E1</ex:hb_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>xs:hexBinary</tdml:error>
+      <tdml:error>calculated length</tdml:error>
+      <tdml:error>40 bits</tdml:error>
+      <tdml:error>32</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: hexBinary_unparse_03
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with less data in the infoset than the specified length
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_03" root="hb_01"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_01>A1B1C1</ex:hb_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1b1c120]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: hexBinary_unparse_04
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with no data in the infoset
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_04" root="hb_01"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_01></ex:hb_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[20202020]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+
+
+  <!--
+    Test name: hexBinary_variable_unparse_01
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with variable length
+  -->
+  <tdml:unparserTestCase name="hexBinary_variable_unparse_01" root="hb_02"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_02>A1B1C1D1</ex:hb_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1b1c1d1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: hexBinary_variable_unparse_02
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with more data in the infoset than a variable specified length
+  -->
+  <tdml:unparserTestCase name="hexBinary_variable_unparse_02" root="hb_02"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_02>A1B1C1D1</ex:hb_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1b1c1d1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: hexBinary_variable_unparse_03
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with less data in the infoset than a variable specified length
+  -->
+  <tdml:unparserTestCase name="hexBinary_variable_unparse_03" root="hb_02"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_02>A1B1C1</ex:hb_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1b1c120]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: hexBinary_variable_unparse_04
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type with no data in the infoset and a variable length
+  -->
+  <tdml:unparserTestCase name="hexBinary_variable_unparse_04" root="hb_02"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_02></ex:hb_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[20202020]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+    Test name: hexBinary_unparse_05
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type when there is not enough data to fulfill the specified length
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_05" root="hb_03"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_03>a1a2a3</ex:hb_03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1a2a33131]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_06
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type when there is not enough data to fulfill the specified length
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_06" root="hb_04"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_04>a1</ex:hb_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a162]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_07
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type when there is not enough data to fulfill the specified length (lengthKind="delimited")
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_07" root="hb_05"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_05>a1</ex:hb_05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1626262626262626262]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_08
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type when there is not enough data to fulfill the specified length (lengthKind="delimited")
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_08" root="hb_06"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_06>a1</ex:hb_06>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a130]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_09
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary simple type when there is not enough data to fulfill the specified length (lengthKind="implicit")
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_09" root="hb_07"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_07>a1</ex:hb_07>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a16161]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_10
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_10" root="ehb_08"
+      model="SimpleTypes-binary" description="Section 5 Simple Types - hexBinary - DFDL-5-025R" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ehb_08></ex:ehb_08>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_11
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of the dfdl hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_11" root="ehb_09"
+      model="SimpleTypes-binary" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ehb_09></ex:ehb_09>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[00d0]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_12
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of outputValueCalc for hexBinary
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_12" root="ehb_10"
+      model="SimpleTypes-binary" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ehb_10></ex:ehb_10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[05]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_13
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of outputValueCalc for hexBinary with the dfdl:hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_13" root="ehb_11"
+      model="SimpleTypes-binary" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ehb_11></ex:ehb_11>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[a1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_14
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of outputValueCalc for hexBinary with the dfdl:hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_14" root="hb_12"
+      model="SimpleTypes-binary">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_12>
+          <ex:input>-48</ex:input>
+          <ex:out>D0</ex:out>
+        </ex:hb_12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[2D34382CD0]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_15
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of outputValueCalc for hexBinary with the dfdl:hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_15" root="hb_12"
+      model="SimpleTypes-binary">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_12>
+          <ex:input>1</ex:input>
+          <ex:out>01</ex:out>
+        </ex:hb_12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[312c01]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_16
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of outputValueCalc for hexBinary with the dfdl:hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_16" root="ehb_13"
+      model="SimpleTypes-binary" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ehb_13></ex:ehb_13>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[fe3030]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_17
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates the use of outputValueCalc for hexBinary with the dfdl:hexBinary constructor function
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_17" root="hb_14"
+      model="SimpleTypes-binary">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_14>
+          <ex:hb_14>F7DC</ex:hb_14>
+        </ex:hb_14>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[f7dc]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_18
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates that for hexBinary, when lengthKind="implicit", minlength and maxlength must match.
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_18" root="hb_15"
+      model="SimpleTypes-binary">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_15></ex:hb_15>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>minLength and maxLength must be equal</tdml:error>
+      <tdml:error>for type HexBinary</tdml:error>
+      <tdml:error>lengthKind='implicit'</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+<!--
+    Test name: hexBinary_unparse_19
+    Schema: SimpleTypes-binary
+    Purpose: This document demonstrates that the normal representation can be a zero-length representation if the type is xs:hexBinary and there is no framing.
+  -->
+  <tdml:unparserTestCase name="hexBinary_unparse_19" root="hb_16"
+      model="SimpleTypes-binary">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hb_16></ex:hb_16>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte"><![CDATA[]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: float_binary_unparse_01
+    Schema: SimpleTypes-binary
+    Purpose: This infoset should be unparsed into the appropriate number of bits for an implicitly-sized float (32)
+  -->
+
+  <tdml:unparserTestCase name="float_binary_unparse_01" root="float_01"
+      model="SimpleTypes-binary" description="Section 5 Simple types-float - DFDL-5-008R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:float_01>5.0</ex:float_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="bits">01000000 10100000 00000000 00000000</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: double_binary_unparse_01
+    Schema: SimpleTypes-binary
+    Purpose: This infoset should be unparsed into the appropriate number of bits for an implicitly-sized double (64)
+  -->
+
+  <tdml:unparserTestCase name="double_binary_unparse_01" root="double_01"
+      model="SimpleTypes-binary" description="Section 5 Schema types-double - DFDL-5-009R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:double_01>5.0</ex:double_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="bits">0100000000010100000000000000000000000000000000000000000000000000</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: integer_binary_unparse_01
+       Schema: SimpleTypes-binary
+      Purpose: This infoset will be unparsed into an integer with a size of 8 bits
+  -->
+  <tdml:unparserTestCase name="integer_binary_unparse_01"
+    root="integer_01" model="SimpleTypes-binary"
+    description="Section 5 Schema types- integer - DFDL-5-011R">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:integer_01>5</ex:integer_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="bits">00000101</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+  
+</tdml:testSuite>

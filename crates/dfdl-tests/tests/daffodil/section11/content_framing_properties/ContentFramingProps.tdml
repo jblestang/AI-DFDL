@@ -1,0 +1,1734 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com" xmlns:tns="http://example.com"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="ContentFramingProperties-Embedded.dfdl.xsd">
+
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited"
+      lengthUnits="characters" encoding="UTF-8" />
+
+    <xs:element name="CFP_01" type="tns:cfp_01" />
+    <xs:simpleType name="cfp_01">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:simpleType lengthKind="explicit" length="3"
+            encoding="UTF-16" byteOrder="bigEndian" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:string" />
+    </xs:simpleType>
+    
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+          <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="root1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit"
+            dfdl:length="5" />
+          <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+            dfdl:length="1" dfdl:encoding="{ ../ex:e1 }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="root2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="delimited"
+            dfdl:terminator=";" />
+          <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+            dfdl:length="2" dfdl:encoding="{ ../ex:e1 }" dfdl:bitOrder="mostSignificantBitFirst" dfdl:byteOrder="littleEndian" />
+          <xs:element name="e3" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:length="4" dfdl:lengthUnits="bits"
+             dfdl:byteOrder="littleEndian"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="root3">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="delimited"
+            dfdl:terminator=";" />
+          <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+            dfdl:length="2" dfdl:encoding="{ ../ex:e1 }" dfdl:bitOrder="leastSignificantBitFirst" dfdl:byteOrder="littleEndian" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="root4">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" dfdl:lengthKind="delimited"
+            dfdl:terminator=";" />
+          <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+            dfdl:length="2" dfdl:encoding="X-DFDL-US-ASCII-6-BIT-PACKED" dfdl:bitOrder="leastSignificantBitFirst" dfdl:byteOrder="littleEndian" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e3" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+
+    <xs:element name="ee1" type="xs:string" dfdl:encodingErrorPolicy="replace" dfdl:encoding="ASCII"
+    	dfdl:byteOrder="bigEndian"/>
+    <xs:element name="ee2" type="xs:string" dfdl:encodingErrorPolicy="replace" dfdl:encoding="UTF-8"
+    	dfdl:byteOrder="bigEndian"/>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="UTF_16_01" root="CFP_01"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">006300610074</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <CFP_01>cat</CFP_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="encoding_property_expression" root="root1" model="ContentFramingProperties-Embedded.dfdl.xsd" 
+    description="Use of DFDL expression for encoding property - DFDL-11-002R">
+    <tdml:document>
+      <tdml:documentPart type="text">UTF-8</tdml:documentPart>
+      <tdml:documentPart type="byte">E5 B9 B4</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root1>
+          <e1>UTF-8</e1>
+          <e2>年</e2>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="encoding_property_expression2" root="root2" model="ContentFramingProperties-Embedded.dfdl.xsd"
+    description="Use of DFDL expression for encoding property - DFDL-11-002R" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">X-DFDL-US-ASCII-6-BIT-PACKED;</tdml:documentPart>
+      <tdml:documentPart type="byte">3F 2D</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>encodings with byte-sized code units</tdml:error>
+      <tdml:error>must be specified as a literal encoding name in the DFDL schema</tdml:error>
+      <tdml:error>X-DFDL-US-ASCII-6-BIT-PACKED</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="encoding_property_expression3" root="root3" model="ContentFramingProperties-Embedded.dfdl.xsd"
+    description="Use of DFDL expression for encoding property - DFDL-11-002R" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">X-DFDL-US-ASCII-6-BIT-PACKED;</tdml:documentPart>
+      <tdml:documentPart type="bits">0011 1111 0011 1101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>encodings with byte-sized code units</tdml:error>
+      <tdml:error>must be specified as a literal encoding name in the DFDL schema</tdml:error>
+      <tdml:error>X-DFDL-US-ASCII-6-BIT-PACKED</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="encoding_property_expression4" root="root4" model="ContentFramingProperties-Embedded.dfdl.xsd"
+    description="Use of DFDL expression for encoding property - DFDL-11-002R" roundTrip="false">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="text">X-DFDL-US-ASCII-6-BIT-PACKED;</tdml:documentPart>
+      <tdml:documentPart type="bits" byteOrder="RTL" bitOrder="LSBFirst">111111 111111</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root4>
+          <e1>X-DFDL-US-ASCII-6-BIT-PACKED</e1>
+          <e2>??</e2>
+        </ex:root4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="encoding_property_expression2_unparse" root="root2" model="ContentFramingProperties-Embedded.dfdl.xsd"
+    description="Use of DFDL expression for encoding property - DFDL-11-002R" roundTrip="true">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root2>
+          <ex:e1>X-DFDL-US-ASCII-6-BIT-PACKED</ex:e1>
+          <ex:e2>?4</ex:e2>
+          <ex:e3>3</ex:e3>
+        </ex:root2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>encodings with byte-sized code units</tdml:error>
+      <tdml:error>must be specified as a literal encoding name in the DFDL schema</tdml:error>
+      <tdml:error>X-DFDL-US-ASCII-6-BIT-PACKED</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="xml_illegal_chars" root="root"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding is utf-8 - DFDL-11-002R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">000f</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <root>
+          <e1>&#57344;</e1>
+          <e2>&#57359;</e2>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="xml_illegal_chars_01" root="e3"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding is utf-8 - DFDL-11-002R">
+    <tdml:document><tdml:documentPart replaceDFDLEntities="true" type="text">%#xFFFF;</tdml:documentPart></tdml:document>
+    <!-- Note that we use an illegal codepoint above that is NOT a high surrogate or a low surrogate,
+    but a character that is a valid codepoint for unicode, but not for XML.
+    The problem is, if we use a surrogate (high or low), the decoder will not accept it so 
+    we can't present it as a data character to the parser since we can't even get at it as text.
+     --> 
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>&#xF0FF;</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="xml_illegal_chars_02" root="e3"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding is utf-8 - DFDL-11-002R">
+    <tdml:document><tdml:documentPart type="byte">efbfbf</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>&#61695;</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+   
+  <tdml:parserTestCase name="xml_utf8_4byte_chars" root="e3"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding is utf-8 - DFDL-11-002R">
+    <tdml:document>&#x10000;</tdml:document>
+    <!-- That's the minimum Unicode character value that takes 4 bytes to encode in utf-8 -->
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>&#x10000;</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="xml_utf8_4byte_chars_01" root="e3"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding is utf-8 - DFDL-11-002R">
+    <tdml:document><tdml:documentPart type="byte">f0 90 80 80</tdml:documentPart></tdml:document>
+    <!-- That's the minimum Unicode character value that takes 4 bytes to encode in utf-8 -->
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>&#x10000;</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="packed7BitASCII">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="X-DFDL-US-ASCII-7-BIT-PACKED"
+      lengthUnits="characters" bitOrder="leastSignificantBitFirst" byteOrder="littleEndian" />
+
+    <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="2" />
+    <xs:element name="e1_1" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="2" dfdl:encodingErrorPolicy="error"/>
+    <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="64" />
+    <xs:element name="e3" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="," />
+
+    <!-- USES proposed dfdl:string constructor to process the entities
+      so that we can put %NUL; in an expression. -->
+    <xs:element name="e4" type="ex:zString" />
+    <xs:complexType name="zString">
+      <xs:sequence>
+
+        <xs:sequence>
+          <!-- wants to be a hidden group. We want the name 's' as the public
+            interface to this type, but the rep element invisible to users
+            of the type. -->
+          <xs:element name="rep" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[^\x00]{0,3}\x00|[^\x00]{4}"
+            dfdl:outputValueCalc="{ 
+            if (fn:string-length(../ex:s) lt 4) 
+            then fn:concat(../ex:s, dfdl:decodeDFDLEntities('%NUL;')) 
+            else ../ex:s 
+            }" />
+        </xs:sequence>
+
+        <xs:element name="s" type="xs:string"
+          dfdl:inputValueCalc="{ 
+               if ((fn:string-length(../ex:rep) eq 4) 
+                    and fn:not(fn:ends-with(../ex:rep, dfdl:decodeDFDLEntities('%NUL;'))))
+                    then ../ex:rep
+               else fn:substring(../ex:rep, 1, fn:string-length(../ex:rep) - 1)
+             }" />
+      </xs:sequence>
+    </xs:complexType>
+
+    <!-- Similar, but delimiter is DEL (ascii 0x7F) -->
+    <xs:element name="e5" type="ex:dString" />
+    <xs:complexType name="dString">
+      <xs:sequence>
+        <xs:sequence>
+          <!-- wants to be a hidden group. We want the name 's' as the public
+            interface to this type, but the rep element invisible to users
+            of the type. -->
+          <xs:element name="rep" type="xs:string"
+            dfdl:lengthKind="pattern" dfdl:lengthPattern="[^\x7F]{0,3}\x7F|[^\x7F]{4}"
+            dfdl:outputValueCalc="{ 
+            if (fn:string-length(../ex:s) lt 4) 
+            then fn:concat(../ex:s, dfdl:decodeDFDLEntities('%DEL;')) 
+            else ../ex:s 
+            }" />
+        </xs:sequence>
+
+        <xs:element name="s" type="xs:string"
+          dfdl:inputValueCalc="{ 
+               if ((fn:string-length(../ex:rep) eq 4) 
+                    and fn:not(fn:ends-with(../ex:rep, dfdl:decodeDFDLEntities('%DEL;'))))
+                    then ../ex:rep
+               else fn:substring(../ex:rep, 1, fn:string-length(../ex:rep) - 1)
+             }" />
+      </xs:sequence>
+    </xs:complexType>
+
+    <xs:element name="e6" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:alignmentUnits="bits" dfdl:alignment="4" />
+    
+    <xs:element name="e7" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:alignmentUnits="bits" dfdl:alignment="6" dfdl:leadingSkip="5"/>
+    
+    <xs:element name="e8" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:alignmentUnits="bits" dfdl:alignment="1" />
+    
+    <xs:element name="e9" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:alignmentUnits="bits" dfdl:alignment="2" dfdl:leadingSkip="1"/>
+    
+    <xs:element name="e10" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:alignmentUnits="bits" dfdl:alignment="5" />
+
+    <xs:element name="e11">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="s1" type="xs:int" dfdl:lengthKind="explicit"
+            dfdl:length="2" dfdl:alignmentUnits="bits" dfdl:alignment="1" />
+          <xs:element name="s2" type="xs:int" dfdl:lengthKind="explicit"
+            dfdl:length="2" dfdl:alignmentUnits="bits" dfdl:alignment="1" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e12" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="8" />
+
+    <xs:element name="e13" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="7" />
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: packed7BitASCII1
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED 
+    encoding, where the document represents
+    two X-DFDL-US-ASCII-7-BIT-PACKED characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII1" root="e1"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       0110010 0110100
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>42</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII2
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED 
+    encoding, where the document represents
+    64 X-DFDL-US-ASCII-7-BIT-PACKED characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII2" root="e2"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0110001 0110010 0110011 0110100 0110101 0110110 0110111 0111000 0111001 0110000
+      0110001 0110010 0110011 0110100 0110101 0110110 0110111 0111000 0111001 0110000
+      0110001 0110010 0110011 0110100 0110101 0110110 0110111 0111000 0111001 0110000
+      0110001 0110010 0110011 0110100 0110101 0110110 0110111 0111000 0111001 0110000
+      0110001 0110010 0110011 0110100 0110101 0110110 0110111 0111000 0111001 0110000
+      0110001 0110010 0110011 0110100 0110101 0110110 0110111 0111000 0111001 0110000
+      0110001 0110010 0110011 0110100 
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>4321098765432109876543210987654321098765432109876543210987654321</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII3
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED 
+    encoding, where the document represents
+    two X-DFDL-US-ASCII-7-BIT-PACKED characters in binary, one being the terminator 
+    ","
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII3" root="e3"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document  bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0101100 0110001  
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>1</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII4
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates a more complex use of the X-DFDL-US-ASCII-7-BIT-PACKED 
+    encoding, where delimited by NUL, which is illegal in XML so is remapped to E000.
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII4" root="e4"
+    model="packed7BitASCII">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       0000000 0110001 
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <rep>1&#xE000;</rep> <!-- should be hidden once that feature is implemented. -->
+          <s>1</s>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII5
+    Schema: packed7BitASCII
+    -->
+
+  <tdml:parserTestCase name="packed7BitASCII5" root="e4"
+    model="packed7BitASCII">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+        0110011 0110011 0110100 0110001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <rep>1433</rep> <!-- should be hidden once that feature is implemented. -->
+          <s>1433</s>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII6
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates a more complex use of the X-DFDL-US-ASCII-7-BIT-PACKED.
+    The NUL character, illegal in XML, is remapped into the private use area to E000. 
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII6" root="e4"
+    model="packed7BitASCII">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0000000 0110001 0110010 0110011 
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <rep>321&#xE000;</rep> <!-- should be hidden once that feature is implemented. -->
+          <s>321</s>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII7
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the use of lengthPatterns with packed7BitASCII. 
+    The lengthPattern is
+    0-3 occurrences of not a 0x7F, followed by a 0x7F, or 4 occurrence of not a 7F. 
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII7" root="e5"
+    model="packed7BitASCII">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0110001 0110010 0110011 0110100 
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <rep>4321</rep> <!-- should be hidden once that feature is implemented. -->
+          <s>4321</s>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII8
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the use of lengthPatterns with packed7BitASCII. 
+    The lengthPattern is
+    0-4 occurrences of not a 0x7F (11111111), followed by a 0x7F
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII8" root="e5"
+    model="packed7BitASCII">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+        1111111 0110001 0110010 0110011  
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <rep>321&#x7F;</rep> <!-- should be hidden once that feature is implemented. -->
+          <s>321</s>
+        </e5> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII9
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the use of lengthPatterns with packed7BitASCII. 
+    The lengthPattern is
+    0-4 occurrences of not a 0x7F (11111111), followed by a 0x7F. In this 
+    case there is more
+    data than the length determined by the pattern.
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII9" root="e5"
+    model="packed7BitASCII">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0110001 0110010 0110011 1111111 01011010
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Left over data</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII10
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED
+    encoding, with two elements in a sequence.
+  -->
+  <tdml:parserTestCase name="packed7BitASCII10" root="e11"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document  bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0110010 0110100 0110010 0110100
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e11>
+          <ex:s1>42</ex:s1>
+          <ex:s2>42</ex:s2>
+        </ex:e11>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII11
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED
+    encoding, where the document represents
+    eight X-DFDL-US-ASCII-7-BIT-PACKED characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII11" root="e12"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       0101110 1110010 0110100 1110001 1000000 0111111 0110011 1010101
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e12>U3?@q4r.</e12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII12
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED
+    encoding, where the document represents
+    seven X-DFDL-US-ASCII-7-BIT-PACKED characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed7BitASCII12" root="e13"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       1110010 0110100 1110001 1000000 0111111 0110011 1010101
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e13>U3?@q4r</e13>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed7BitASCII_unparse
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-7-BIT-PACKED
+    encoding, with unparse.
+  -->
+  <tdml:unparserTestCase name="packed7BitASCII_unparse" root="e1"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>B$</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document  bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0100100 1000010
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: packed7BitASCII_unparse2
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates use of the X-DFDL-US-ASCII-7-BIT-PACKED
+             encoding, with an invalid character with
+             encodingErrorPolicy="replace". The pound sign is replaced with a
+             question mark (0b0111111), and a pad character (0b0100000) is
+             added to make the string length 2
+  -->
+  <tdml:unparserTestCase name="packed7BitASCII_unparse2" root="e1"
+    model="packed7BitASCII" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>£</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0100000 0111111
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: packed7BitASCII_unparse3
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates use of the X-DFDL-US-ASCII-7-BIT-PACKED
+             encoding, with an invalid character with
+             encodingErrorPolicy="error".
+  -->
+  <tdml:unparserTestCase name="packed7BitASCII_unparse3" root="e1_1"
+    model="packed7BitASCII" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1_1>£</ex:e1_1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>UnmappableCharacterException</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: alignmentPacked7BitASCII
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates that the required alignment for 7-bit ASCII is 1 bit.
+  -->
+
+  <tdml:parserTestCase name="alignmentPacked7BitASCII" root="e6"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      0110100 0110010
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6>24</e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: alignmentPacked7BitASCII_02
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates that the required alignment for 7-bit ASCII is any multiple of 1 bit.
+  -->
+
+  <tdml:parserTestCase name="alignmentPacked7BitASCII_02" root="e7"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL">  0110010 0110100 01010</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e7>42</e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+ 
+<!--
+    Test name: alignmentPacked7BitASCII_03
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates that the required alignment for 7-bit ASCII is 1 bit.
+             Therefore, the alignment can be any multiple of 1 bit, meaning it can be any positive integer value.
+  -->
+
+  <tdml:parserTestCase name="alignmentPacked7BitASCII_03" root="e8"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[0110010 0110100]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e8>42</e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: alignmentPacked7BitASCII_04
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates that the required alignment for 7-bit ASCII is 1 bit.
+             Therefore, the alignment can be any multiple of 1 bit, meaning it can be any positive integer value.
+  -->
+
+  <tdml:parserTestCase name="alignmentPacked7BitASCII_04" root="e9"
+    model="packed7BitASCII" roundTrip="twoPass">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[ 0110100 0110010 11]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e9>24</e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: alignmentPacked7BitASCII_05
+    Schema: packed7BitASCII
+    Purpose: This test demonstrates that the required alignment for 7-bit ASCII is 1 bit.
+             Therefore, the alignment can be any multiple of 1 bit, meaning it can be any positive integer value.
+  -->
+
+  <tdml:parserTestCase name="alignmentPacked7BitASCII_05" root="e10"
+    model="packed7BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[0110100 0110010]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e10>24</e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="iso-8859-1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text" encoding="iso-8859-1"
+      separator="/" byteOrder="bigEndian" ignoreCase="no" textNumberRep="standard"
+      initiator="" initiatedContent="no" terminator="" />
+
+    <xs:element name="e1" dfdl:lengthKind="delimited" type="xs:string" />
+  </tdml:defineSchema>
+
+  <!--
+    Test name: encoding_iso-8859-1
+    Schema: iso-8859-1
+    Purpose: This test demonstrates that the byte 0xFF does not end data.
+  -->
+  <tdml:parserTestCase name="encoding_iso_8859_1" root="e1" model="iso-8859-1"
+    description="">
+    <tdml:document>
+     <tdml:documentPart type="byte"><![CDATA[FF 31 32 33]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+          <e1>ÿ123</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: encodingErrorReplace
+    Schema: ContentFramingProperties-Embedded.dfdl.xsd
+    Purpose: This test demonstrates that when the encodingErrorPolicy is "replace" any error when decoding characters
+    results in the insertion of the Unicode Replacement Character (U+FFFD) as the replacement for that error.
+    Note that this test does not round trip because the unicode replacement character unparses to '?' when the encoding is ASCII.
+  -->
+  <tdml:parserTestCase name="encodingErrorReplace" root="ee1"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R" roundTrip="false">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">64ff67</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ee1>d�g</ee1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: encodingErrorReplace_unparse
+    Schema: ContentFramingProperties-Embedded.dfdl.xsd
+    Purpose: This test is the opposite of the above test, testing that a unicode replacement character becomes an ASCII '?' when uparsed.
+  -->
+  <tdml:unparserTestCase name="encodingErrorReplace_unparse" root="ee1"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R" roundTrip="false">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ex:ee1>d�g</ex:ee1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text">d?g</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: encodingNoError
+    Schema:    ContentFramingProperties-Embedded.dfdl.xsd
+    Root:      ee2
+    Purpose:   This test has a 4 byte utf-8 character and no replacement character is needed.
+  -->
+  <tdml:parserTestCase name="encodingNoError" root="ee2"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">64f09087a167</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ee2>d𐇡g</ee2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: encodingErrorReplace2
+    Schema:    ContentFramingProperties-Embedded.dfdl.xsd
+    Root:      ee2
+    Purpose:   This test demonstrates that when the encodingErrorPolicy is "replace" any error when decoding characters
+        results in the insertion of the Unicode Replacement Character (U+FFFD) as the replacement for that error.
+  -->
+  <tdml:parserTestCase name="encodingErrorReplace2" root="ee2"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">64f0908767</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ee2>d�g</ee2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: encodingErrorReplace3
+    Schema:    ContentFramingProperties-Embedded.dfdl.xsd
+    Root:      ee2
+    Purpose:   This test demonstrates that when the encodingErrorPolicy is "replace" any error when decoding characters
+        results in the insertion of the Unicode Replacement Character (U+FFFD) as the replacement for that error.
+  -->
+  <tdml:parserTestCase name="encodingErrorReplace3" root="ee2"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">64c2ff67</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ee2>d��g</ee2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: encodingErrorReplace4
+    Schema:    ContentFramingProperties-Embedded.dfdl.xsd
+    Root:      ee2
+    Purpose:   This test demonstrates that when the encodingErrorPolicy is "replace" any error when decoding characters
+        results in the insertion of the Unicode Replacement Character (U+FFFD) as the replacement for that error.
+  -->
+  <tdml:parserTestCase name="encodingErrorReplace4" root="ee2"
+    model="ContentFramingProperties-Embedded.dfdl.xsd" description="Section 11 encoding - DFDL-11-002R"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">648067</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ee2>d�g</ee2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="mixedEncoding">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="X-DFDL-US-ASCII-7-BIT-PACKED"
+      lengthUnits="characters" bitOrder="leastSignificantBitFirst" byteOrder="littleEndian" 
+      lengthKind="implicit" alignmentUnits="bits" alignment="1" />
+
+    <xs:element name="e1" >
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="sibling1">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="string7Bit" type="xs:string" dfdl:length="1" dfdl:lengthKind="explicit" />
+                <xs:element name="hexBinary" type="xs:hexBinary" dfdl:lengthUnits="bytes" dfdl:length="1" dfdl:lengthKind="explicit" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="sibling2">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="string7Bit" type="xs:string" dfdl:length="1" dfdl:lengthKind="explicit" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e2" >
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="sibling1">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="string7Bit" type="xs:string" dfdl:length="1" dfdl:lengthKind="explicit" />
+                
+                <xs:sequence dfdl:alignment="8"/><!-- align to 8 bit boundary so we can change bit order -->
+                
+                <!-- 
+                  Interesting. The above element leaves us at bit 7, and bitOrder LSBF.
+                  But the next thing below has bitOrder MSBF and encoding US-ASCII which has mandatory bit
+                  alignment of 8. 
+                  
+                  So we should automatically move over to a byte boundary (the mandatory byte alignment)
+                  but we do so filling with the fill byte according to the bitOrder of the preceding thing.
+                  
+                  Daffodil doesn't do this currently. Bug DAFFODIL-1888
+                 -->
+                <xs:element name="string8Bit" type="xs:string" dfdl:length="1" dfdl:lengthKind="explicit" 
+                dfdl:encoding="US-ASCII" 
+                dfdl:bitOrder="mostSignificantBitFirst"
+                dfdl:alignment="8" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="sibling2">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="string7Bit" type="xs:string" dfdl:length="1" dfdl:lengthKind="explicit" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: mixedEncoding1
+    Schema:    mixedEncoding
+    Root:      e1
+    Purpose:   This tests how encodings change and EncodingChange parsers are
+               inserted. HexBinary should not insert an EncodingChangeParser
+  -->
+  <tdml:parserTestCase name="mixedEncoding1" root="e1"
+    model="mixedEncoding" description="Section 11 encoding - DFDL-11-002R">
+
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[0110101 10100101 1000001]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <e1>
+          <sibling1>
+            <string7Bit>A</string7Bit>
+            <hexBinary>A5</hexBinary>
+          </sibling1>
+          <sibling2>
+            <string7Bit>5</string7Bit>
+          </sibling2>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: mixedEncoding2
+    Schema:    mixedEncoding
+    Root:      e2
+    Purpose:   This tests how encodings change and EncodingChange parsers are
+               inserted. This should change encodings to 8bit US-ASCII, and
+               then change back to 7Bit US-ASCII
+  -->
+  <tdml:parserTestCase name="mixedEncoding2" root="e2"
+    model="mixedEncoding" description="Section 11 encoding - DFDL-11-002R">
+
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[1000011 01000010 0 1000001]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <e2>
+          <sibling1>
+            <string7Bit>A</string7Bit>
+            <string8Bit>B</string8Bit>
+          </sibling1>
+          <sibling2>
+            <string7Bit>C</string7Bit>
+          </sibling2>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="packed6BitASCII">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="X-DFDL-US-ASCII-6-BIT-PACKED" alignmentUnits="bits"
+      lengthUnits="characters" bitOrder="leastSignificantBitFirst" byteOrder="littleEndian" />
+
+    <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="2" />
+
+    <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="5" />
+
+    <xs:element name="e3" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="4" />
+
+    <xs:element name="e6" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:alignmentUnits="bits" dfdl:alignment="4" />
+
+    <xs:element name="e2a" type="xs:string" dfdl:lengthKind="explicit"
+                dfdl:length="8" dfdl:encoding="X-DFDL-6-BIT-ICAO-Aircraft-ID"/>
+
+    <xs:element name="e2b" type="xs:string" dfdl:lengthKind="explicit"
+                dfdl:length="8" dfdl:encoding="X-DFDL-US-ASCII-6-BIT-PACKED-MSB-FIRST"/>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: packed6BitASCII1
+    Schema: packed6BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-6-BIT-PACKED
+    encoding, where the document represents
+    two X-DFDL-US-ASCII-6-BIT-PACKED characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed6BitASCII1" root="e1"
+    model="packed6BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       110010 000001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>A2</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: alignmentPacked6BitASCII
+    Schema: packed6BitASCII
+    Purpose: This test demonstrates that the required alignment for 6-bit ASCII is 1 bit.
+  -->
+
+  <tdml:parserTestCase name="alignmentPacked6BitASCII" root="e6"
+    model="packed6BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      110100 110010
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6>24</e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed6BitASCII_unparse1
+    Schema: packed6BitASCII
+    Purpose: This test demonstrates use of the X-DFDL-US-ASCII-6-BIT-PACKED
+             encoding, with an invalid character with
+             encodingErrorPolicy="replace". The pound sign is replaced with a
+             underscore (0b011111), and a pad character (0b100000) is
+             added to make the string length 2
+  -->
+  <tdml:unparserTestCase name="packed6BitASCII_unparse1" root="e1"
+    model="packed6BitASCII" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>£</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      100000 011111
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: packed6BitASCII_unparse2
+    Schema: packed6BitASCII
+    Purpose: This test demonstrates use of the X-DFDL-US-ASCII-6-BIT-PACKED
+             encoding, with an invalid character with
+             encodingErrorPolicy="replace". The 'a' is replaced with an
+             underscore (0b011111)
+  -->
+  <tdml:unparserTestCase name="packed6BitASCII_unparse2" root="e1"
+    model="packed6BitASCII" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>aA</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      000001 011111
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: packed6BitASCII3
+    Schema: packed6BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-6-BIT-PACKED 
+    encoding, where the document represents
+    five X-DFDL-US-ASCII-6-BIT-PACKED characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed6BitASCII3" root="e2"
+    model="packed6BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       011100 110011 100111 001000 011001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>YH'3\</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packed6BitASCII4" root="e3" model="packed6BitASCII"
+    description="Use of DFDL expression for encoding property - DFDL-11-002R" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="byte">3F 2D 2A</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>?4"J</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed6BitASCII5
+    Schema: packed6BitASCII
+    Purpose: This test demonstrates the simple use of the X-DFDL-US-ASCII-6-BIT-PACKED
+    encoding with a documentPart with type="text"
+  -->
+
+  <tdml:parserTestCase name="packed6BitASCII5" root="e2"
+    model="packed6BitASCII" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="text" encoding="X-DFDL-US-ASCII-6-BIT-PACKED" byteOrder="RTL" ><![CDATA[12345]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>12345</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packed6BitICAO" root="e2a"
+                       model="packed6BitASCII" roundTrip="true">
+    <tdml:document >
+      <!-- DAFFODIL-2661 means we can't encode these using text -->
+      <!--
+      <tdml:documentPart type="text"
+                         encoding="X-DFDL-6-BIT-ICAO-Aircraft-ID"
+                          ><![CDATA[12345ABC]]></tdml:documentPart>
+      -->
+      <!-- but we can do it the hard way using bits -->
+      <tdml:documentPart type="bits"><![CDATA[
+      110001 110010 110011 110100 110101 000001 000010 000011
+]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2a>12345ABC</e2a>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packed6BitMSBF" root="e2b"
+                       model="packed6BitASCII" roundTrip="true">
+    <tdml:document >
+      <tdml:documentPart type="text"
+                         encoding="X-DFDL-US-ASCII-6-BIT-PACKED-MSB-FIRST"
+      ><![CDATA[12345ABC]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2b>12345ABC</e2b>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packed6BitMSBF2" root="e2b"
+                       model="packed6BitASCII" roundTrip="true">
+    <tdml:document >
+      <tdml:documentPart type="bits"><![CDATA[
+      110001 110010 110011 110100 110101 000001 000010 000011
+]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2b>12345ABC</e2b>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="packed5Bit">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="X-DFDL-5-BIT-PACKED-LSBF"
+      lengthUnits="characters" bitOrder="leastSignificantBitFirst" byteOrder="littleEndian" />
+
+    <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="2" />
+
+    <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="3" />
+
+    <xs:element name="e3" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="9" />
+
+    <xs:element name="e4">
+      <xs:complexType>
+        <xs:sequence>
+          <!-- single bit field leaves us after first bit, and in MSBF bit order -->
+          <xs:element name="bit" type="xs:unsignedInt" dfdl:lengthKind="explicit" dfdl:length="1"
+             dfdl:representation="binary" dfdl:lengthUnits="bits" dfdl:bitOrder="mostSignificantBitFirst"/>
+          <!-- this encoding can go on any bit boundary, but requires LSBF -->
+          <xs:element name="s" type="xs:string" dfdl:lengthKind="explicit"
+              dfdl:length="2" dfdl:alignmentUnits="bits"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e6" type="xs:string" dfdl:lengthKind="delimited"
+      dfdl:terminator="" dfdl:representation="text" dfdl:alignmentUnits="bits" dfdl:alignment="4" />
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: packed5Bit1
+    Schema: packed5Bit
+    Purpose: This test demonstrates the simple use of the X-DFDL-5-BIT-PACKED-LSBF
+    encoding, where the document represents
+    two X-DFDL-5-BIT-PACKED-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed5Bit1" root="e1"
+    model="packed5Bit" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       11000 00001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>1S</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed5Bit2
+    Schema: packed5Bit
+    Purpose: This test demonstrates the simple use of the X-DFDL-5-BIT-PACKED-LSBF
+    encoding, where the document represents
+    three X-DFDL-5-BIT-PACKED-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed5Bit2" root="e2"
+    model="packed5Bit" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       11010 00101 10000
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>J5U</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed5Bit3
+    Schema: packed5Bit
+    Purpose: This test demonstrates the simple use of the X-DFDL-5-BIT-PACKED-LSBF
+    encoding, where the document represents
+    three X-DFDL-5-BIT-PACKED-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed5Bit3" root="e2"
+    model="packed5Bit" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       11111 11111 11111
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>ZZZ</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed5Bit4
+    Schema: packed5Bit
+    Purpose: This test demonstrates the simple use of the X-DFDL-5-BIT-PACKED-LSBF
+    encoding, where the document represents
+    X-DFDL-5-BIT-PACKED-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed5Bit4" root="e3"
+    model="packed5Bit" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       10101 11100 11011 00001 11111 00000 01010 00110 01110
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>G6C0Z1VWP</e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed5Bit5
+    Schema: packed5Bit
+    Purpose: This test demonstrates the simple use of the X-DFDL-5-BIT-PACKED-LSBF
+    encoding, where the document represents
+    three X-DFDL-5-BIT-PACKED-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="packed5Bit5" root="e2"
+    model="packed5Bit" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       00000 11000 00001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>1S0</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed5Bit6
+    Schema: packed5Bit
+    Purpose: This test demonstrates that X-DFDL-5-BIT-PACKED-LSBF
+             encoding, requires bitOrder leastSignificantBitFirst
+  -->
+  <tdml:parserTestCase name="packed5Bit6" root="e4"
+    model="packed5Bit">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      00000 11101 1
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>bitOrder on a byte boundary</tdml:error>
+      <tdml:error>2</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: packed5Bit_unparse1
+    Schema: packed5Bit
+    Purpose: This test demonstrates unparsing two X-DFDL-5-BIT-PACKED-LSBF characters
+    in binary with X-DFDL-5-BIT-PACKED-LSBF encoding.
+  -->
+
+  <tdml:unparserTestCase name="packed5Bit_unparse1" root="e1"
+    model="packed5Bit" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>1S</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       11000 00001
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: packed5Bit_unparse2
+    Schema: packed5Bit
+    Purpose: This test demonstrates use of the X-DFDL-5-BIT-PACKED-LSBF
+             encoding, with an invalid character with
+             encodingErrorPolicy="replace". The pound sign is replaced with
+             an 'X', and a pad character is added to make the string length 2
+  -->
+  <tdml:unparserTestCase name="packed5Bit_unparse2" root="e1"
+    model="packed5Bit" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>£</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      00000 11101
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: packed5Bit_unparse3
+    Schema: packed5Bit
+    Purpose: This test demonstrates use of the X-DFDL-5-BIT-PACKED-LSBF
+             encoding
+  -->
+  <tdml:unparserTestCase name="packed5Bit_unparse3" root="e3"
+    model="packed5Bit" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3>AI2OGB701</ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      00001 00000 00111 01001 01110 00000 00010 00001 01000
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="octalLSBF">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="X-DFDL-OCTAL-LSBF"
+      lengthUnits="characters" bitOrder="leastSignificantBitFirst" byteOrder="littleEndian" />
+
+    <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="2" />
+
+    <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="8" />
+
+    <xs:element name="e3" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="4" dfdl:encodingErrorPolicy="error"/>
+
+    <xs:element name="e4" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="9" />
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: octalLSBF1
+    Schema: octalLSBF
+    Purpose: This test demonstrates the simple use of the X-DFDL-OCTAL-LSBF
+    encoding, where the document represents
+    two X-DFDL-OCTAL-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="octalLSBF1" root="e1"
+    model="octalLSBF" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       111 010
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>27</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: octalLSBF2
+    Schema: octalLSBF
+    Purpose: This test demonstrates the simple use of the X-DFDL-OCTAL-LSBF
+    encoding, where the document represents
+    eight X-DFDL-OCTAL-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="octalLSBF2" root="e2"
+    model="octalLSBF" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       000 001 010 011 100 101 110 111
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>76543210</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: octalLSBF3
+    Schema: octalLSBF
+    Purpose: This test demonstrates the simple use of the X-DFDL-OCTAL-LSBF
+    encoding, where the document represents
+    nine X-DFDL-OCTAL-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="octalLSBF3" root="e4"
+    model="octalLSBF" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       101 001 000 111 101 011 110 101 001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>156357015</e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: octalLSBF_unparse1
+    Schema: octalLSBF
+    Purpose: This test demonstrates use of the X-DFDL-OCTAL-LSBF
+             encoding, with an invalid character with
+             encodingErrorPolicy="replace". The invalid character is replaced with
+             a '0', and a pad character is added to make the string length 2
+  -->
+  <tdml:unparserTestCase name="octalLSBF_unparse1" root="e1"
+    model="octalLSBF" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>9</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+      000 000
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: octalLSBF_unparse_error
+    Schema: octalLSBF
+    Purpose: This test demonstrates use of the X-DFDL-OCTAL-LSBF
+             encoding, with an invalid character with
+             encodingErrorPolicy="error".
+  -->
+  <tdml:unparserTestCase name="octalLSBF_unparse_error" root="e3"
+    model="octalLSBF" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3>1926</ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>UnmappableCharacterException</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="hexLSBF">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="X-DFDL-HEX-LSBF"
+      lengthUnits="characters" bitOrder="leastSignificantBitFirst" byteOrder="littleEndian" />
+
+    <xs:element name="e1" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="2" />
+
+    <xs:element name="e2" type="xs:string" dfdl:lengthKind="explicit"
+      dfdl:length="5" />
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: hexLSBF1
+    Schema: hexLSBF
+    Purpose: This test demonstrates the simple use of the X-DFDL-HEX-LSBF
+    encoding, where the document represents
+    two X-DFDL-HEX-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="hexLSBF1" root="e1"
+    model="hexLSBF" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       1111 1010
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>AF</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: hexLSBF2
+    Schema: hexLSBF
+    Purpose: This test demonstrates the simple use of the X-DFDL-HEX-LSBF
+    encoding, where the document represents
+    five X-DFDL-HEX-LSBF characters in binary.
+  -->
+
+  <tdml:parserTestCase name="hexLSBF2" root="e2"
+    model="hexLSBF" roundTrip="true">
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       1000 0011 1100 1101 0001
+      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>1DC38</e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: hexLSBF_unparse1
+    Schema: hexLSBF
+    Purpose: This test demonstrates the simple use of the X-DFDL-HEX-LSBF
+    encoding, with unparse.
+  -->
+
+  <tdml:unparserTestCase name="hexLSBF_unparse1" root="e1"
+    model="hexLSBF" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>AF</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document bitOrder="LSBFirst">
+      <tdml:documentPart type="bits" byteOrder="RTL"><![CDATA[
+       1111 1010
+      ]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

@@ -1,0 +1,12 @@
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Rust build target
+/target/
+target/
+
+# Scratch workspace
+scratch/
+
+# Test runs and temporary logs
+*.log

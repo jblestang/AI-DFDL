@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="AQ" description="AQ test of InputValueCalc"
+  xmlns="http://example.com" 
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com">
+
+  <tdml:defineSchema name="AQ.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" separator=""
+      initiator="" terminator="" emptyValueDelimiterPolicy="none"
+      textNumberRep="standard" representation="text"
+      occursCountKind="parsed" lengthKind="delimited" lengthUnits="bytes"
+      encoding="US-ASCII" ignoreCase="no" />
+    <!-- Basic Math in DFDL Representations -->
+    <xs:element name="ROOT">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="x" type="xsd:float"
+            dfdl:terminator="," dfdl:encoding="US-ASCII" />
+          <xs:element name="y" type="xsd:float"
+            dfdl:encoding="US-ASCII" dfdl:terminator="%NL;%WSP*;" />
+          <xs:element name="Multiply" type="xsd:float"
+            dfdl:inputValueCalc="{ ../tns:x * ../tns:y }" />
+          <xs:element name="Add" type="xsd:float"
+            dfdl:inputValueCalc="{ ../tns:x + ../tns:y }" />
+          <xs:element name="Subtract" type="xsd:float"
+            dfdl:inputValueCalc="{ ../tns:x - ../tns:y }" />
+          <xs:element name="SubtractLiteral" type="xsd:float"
+            dfdl:inputValueCalc="{ xs:float(../tns:x - 2) }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="AQ000" root="ROOT"
+    model="AQ.dfdl.xsd"
+    description="Section 17 Tests variables, arithmetic, and inputValueCalc - DFDL-17-007R">
+
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[10.5,12.01
+ ]]></tdml:documentPart>
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ROOT>
+          <x>10.5</x>
+          <y>12.01</y>
+          <Multiply xsi:type="xsd:float">126.105</Multiply>
+          <Add xsi:type="xsd:float">22.51</Add>
+          <Subtract xsi:type="xsd:float">-1.5100002</Subtract>
+          <SubtractLiteral xsi:type="xsd:float">8.5</SubtractLiteral>
+        </ex:ROOT>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

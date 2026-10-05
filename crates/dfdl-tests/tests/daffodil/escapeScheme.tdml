@@ -1,0 +1,853 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<testSuite suiteName="escapeScheme" xmlns="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:tns="http://example.com" 
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  defaultRoundTrip="true">
+
+  <defineSchema name="es1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+
+    <dfdl:defineEscapeScheme name="pound">
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    <dfdl:defineEscapeScheme name='cStyleComment'>
+      <dfdl:escapeScheme escapeBlockStart='/*'
+        escapeBlockEnd='*/' escapeKind="escapeBlock"
+        escapeEscapeCharacter=""  extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="list1">
+      <xs:complexType>
+        <xs:sequence dfdl:initiatedContent="no"
+          dfdl:separatorPosition="infix" dfdl:sequenceKind="ordered"
+          dfdl:separator=",">
+          <xs:element name="character" type="xs:string">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:element escapeSchemeRef="tns:pound"/>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="block" type="xs:string"
+            dfdl:escapeSchemeRef="tns:cStyleComment" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </defineSchema>
+
+  <defineSchema name="es2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+      <xs:element name="elem" dfdl:defineEscapeScheme=""/>
+  </defineSchema>
+
+  <defineSchema name="es4">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+      <xs:element name="elem"/>
+  </defineSchema>
+
+  <defineSchema name="es5">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+    <dfdl:defineEscapeScheme>
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    <xs:element name="elem" type="xs:int"/>
+  </defineSchema>
+  
+  <defineSchema name="es6">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+
+    <dfdl:defineEscapeScheme name="pound">
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    <dfdl:defineEscapeScheme name='cStyleComment'>
+      <dfdl:escapeScheme escapeBlockStart='/*'
+        escapeBlockEnd='*/' escapeKind="escapeBlock"
+        escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="list2">
+      <xs:complexType>
+        <xs:sequence dfdl:initiatedContent="no"
+          dfdl:separatorPosition="infix" dfdl:sequenceKind="ordered"
+          dfdl:separator=",">
+          <xs:element name="character" type="xs:string" dfdl:escapeSchemeRef="tns:pound"/>
+          <xs:element name="block" type="xs:string">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:element>
+                  <dfdl:property name="escapeSchemeRef">tns:cStyleComment</dfdl:property>
+                </dfdl:element>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+  </defineSchema>
+
+  <defineSchema name="emptyRef">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+  <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+    
+    <dfdl:defineEscapeScheme name="table1">
+      <dfdl:escapeScheme escapeCharacter='/'
+        escapeKind="escapeCharacter" escapeEscapeCharacter=";"
+        extraEscapedCharacters="?" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="noesc" type="xs:string" dfdl:escapeSchemeRef=""/>
+    <xs:element name="esc" type="xs:string" dfdl:escapeSchemeRef="tns:table1"/>
+
+  </defineSchema>
+  
+  <defineSchema name="unusedRef">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+  <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+    
+    <dfdl:defineEscapeScheme name="table1">
+      <dfdl:escapeScheme escapeCharacter='/'
+        escapeKind="escapeCharacter" escapeEscapeCharacter=";"
+        extraEscapedCharacters="?" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="noesc" type="xs:string"/>
+
+  </defineSchema>
+
+  <defineSchema name="nonUnique">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+    <dfdl:defineEscapeScheme name="escapeScheme">
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    <dfdl:defineEscapeScheme name="escapeScheme">
+      <dfdl:escapeScheme escapeCharacter='*'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    <xs:element name="elem" type="xs:int" dfdl:escapeSchemeRef="tns:escapeScheme" />
+  </defineSchema>
+
+  <parserTestCase name="escapeSchemeSimple" model="es1"
+    description="Section 7 defineEscapeScheme - DFDL-7-079R" root="list1" roundTrip="false">
+    <document><![CDATA[ab#,cd,/*ef,gh*/]]></document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:list1>
+          <character>ab,cd</character>
+          <block>ef,gh</block>
+        </tns:list1>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+       Test Name: escapeSchemeFail
+          Schema: es2
+            Root: elem
+         Purpose: This is a negative test to demonstrate that defineEscapeScheme cannot be used within an element tag
+  -->
+
+  <parserTestCase name="escapeSchemeFail" model="es2"
+    description="Section 7 defineEscapeScheme - DFDL-7-087R" root="elem">
+    <document><![CDATA[123]]></document>
+    <errors>
+      <error>Schema Definition Error</error>
+    </errors>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeSchemeFail2
+          Schema: es5
+            Root: elem
+         Purpose: This is a negative test to demonstrate that "name" is a required attribute of the defineEscapeScheme tag 
+  -->
+
+  <parserTestCase name="escapeSchemeFail2" model="es5"
+    description="Section 7 defineEscapeScheme - DFDL-7-082R" root="elem">
+    <document><![CDATA[123]]></document>
+    <errors>
+      <error>Schema Definition Error</error>
+      <error>Attribute 'name' must appear on element</error>
+    </errors>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeSchemeFail3
+          Schema: es6
+            Root: list2
+         Purpose: This is a negative test to demonstrate that escapeScheme cannot be specified in element form 
+  -->
+
+  <parserTestCase name="escapeSchemeFail3" model="es6"
+    description="Section 7 defineEscapeScheme - DFDL-7-017R" root="list2">
+    <document><![CDATA[123]]></document>
+    <errors>
+      <error>Schema Definition Error</error>
+    </errors>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeSchemeEmpty
+          Schema: emptyRef
+            Root: noesc
+         Purpose: This is a test to demonstrate that if the value of escapeSchemeRef is the empty string then escaping is explicitly turned off
+  -->
+
+  <parserTestCase name="escapeSchemeEmpty" model="emptyRef"
+    description="Section 13 defineEscapeScheme - DFDL-13-022R" root="noesc" roundTrip="true">
+    <document><![CDATA[;/../a]]></document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:noesc>;/../a</tns:noesc>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeSchemeUnused
+          Schema: unusedRef
+            Root: noesc
+         Purpose: This is a test to demonstrate that A dfdl:defineFormat serves only to supply a 
+                  named definition for a format for reuse from other places. It does not cause any 
+                  use of the representation properties it contains to describe any actual data (DFDL-7-088R)
+  -->
+
+  <parserTestCase name="escapeSchemeUnused" model="unusedRef"
+    description="Section 7 defineEscapeScheme - DFDL-7-088R" root="noesc" roundTrip="true">
+    <document><![CDATA[;/../a]]></document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:noesc>;/../a</tns:noesc>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeSchemeNonEmpty
+          Schema: emptyRef
+            Root: esc
+         Purpose: This is a test to counter the test that demonstrates if the value of escapeSchemeRef is the empty string then escaping is explicitly turned off
+  -->
+
+  <parserTestCase name="escapeSchemeNonEmpty" model="emptyRef"
+    description="Section 13 defineEscapeScheme - DFDL-13-022R" root="esc"
+    roundTrip="twoPass">
+    <document><![CDATA[;/../a]]></document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:esc>/..a</tns:esc>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+       Test Name: escapeSchemeNonUnique
+          Schema: nonUnique
+            Root: elem
+         Purpose: This is a negative test to demonstrate that defineEscapeScheme must have a unique name within the namespace
+  -->
+
+  <parserTestCase name="escapeSchemeNonUnique" model="nonUnique"
+    description="Section 7 defineEscapeScheme - unique namespace - DFDL-7-085R" root="elem">
+    <document><![CDATA[123]]></document>
+    <errors>
+      <error>Schema Definition Error</error>
+    </errors>
+  </parserTestCase>
+  
+  <defineSchema name="escapeSchemeExpressions">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" separatorPosition="infix" lengthKind="delimited"
+      occursCountKind='parsed'/> 
+
+    <dfdl:defineEscapeScheme name="fromData">
+      <dfdl:escapeScheme escapeCharacter="{ /tns:e1/tns:escapeChar }"
+        escapeKind="escapeCharacter" escapeEscapeCharacter="^" extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <dfdl:defineEscapeScheme name="literal">
+      <dfdl:escapeScheme escapeCharacter="\"
+        escapeKind="escapeCharacter" escapeEscapeCharacter="^" extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <dfdl:defineEscapeScheme name="fromDataEmptyEEC">
+      <dfdl:escapeScheme escapeCharacter="{ /tns:e1EmptyEEC/tns:escapeChar }"
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <dfdl:defineEscapeScheme name="fromData2">
+      <dfdl:escapeScheme escapeCharacter="{ ../tns:escapeChar }"
+        escapeKind="escapeCharacter" escapeEscapeCharacter="{ ../tns:escapeEscapeChar }" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+    
+    <dfdl:defineEscapeScheme name="fromData3">
+      <dfdl:escapeScheme escapeCharacter="{ xs:string(xs:int(../tns:escapeChar) - 3) }"
+        escapeKind="escapeCharacter" escapeEscapeCharacter="{ xs:string(xs:int(fn:ceiling(xs:float(../tns:escapeEscapeChar)))) }" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <dfdl:defineEscapeScheme name="fromData4">
+      <dfdl:escapeScheme
+              escapeCharacter="{ xs:string(xs:int(../tns:escapeChar) - 3) }"
+              escapeKind="escapeCharacter"
+              escapeEscapeCharacter="{ xs:string(xs:int(fn:ceiling(xs:float(../tns:escapeEscapeChar)))) }"
+              extraEscapedCharacters="{ xs:string(../tns:extraEscapedChars) }"
+              generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <dfdl:defineEscapeScheme name="fromData5">
+      <dfdl:escapeScheme
+              escapeCharacter="{ xs:string(xs:int(../tns:escapeChar) - 3) }"
+              escapeKind="escapeCharacter"
+              escapeEscapeCharacter="{ xs:string(xs:int(fn:ceiling(xs:float(../tns:escapeEscapeChar)))) }"
+              extraEscapedCharacters="1 3"
+              generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="escapeChar" dfdl:lengthKind="explicit" dfdl:length="1" type="xs:string"/>
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:fromData"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e1b">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:literal"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e1EmptyEEC">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="escapeChar" dfdl:lengthKind="explicit" dfdl:length="1" type="xs:string"/>
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:fromDataEmptyEEC"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="escapeChar" type="xs:string"/>
+          <xs:element name="escapeEscapeChar" type="xs:string"/>
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:fromData2"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e3">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="escapeChar" type="xs:int"/>
+          <xs:element name="escapeEscapeChar" type="xs:float"/>
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:fromData3"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e4">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="escapeChar" type="xs:int"/>
+          <xs:element name="escapeEscapeChar" type="xs:float"/>
+          <xs:element name="extraEscapedChars" type="xs:string"/>
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:fromData4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e5">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="escapeChar" type="xs:int"/>
+          <xs:element name="escapeEscapeChar" type="xs:float"/>
+          <xs:element name="strng" type="xs:string" dfdl:lengthKind="delimited" minOccurs="1" maxOccurs="5" dfdl:escapeSchemeRef="tns:fromData5"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  
+  </defineSchema>
+  
+  <!--
+       Test Name: escapeExpressions_01
+          Schema: escapeSchemeExpressions
+            Root: e1
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter 
+  -->
+
+  <parserTestCase name="escapeExpressions_01" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e1">
+    <document>\,4\,000\,000,5\,000,6\,450,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e1 xmlns:tns="http://example.com">
+          <tns:escapeChar>\</tns:escapeChar>
+          <tns:strng>4,000,000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>6,450</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e1>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeExpressions_01b
+          Schema: escapeSchemeExpressions
+            Root: e1b
+         Purpose: This test has the same escapeScheme as the one generated in escapeExpressions_01, but in this test
+                  the escapeCharacter is defined literally instead of taken from the data
+  -->
+
+  <parserTestCase name="escapeExpressions_01b" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e1b">
+    <document>4\,000\,000,5\,000,6\,450,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e1b xmlns:tns="http://example.com">
+          <tns:strng>4,000,000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>6,450</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e1b>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeExpressions_02
+          Schema: escapeSchemeExpressions
+            Root: e1
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter 
+  -->
+
+  <parserTestCase name="escapeExpressions_02" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e1">
+    <document>\,4\,000,5000,6450,5000,400</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e1 xmlns:tns="http://example.com">
+          <tns:escapeChar>\</tns:escapeChar>
+          <tns:strng>4,000</tns:strng>
+          <tns:strng>5000</tns:strng>
+          <tns:strng>6450</tns:strng>
+          <tns:strng>5000</tns:strng>
+          <tns:strng>400</tns:strng>
+        </tns:e1>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeExpressions_03
+          Schema: escapeSchemeExpressions
+            Root: e1EmptyEEC
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter 
+                  In this case the escapeEscapeCharacter is not defined (empty string)     
+  -->
+
+  <parserTestCase name="escapeExpressions_03" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e1EmptyEEC">
+    <document>\,4\,000\,000,5\,000,6\,450,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e1EmptyEEC xmlns:tns="http://example.com">
+          <tns:escapeChar>\</tns:escapeChar>
+          <tns:strng>4,000,000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>6,450</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e1EmptyEEC>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeExpressions_04
+          Schema: escapeSchemeExpressions
+            Root: e2
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter and an escapeEscapeCharacter 
+  -->
+
+  <parserTestCase name="escapeExpressions_04" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e2">
+    <document>\,*,4\,000\,000,5*\,000,6\,450,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e2 xmlns:tns="http://example.com">
+          <tns:escapeChar>\</tns:escapeChar>
+          <tns:escapeEscapeChar>*</tns:escapeEscapeChar>
+          <tns:strng>4,000,000</tns:strng>
+          <tns:strng>5\</tns:strng>
+          <tns:strng>000</tns:strng>
+          <tns:strng>6,450</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e2>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeExpressions_05
+          Schema: escapeSchemeExpressions
+            Root: e2
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter and an escapeEscapeCharacter 
+  -->
+
+  <parserTestCase name="escapeExpressions_05" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e2">
+    <document>\,\,4\\,000,5\,000,6\\,450,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e2 xmlns:tns="http://example.com">
+          <tns:escapeChar>\</tns:escapeChar>
+          <tns:escapeEscapeChar>\</tns:escapeEscapeChar>
+          <tns:strng>4\</tns:strng>
+          <tns:strng>000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>6\</tns:strng>
+          <tns:strng>450</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e2>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+  
+  <!--
+       Test Name: escapeExpressions_06
+          Schema: escapeSchemeExpressions
+            Root: e3
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter and an escapeEscapeCharacter 
+  -->
+
+  <parserTestCase name="escapeExpressions_06" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter - DFDL-13-029R" root="e3">
+    <document>5,3.2,12,000,52,000,642,450,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e3 xmlns:tns="http://example.com">
+          <tns:escapeChar>5</tns:escapeChar>
+          <tns:escapeEscapeChar>3.2</tns:escapeEscapeChar>
+          <tns:strng>1,000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>62</tns:strng>
+          <tns:strng>450</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e3>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+       Test Name: escapeExpressions_07
+          Schema: escapeSchemeExpressions
+            Root: e5
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter, escapeEscapeCharacter and a literal for extraEscapedCharacters
+  -->
+
+  <parserTestCase name="escapeExpressions_07" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter" root="e5">
+    <document>5,3.2,212,000,52,000,642,5230,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e5 xmlns:tns="http://example.com">
+          <tns:escapeChar>5</tns:escapeChar>
+          <tns:escapeEscapeChar>3.2</tns:escapeEscapeChar>
+          <tns:strng>1,000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>62</tns:strng>
+          <tns:strng>530</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e5>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+       Test Name: escapeExpressions_08
+          Schema: escapeSchemeExpressions
+            Root: e4
+         Purpose: This test demonstrates that you can use an expression to define an escapeCharacter, escapeEscapeCharacter and an extraEscapedCharacters
+  -->
+
+  <parserTestCase name="escapeExpressions_08" model="escapeSchemeExpressions"
+    description="Section 13 - escapeCharacter" root="e4">
+    <document>5,3.2,1 3,212,000,52,000,642,5230,500</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:e4 xmlns:tns="http://example.com">
+          <tns:escapeChar>5</tns:escapeChar>
+          <tns:escapeEscapeChar>3.2</tns:escapeEscapeChar>
+          <tns:extraEscapedChars>1 3</tns:extraEscapedChars>
+          <tns:strng>1,000</tns:strng>
+          <tns:strng>5,000</tns:strng>
+          <tns:strng>62</tns:strng>
+          <tns:strng>530</tns:strng>
+          <tns:strng>500</tns:strng>
+        </tns:e4>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+       Test Name: escBlkAllQuotes
+          Schema: eBlkAllQuotes
+            Root: record
+         Purpose: This test demonstrates that escapeSheme with escapeBlock where the escapeBlockStart, escapeBlockEnd and escapeEscapeCharacter characters are the same, all quotes (DAFFODIL-1923).
+  -->
+  <defineSchema name="eBlkAllQuotes">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+
+    <dfdl:defineEscapeScheme name="eBlkAllQuotes">
+      <dfdl:escapeScheme escapeBlockStart="&quot;"
+        escapeBlockEnd="&quot;" escapeKind="escapeBlock"
+        escapeEscapeCharacter="&quot;"  extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="record">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="," >
+          <xs:element name="item" type="xs:string" maxOccurs="unbounded"
+	    dfdl:escapeSchemeRef="tns:eBlkAllQuotes" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </defineSchema>
+
+  <parserTestCase name="escBlkAllQuotes" model="eBlkAllQuotes"
+    description="Section 7 defineEscapeScheme - DFDL-7-079R" root="record" roundTrip="true">
+    <document>1,"Column ""Number"" Two",3,4,5</document>
+    <infoset>
+      <dfdlInfoset>
+    	<tns:record>
+    	  <tns:item>1</tns:item>
+    	  <tns:item>Column &quot;Number&quot; Two</tns:item>
+    	  <tns:item>3</tns:item>
+    	  <tns:item>4</tns:item>
+    	  <tns:item>5</tns:item>
+  	</tns:record>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+       Test Name: escBlkEndSame
+          Schema: eBlkEndSame
+            Root: record
+         Purpose: This test demonstrates that escapeSheme with escapeBlock where the escapeBlockEnd and escapeEscapeCharacter characters are the same (closing paren) but differnet from escapeBlockStart (DAFFODIL-1923).
+  -->
+  <defineSchema name="eBlkEndSame">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+
+    <dfdl:defineEscapeScheme name="eBlkEndParen">
+      <dfdl:escapeScheme escapeBlockStart="("
+        escapeBlockEnd=")" escapeKind="escapeBlock"
+        escapeEscapeCharacter=")"  extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+    <dfdl:defineEscapeScheme name="eBlkEndParen_eecExp">
+      <dfdl:escapeScheme escapeBlockStart="("
+        escapeBlockEnd=")" escapeKind="escapeBlock"
+        escapeEscapeCharacter=")" extraEscapedCharacters="{../tns:extraEscapedCharacters }" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+    <dfdl:defineEscapeScheme name="eBlkEndParen_eecLit">
+      <dfdl:escapeScheme escapeBlockStart="("
+        escapeBlockEnd=")" escapeKind="escapeBlock"
+        escapeEscapeCharacter=")" extraEscapedCharacters="? *" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="record">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="," >
+          <xs:element name="item" type="xs:string" maxOccurs="unbounded"
+	    dfdl:escapeSchemeRef="tns:eBlkEndParen" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="record2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="," >
+          <xs:element name="extraEscapedCharacters" type="xs:string"/>
+          <xs:element name="item" type="xs:string" dfdl:lengthKind="delimited" maxOccurs="5"
+	    dfdl:escapeSchemeRef="tns:eBlkEndParen_eecExp" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="record3">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="," >
+          <xs:element name="extraEscapedCharacters" type="xs:string"/>
+          <xs:element name="item" type="xs:string" dfdl:lengthKind="delimited" maxOccurs="5"
+	    dfdl:escapeSchemeRef="tns:eBlkEndParen_eecLit" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </defineSchema>
+ 
+  <parserTestCase name="escBlkEndSame" model="eBlkEndSame"
+    description="Section 7 defineEscapeScheme - DFDL-7-079R" root="record" roundTrip="true">
+    <document>1,(Column (Number)) Two),3,4,5</document>
+    <infoset>
+      <dfdlInfoset>
+    	<tns:record>
+    	  <tns:item>1</tns:item>
+    	  <tns:item>Column (Number) Two</tns:item>
+    	  <tns:item>3</tns:item>
+    	  <tns:item>4</tns:item>
+    	  <tns:item>5</tns:item>
+  	</tns:record>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <unparserTestCase name="escBlkEndSame2" model="eBlkEndSame"
+    description="Section 7 defineEscapeScheme - escapeBlock with expression extraEscapedCharacters" root="record2" roundTrip="true">
+    <document>? *,1,(Column Number? Two*),3,4,5</document>
+    <infoset>
+      <dfdlInfoset>
+    	<tns:record2>
+    	  <tns:extraEscapedCharacters>? *</tns:extraEscapedCharacters>
+    	  <tns:item>1</tns:item>
+    	  <tns:item>Column Number? Two*</tns:item>
+    	  <tns:item>3</tns:item>
+    	  <tns:item>4</tns:item>
+    	  <tns:item>5</tns:item>
+  	    </tns:record2>
+      </dfdlInfoset>
+    </infoset>
+  </unparserTestCase>
+
+  <unparserTestCase name="escBlkEndSame3" model="eBlkEndSame"
+    description="Section 7 defineEscapeScheme - escapeBlock with literal extraEscapedCharacters" root="record3" roundTrip="true">
+    <document>? *,1,(Column Number? Two*),3,4,5</document>
+    <infoset>
+      <dfdlInfoset>
+    	<tns:record3>
+    	  <tns:extraEscapedCharacters>? *</tns:extraEscapedCharacters>
+    	  <tns:item>1</tns:item>
+    	  <tns:item>Column Number? Two*</tns:item>
+    	  <tns:item>3</tns:item>
+    	  <tns:item>4</tns:item>
+    	  <tns:item>5</tns:item>
+  	    </tns:record3>
+      </dfdlInfoset>
+    </infoset>
+  </unparserTestCase>
+
+  <!--
+       Test Name: escBlkMultipleEEC
+          Schema: eBlkMultipleEEC
+            Root: record
+         Purpose: This test demonstrates that escapeSheme with escapeBlock where the escapeBlockEnd is the same as 2 escapeEscapeCharacters (DAFFODIL-1923).
+  -->
+  <defineSchema name="eBlkMultipleEEC">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+
+    <dfdl:defineEscapeScheme name="eBlkMultipleEEC">
+      <dfdl:escapeScheme escapeBlockStart="&quot;"
+        escapeBlockEnd="&quot;&quote;" escapeKind="escapeBlock"
+        escapeEscapeCharacter="&quot;"  extraEscapedCharacters="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="record">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="," >
+          <xs:element name="item" type="xs:string" maxOccurs="unbounded"
+	    dfdl:escapeSchemeRef="tns:eBlkMultipleEEC" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </defineSchema>
+
+  <parserTestCase name="escBlkMultipleEEC" model="eBlkMultipleEEC"
+    description="Section 7 defineEscapeScheme - DFDL-7-079R" root="record" roundTrip="true">
+    <document>1,"Column """Number""" Two"",3,4,5</document>
+    <infoset>
+      <dfdlInfoset>
+    	<tns:record>
+    	  <tns:item>1</tns:item>
+    	  <tns:item>Column &quot;Number&quot; Two</tns:item>
+    	  <tns:item>3</tns:item>
+    	  <tns:item>4</tns:item>
+    	  <tns:item>5</tns:item>
+  	</tns:record>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <defineSchema name="es7">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+    <dfdl:defineEscapeScheme name="pound">
+      <!-- comment should be ignored -->
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+      <!-- comment should be ignored -->
+    </dfdl:defineEscapeScheme>
+
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" escapeSchemeRef="tns:pound" />
+
+    <xs:element name="list">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="field" type="xs:string" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </defineSchema>
+
+  <parserTestCase name="escapeScheme_with_comment" model="es7"
+    description="Section 7 defineEscapeScheme - DFDL-7-079R" root="list" roundTrip="true">
+    <document>1,2#,2,3</document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:list>
+          <tns:field>1</tns:field>
+          <tns:field>2,2</tns:field>
+          <tns:field>3</tns:field>
+        </tns:list>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+</testSuite>

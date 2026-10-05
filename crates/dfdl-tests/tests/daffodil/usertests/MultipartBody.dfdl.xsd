@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<xsd:schema 
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+ >
+
+	<!-- include the default properties -->
+	<xsd:include schemaLocation="DefaultProperties.dfdl.xsd" />
+
+	<xsd:annotation>
+		<xsd:appinfo source="http://www.ogf.org/dfdl/">
+			<dfdl:format ref="DefaultPropertiesFormat" />
+		</xsd:appinfo>
+	</xsd:annotation>
+	
+	<xsd:annotation>
+		<xsd:appinfo source="http://www.ogf.org/dfdl/">
+			<!-- define variables -->
+			<dfdl:defineVariable name="boundary" type="xsd:string"
+				defaultValue="%WSP*;--_000_1B0E0A42CBA5E943BA6175AE7FDD6B5B013F8A51IMCMBX03TESTSOR_%WSP*;" />
+		</xsd:appinfo>
+	</xsd:annotation>
+
+	<!-- root element -->
+	<xsd:element name="MultipartBody">
+		<xsd:complexType>
+			<!-- should be able to use {$dfdl:boundary} here, but Daffodil 0.10.1 
+				doesn't recognize it -->
+            <!-- Not correct. The name boundary is defined above in the namespace
+                 of this schema, however, this schema has no namespace so the name boundary
+                 has no namespace hence no prefix. -->
+			<xsd:sequence dfdl:separator="{$boundary}"
+				dfdl:separatorSuppressionPolicy="anyEmpty" dfdl:separatorPosition="prefix"
+				dfdl:terminator="--%CR;%LF;">
+				<xsd:element name="BodyPart" dfdl:lengthKind="delimited"
+					minOccurs="1" maxOccurs="unbounded" type="xsd:string"
+					dfdl:occursCountKind="implicit"
+				 	dfdl:emptyElementParsePolicy="treatAsEmpty" />
+			</xsd:sequence>
+		</xsd:complexType>
+	</xsd:element>
+</xsd:schema>

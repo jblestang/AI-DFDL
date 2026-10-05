@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+                xmlns:dfdl="http://www.dfdl.org/7793"
+                xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                suiteName="OfficialDFDLConformanceSuite">
+
+    <tdml:defineSchema name="BinaryAndTextSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator=",">
+                        <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:assert="{ 10 gt 5 }"/>
+                        <xs:element name="Val" type="xs:int" dfdl:length="2"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <tdml:defineSchema name="NegativeAssertionSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator=",">
+                        <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:assert="{ 1 gt 5 }"/>
+                        <xs:element name="Val" type="xs:int" dfdl:length="2"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <tdml:defineSchema name="HiddenGroupSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:group name="HeaderGroup">
+                <xs:sequence>
+                    <xs:element name="Header" type="xs:int" dfdl:length="2" dfdl:outputValueCalc="{ 99 }"/>
+                </xs:sequence>
+            </xs:group>
+            <xs:element name="SecretRecord">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text">
+                        <xs:sequence dfdl:hiddenGroupRef="HeaderGroup" dfdl:representation="text"/>
+                        <xs:element name="Payload" type="xs:int" dfdl:length="2"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Test Case 1: Text Delimited Parser Case -->
+    <tdml:parserTestCase name="test_text_delimited_parser" root="Record" model="BinaryAndTextSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">10,42</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Tag>10</Tag>
+                    <Val>42</Val>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test Case 2: Text Delimited Unparser Case -->
+    <tdml:unparserTestCase name="test_text_delimited_unparser" root="Record" model="BinaryAndTextSchema">
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Tag>10</Tag>
+                    <Val>42</Val>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+        <tdml:document>
+            <tdml:documentPart type="text">10,42</tdml:documentPart>
+        </tdml:document>
+    </tdml:unparserTestCase>
+
+    <!-- Test Case 3: Assertion Validation Failure Case -->
+    <tdml:parserTestCase name="test_assertion_error_negative" root="Record" model="NegativeAssertionSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">01,42</tdml:documentPart>
+        </tdml:document>
+        <tdml:errors>
+            <tdml:error>Validation</tdml:error>
+        </tdml:errors>
+    </tdml:parserTestCase>
+
+    <!-- Test Case 4: Hidden Group Suppression Parser Case -->
+    <tdml:parserTestCase name="test_hidden_group_parser" root="SecretRecord" model="HiddenGroupSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">9942</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <SecretRecord>
+                    <Payload>42</Payload>
+                </SecretRecord>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test Case 5: Hidden Group Calculation Unparser Case -->
+    <tdml:unparserTestCase name="test_hidden_group_unparser" root="SecretRecord" model="HiddenGroupSchema">
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <SecretRecord>
+                    <Payload>42</Payload>
+                </SecretRecord>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+        <tdml:document>
+            <tdml:documentPart type="text">9942</tdml:documentPart>
+        </tdml:document>
+    </tdml:unparserTestCase>
+
+</tdml:testSuite>

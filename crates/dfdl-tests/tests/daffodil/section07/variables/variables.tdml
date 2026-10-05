@@ -1,0 +1,2851 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns="http://example.com"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:ex="http://example.com"
+  xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="v">
+    <dfdl:defineVariable name="v_no_default" type="xsd:int" />
+    <dfdl:defineVariable name="v_with_default" type="xsd:int"
+      defaultValue="42" />
+    <dfdl:defineVariable name="myVar1" type="xs:int"
+      defaultValue="6" />
+    <dfdl:defineVariable name="myVar2" type="xs:int"
+      defaultValue="16" />
+    <dfdl:defineVariable name="myVar3" type="xs:int"
+      defaultValue="26" />
+    <dfdl:defineVariable name="myVar4" type="xs:int"
+      defaultValue="36" />
+    <dfdl:defineVariable name="nonConstVar" type="xs:int"
+      defaultValue="{ $ex:myVar4 }" />
+    <dfdl:defineVariable name="nonConstVar2" type="xs:int"
+      defaultValue="{ $ex:nonConstVar }" />
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+    <xs:element name="c">
+      <xs:complexType>
+        <xs:sequence>
+
+          <xs:element name="d" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:v_with_default }">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v_no_default">{ . }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="e" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:v_no_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v_no_default">{ 41 }</dfdl:setVariable>
+              <dfdl:setVariable ref="ex:v_no_default">{ 42 }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="d" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:v_no_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="d" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:v_with_default }" />
+          <xs:element name="e" type="xsd:string"
+            dfdl:inputValueCalc="{ 'just here to carry the setVariable annotation' }">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v_with_default">{ 41 }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r3">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v_no_default">{ 41 }</dfdl:setVariable>
+              <dfdl:setVariable ref="ex:v_no_default">{ 42 }</dfdl:setVariable>
+              <dfdl:setVariable ref="ex:v_no_default">{ 43 }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="d" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:v_no_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="7" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="7" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+          <xs:element name="nest1">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="ex:myVar1"
+                      defaultValue="8" />
+                  </xs:appinfo>
+                </xs:annotation>
+                <xs:element name="b" type="xsd:int"
+                  dfdl:inputValueCalc="{ $ex:myVar1 }" />
+                <xs:element name="nest2">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                          <dfdl:newVariableInstance ref="ex:myVar1"
+                            defaultValue="9" />
+                        </xs:appinfo>
+                      </xs:annotation>
+                      <xs:element name="c" type="xsd:int"
+                        dfdl:inputValueCalc="{ $ex:myVar1 }" />
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="d" type="xsd:int"
+                  dfdl:inputValueCalc="{ $ex:myVar1 }" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="e" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi3">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="7" />
+              <dfdl:newVariableInstance ref="ex:myVar2"
+                defaultValue="17" />
+              <dfdl:newVariableInstance ref="ex:myVar3"
+                defaultValue="27" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+          <xs:element name="b" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar2 }" />
+          <xs:element name="c" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar3 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi4">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="7">8</dfdl:newVariableInstance>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi5">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="7" />
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="8" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi6">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:newVariableInstance ref="ex:myVar1"
+            defaultValue="7" />
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi7">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="s1" type="xs:string" defaultValue="global_default1" />
+    <dfdl:defineVariable name="s2" type="xs:string" defaultValue="global_default2" />
+    <xs:element name="nvi8">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:s1">{ "global_set1" }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="nest1">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="ex:s1"
+                      defaultValue="nest1_nvi1_default1" />
+                    <dfdl:newVariableInstance ref="ex:s2"
+                      defaultValue="nest1_nvi1_default2" />
+                    <dfdl:setVariable ref="ex:s1">{ "nest1_nvi1_set1" }</dfdl:setVariable>
+                  </xs:appinfo>
+                </xs:annotation>
+                <xs:element name="nest2">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                          <dfdl:newVariableInstance ref="ex:s1"
+                            defaultValue="nest2_nvi2_default1" />
+                          <dfdl:newVariableInstance ref="ex:s2"
+                            defaultValue="nest2_nvi2_default2" />
+                        </xs:appinfo>
+                      </xs:annotation>
+                      <xs:element name="choice">
+                        <xs:complexType>
+                          <xs:choice>
+                            <xs:element name="c1_s2" type="xs:string" dfdl:lengthKind="delimited">
+                              <xs:annotation>
+                                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                  <dfdl:setVariable ref="ex:s1">{ "c1_s1_set1" }</dfdl:setVariable>
+                                  <dfdl:assert><![CDATA[{ xs:string(.) eq "fail" }]]></dfdl:assert>
+                                </xs:appinfo>
+                              </xs:annotation>
+                            </xs:element>
+                            <xs:element name="c2_s2" type="xs:string" dfdl:lengthKind="delimited">
+                              <xs:annotation>
+                                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                  <dfdl:setVariable ref="ex:s1">{ "c2_s1_set1" }</dfdl:setVariable>
+                                  <dfdl:assert><![CDATA[{ xs:string(.) eq "fail" }]]></dfdl:assert>
+                                </xs:appinfo>
+                              </xs:annotation>
+                            </xs:element>
+                            <xs:element name="c3_s2" type="xs:string" dfdl:lengthKind="delimited">
+                              <xs:annotation>
+                                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                  <dfdl:setVariable ref="ex:s1">{ "c3_s1_set1" }</dfdl:setVariable>
+                                  <dfdl:assert><![CDATA[{ xs:string(.) eq "nest2_nvi2_default2" }]]></dfdl:assert>
+                                </xs:appinfo>
+                              </xs:annotation>
+                            </xs:element>
+                          </xs:choice>
+                        </xs:complexType>
+                      </xs:element>
+                      <xs:element name="d" type="xs:string"
+                        dfdl:inputValueCalc="{ $ex:s1 }" />
+                      <xs:element name="e" type="xs:string"
+                        dfdl:inputValueCalc="{ $ex:s2 }" />
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="f" type="xs:string"
+                  dfdl:inputValueCalc="{ $ex:s1 }">
+                </xs:element>
+                <xs:element name="g" type="xs:string"
+                  dfdl:inputValueCalc="{ $ex:s2 }" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="h" type="xs:string"
+            dfdl:inputValueCalc="{ $ex:s1 }" />
+          <xs:element name="i" type="xs:string"
+            dfdl:inputValueCalc="{ $ex:s2 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi9">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="original" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+          <xs:element name="choice">
+            <xs:complexType>
+              <xs:choice>
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="ex:myVar1"
+                      defaultValue="7" />
+                  </xs:appinfo>
+                </xs:annotation>
+                <xs:element name="new" type="xsd:int" dfdl:lengthKind="explicit" dfdl:length="1">
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:assert><![CDATA[{ xs:int(.) eq $ex:myVar1 }]]></dfdl:assert>
+                    </xs:appinfo>
+                  </xs:annotation>
+                </xs:element>
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi10">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="before">
+            <xs:complexType>
+              <xs:group ref="ex:g5">
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+                  </xs:appinfo>
+                </xs:annotation>
+              </xs:group>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="after">
+            <xs:complexType>
+              <xs:group ref="ex:g5">
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="ex:v1_no_default" />
+                    <dfdl:setVariable ref="ex:v1_no_default">{ "February" }</dfdl:setVariable>
+                  </xs:appinfo>
+                </xs:annotation>
+              </xs:group>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi11">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1"
+                defaultValue="10" />
+              <dfdl:assert testKind="pattern" testPattern="\d"
+                message="Assertion failed for pattern \d" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi12">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="oldVarValue" type="xsd:int" dfdl:inputValueCalc="{ $ex:myVar1 }" />
+          <xs:element name="newDefaultValue" type="xsd:int" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:element name="innerSeq">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="ex:myVar1"
+                      defaultValue="{ ../ex:newDefaultValue }" />
+                  </xs:appinfo>
+                </xs:annotation>
+                <xs:element name="newVarValue" type="xs:int"
+                  dfdl:inputValueCalc="{ $ex:myVar1 }" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="v1" type="xs:string" defaultValue="v1_global_default" />
+    <dfdl:defineVariable name="v2" type="xs:string" />
+    <xs:element name="nvi14">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v1">{ "v1_global_set" }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="nest1">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="ex:v1"
+                      defaultValue="v1_nest1_nvi1_default" />
+                    <dfdl:newVariableInstance ref="ex:v2" />
+                    <dfdl:setVariable ref="ex:v2">{ "v2_nest1_nvi1_set" }</dfdl:setVariable>
+                  </xs:appinfo>
+                </xs:annotation>
+                <xs:element name="nest2">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                          <dfdl:newVariableInstance ref="ex:v1"
+                            defaultValue="v1_nest2_nvi2_default" />
+                          <dfdl:newVariableInstance ref="ex:v2" />
+                        </xs:appinfo>
+                      </xs:annotation>
+                      <xs:element name="choice">
+                        <xs:complexType>
+                          <xs:choice>
+                            <xs:element name="c1_v2" type="xs:string" dfdl:lengthKind="delimited">
+                              <xs:annotation>
+                                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                  <dfdl:setVariable ref="ex:v2">{ "v2_c1_set" }</dfdl:setVariable>
+                                  <dfdl:assert><![CDATA[{ xs:string(.) eq "fail" }]]></dfdl:assert>
+                                </xs:appinfo>
+                              </xs:annotation>
+                            </xs:element>
+                            <xs:element name="c2_v2" type="xs:string" dfdl:lengthKind="delimited">
+                              <xs:annotation>
+                                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                  <dfdl:setVariable ref="ex:v2">{ "v2_c2_set" }</dfdl:setVariable>
+                                  <dfdl:assert><![CDATA[{ xs:string(.) eq "fail" }]]></dfdl:assert>
+                                </xs:appinfo>
+                              </xs:annotation>
+                            </xs:element>
+                            <xs:element name="c3_v2" type="xs:string" dfdl:lengthKind="delimited">
+                              <xs:annotation>
+                                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                  <dfdl:setVariable ref="ex:v2">{ "v2_c3_set" }</dfdl:setVariable>
+                                  <dfdl:assert><![CDATA[{ xs:string(.) eq "nest2_nvi2_default2" }]]></dfdl:assert>
+                                </xs:appinfo>
+                              </xs:annotation>
+                            </xs:element>
+                          </xs:choice>
+                        </xs:complexType>
+                      </xs:element>
+                      <xs:element name="d" type="xs:string"
+                        dfdl:inputValueCalc="{ $ex:v1 }" />
+                      <xs:element name="e" type="xs:string"
+                        dfdl:inputValueCalc="{ $ex:v2 }" />
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="f" type="xs:string"
+                  dfdl:inputValueCalc="{ $ex:v1 }">
+                </xs:element>
+                <xs:element name="g" type="xs:string"
+                  dfdl:inputValueCalc="{ $ex:v2 }" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="h" type="xs:string"
+            dfdl:inputValueCalc="{ $ex:v1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="nvi15">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:myVar1" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="a" type="xsd:int" dfdl:lengthKind="explicit" dfdl:length="1"
+            dfdl:outputValueCalc="{ $ex:myVar1 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="defNonConst">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="test" type="xsd:int" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:element name="value" type="xsd:int" dfdl:inputValueCalc="{ $ex:nonConstVar }" />
+          <xs:element name="value2" type="xsd:int" dfdl:inputValueCalc="{ $ex:nonConstVar2 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="{ $ex:v1_with_default }"
+          dfdl:separatorPosition="infix">
+          <xs:element name="b" type="xsd:int" maxOccurs="unbounded"
+            dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e2" type="xsd:string"
+      dfdl:inputValueCalc="{ $ex:v1_with_default }" />
+
+    <dfdl:defineVariable name="v1_with_default">,</dfdl:defineVariable>
+    <dfdl:defineVariable name="v1_no_default" />
+    <dfdl:defineVariable name="v2_with_default"
+      type="xsd:int">7</dfdl:defineVariable>
+
+    <xs:element name="day" type="xsd:int" />
+    <xs:element name="e3">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="month" type="xsd:string"
+            dfdl:inputValueCalc="{ $ex:v1_no_default }" />
+          <xs:element ref="day" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v2_with_default">{ 9 }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="hour" type="xsd:int"
+            dfdl:inputValueCalc="{ $ex:v2_with_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e4" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:choice>
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+            <xs:element name="Sale" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:setVariable ref="ex:v2_with_default">{ 29 }</dfdl:setVariable>
+                  <dfdl:assert><![CDATA[{ xs:string(.) eq "Friday" }]]></dfdl:assert>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+            <xs:element name="NoSale" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:assert><![CDATA[{ xs:string(.) eq "Monday" }]]></dfdl:assert>
+                  <dfdl:setVariable ref="ex:v2_with_default">{ 36 }</dfdl:setVariable>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+          </xs:choice>
+          <xsd:element name="month" type="xs:string"
+            dfdl:inputValueCalc="{ $ex:v1_no_default }" />
+          <xsd:element name="price" type="xs:int"
+            dfdl:inputValueCalc="{ $ex:v2_with_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e7">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="-">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="month" type="xsd:string" dfdl:lengthKind="delimited"
+            dfdl:outputValueCalc="{ $ex:v1_no_default }" />
+          <xs:element name="day" type="xsd:string" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v2_with_default">{ 9 }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="hour" type="xsd:int" dfdl:lengthKind="delimited"
+            dfdl:outputValueCalc="{ $ex:v2_with_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:simpleType name="s1">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:setVariable ref="ex:v_no_default">{ 41 }</dfdl:setVariable>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:restriction base="xs:int" />
+    </xs:simpleType>
+
+    <xs:group name="g5">
+      <xs:sequence>
+        <xs:element name="month" type="xsd:string"
+          dfdl:inputValueCalc="{ $ex:v1_no_default }" />
+        <xs:element ref="day" dfdl:lengthKind="explicit"
+          dfdl:length="2" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="e5">
+      <xs:complexType>
+        <xs:group ref="ex:g5">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:group>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e6">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="ex:s1" dfdl:lengthKind="delimited" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:inputValueCalc="{ $ex:v_no_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:group name="g8">
+      <xs:sequence>
+        <xs:element name="month" type="xsd:string" dfdl:lengthKind="delimited"
+          dfdl:outputValueCalc="{ $ex:v1_no_default }" />
+        <xs:element ref="day" dfdl:lengthKind="explicit"
+          dfdl:length="2" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="e8">
+      <xs:complexType>
+        <xs:group ref="ex:g5">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:group>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e9" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:choice>
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v1_no_default">{ "January" }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+            <xs:element name="Sale" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:setVariable ref="ex:v2_with_default">{ 29 }</dfdl:setVariable>
+                  <dfdl:assert><![CDATA[{ xs:string(.) eq "Friday" }]]></dfdl:assert>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+            <xs:element name="NoSale" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:assert><![CDATA[{ xs:string(.) eq "Monday" }]]></dfdl:assert>
+                  <dfdl:setVariable ref="ex:v2_with_default">{ 36 }</dfdl:setVariable>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+          </xs:choice>
+          <xsd:element name="month" type="xs:string" dfdl:lengthKind="delimited"
+            dfdl:outputValueCalc="{ $ex:v1_no_default }" />
+          <xsd:element name="price" type="xs:int" dfdl:lengthKind="delimited"
+            dfdl:outputValueCalc="{ $ex:v2_with_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="s_with_default" type="xs:string" defaultValue="default" />
+    <dfdl:defineVariable name="s_no_default" type="xs:string" />
+    <xs:element name="e10" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:choice>
+            <xs:element name="branch1" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:setVariable ref="ex:s_no_default">{ "variableSet_branch1" }</dfdl:setVariable>
+                  <dfdl:assert><![CDATA[{ $s_with_default eq "branch1" }]]></dfdl:assert>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+            <xs:element name="branch2" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:setVariable ref="ex:s_no_default">{ "s_no_branch2" }</dfdl:setVariable>
+                  <dfdl:setVariable ref="ex:s_with_default">{ "s_def_branch2" }</dfdl:setVariable>
+                  <dfdl:assert><![CDATA[{ xs:string($ex:s_with_default) eq "s_def_branch2" }]]></dfdl:assert>
+                  <dfdl:assert><![CDATA[{ xs:string($ex:s_with_default) eq "s_def_branch2" }]]></dfdl:assert>
+                  <dfdl:assert><![CDATA[{ xs:string(.) eq "branch2" }]]></dfdl:assert>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+            <xs:element name="branch3" type="xs:string"
+              dfdl:lengthKind="delimited">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:setVariable ref="ex:s_no_default">{ "s_no_branch3" }</dfdl:setVariable>
+                  <dfdl:assert><![CDATA[{ xs:string(.) eq "branch3" }]]></dfdl:assert>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+          </xs:choice>
+          <xsd:element name="s_no_default" type="xs:string"
+            dfdl:inputValueCalc="{ $ex:s_no_default }" />
+          <xsd:element name="s_with_default" type="xs:string"
+            dfdl:inputValueCalc="{ $ex:s_with_default }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="badscope" type="xs:int" defaultValue="70"/>
+
+    <dfdl:defineVariable name="unsignedLen" type="xs:unsignedInt" defaultValue="2"/>
+    <xs:element name="u1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="a" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{ $ex:unsignedLen }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="setVar1" root="c"
+    model="v" description="Use of defineVariable and setVariable - DFDL-7-091R">
+
+    <tdml:document />
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <c xmlns="http://example.com">
+          <d xsi:type="xsd:int">42</d>
+          <e xsi:type="xsd:int">42</e>
+        </c>
+
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="doubleSetErr" root="r1"
+    model="v"
+    description="Error to set the value of a variable instance twice - DFDL-7-130R">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Variables</tdml:error>
+      <tdml:error>distinct</tdml:error>
+      <tdml:error>same location</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="multiSetErr" root="r3"
+    model="v"
+    description="Error to set the value of a variable instance more than once - DFDL-7-130R">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Variables</tdml:error>
+      <tdml:error>distinct</tdml:error>
+      <tdml:error>same location</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="setAfterReadErr" root="r2"
+    model="v"
+    description="Error to set the value of a variable instance after it is referenced - DFDL-7-131R">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>variable</tdml:error>
+      <tdml:error>after</tdml:error>
+      <tdml:error>v_with_default</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="setAfterDefaultUnparseErr" root="r2"
+    model="v"
+    description="Error to set the value of a variable instance that has a default value when unparsing">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>variable</tdml:error>
+      <tdml:error>after</tdml:error>
+      <tdml:error>v_with_default</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_01" root="nvi1"
+    model="v"
+    description="Simple demonstration of newVariableInstance">
+
+    <tdml:document />
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi1 xmlns="http://example.com">
+          <a xsi:type="xsd:int">7</a>
+        </nvi1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_02" root="nvi2"
+    model="v"
+    description="Demonstrates that newVariableInstance correctly goes into and out of scope">
+
+    <tdml:document />
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi2 xmlns="http://example.com">
+          <a xsi:type="xsd:int">7</a>
+          <nest1>
+            <b xsi:type="xsd:int">8</b>
+            <nest2>
+              <c xsi:type="xsd:int">9</c>
+            </nest2>
+            <d xsi:type="xsd:int">8</d>
+          </nest1>
+          <e xsi:type="xsd:int">7</e>
+        </nvi2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_03" root="nvi3"
+    model="v"
+    description="Demonstrates using multiple newVariableInstance statements within a sequence">
+
+    <tdml:document />
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi3 xmlns="http://example.com">
+          <a xsi:type="xsd:int">7</a>
+          <b xsi:type="xsd:int">17</b>
+          <c xsi:type="xsd:int">27</c>
+        </nvi3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_04" root="nvi4"
+    model="v"
+    description="SDE due to default value being set both as attribute and element value">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>value of variable was supplied both as attribute and element value</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_05" root="nvi5"
+    model="v"
+    description="SDE due to multiple newVariableInstance calls within the same scope to the same variable">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>newVariableInstances must all be distinct within the same scope</tdml:error>
+      <tdml:error>myVar1</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_06" root="nvi6"
+    model="v"
+    description="SDE due to newVariableInstance being declared on an element instead of group reference, sequence or choice">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>newVariableInstance may only be used on group reference, sequence or choice</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_07" root="nvi7"
+    model="v"
+    description="Demonstrates that newVariableInstance inherits default value from original definition">
+
+    <tdml:document />
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi7 xmlns="http://example.com">
+          <a xsi:type="xsd:int">6</a>
+        </nvi7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="varInstance_15" root="nvi15"
+    model="v" roundTrip="false"
+    description="Demonstrates that newVariableInstance inherits default value from original definition">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi15 xmlns="http://example.com">
+          <a xsi:type="xsd:int">8</a>
+        </nvi15>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>6</tdml:document>
+
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="varInstance_08" root="nvi8"
+    model="v"
+    description="Demonstrates that newVariableInstance default values cannot be used in combination with setVariable when unparsing">
+
+    <tdml:document><![CDATA[nest2_nvi2_default2]]></tdml:document>
+
+    <tdml:errors>
+      <tdml:error>unparse direction</tdml:error>
+      <tdml:error>default value</tdml:error>
+      <tdml:error>race condition</tdml:error>
+      <tdml:error>forward referencing expression</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_09" root="nvi9"
+    model="v"
+    description="Simple demonstration of newVariableInstance on a choice">
+
+    <tdml:document><![CDATA[7]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi9 xmlns="http://example.com">
+          <original xsi:type="xsd:int">6</original>
+          <choice>
+            <new xsi:type="xsd:int">7</new>
+          </choice>
+        </nvi9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_10" root="nvi10"
+    model="v" description="setVariable on a group reference - DFDL-7-121R">
+    <tdml:document><![CDATA[2324]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi10 xmlns="http://example.com">
+          <before>
+            <month>January</month>
+            <day>23</day>
+          </before>
+          <after>
+            <month>February</month>
+            <day>24</day>
+          </after>
+        </nvi10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_11" root="nvi11"
+    model="v"
+    description="Demonstrates correct statement order is observed with newVariableInstance">
+
+    <tdml:document />
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>Assertion failed: Assertion failed for pattern \d</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_12" root="nvi12"
+    model="v" roundTrip="false"
+    description="newVariablesInstance with a non-constant expression as defaultValue">
+
+    <tdml:document><![CDATA[7]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi12 xmlns="http://example.com">
+          <oldVarValue xsi:type="xsd:int">6</oldVarValue>
+          <newDefaultValue xsi:type="xsd:int">7</newDefaultValue>
+          <innerSeq>
+            <newVarValue xsi:type="xsd:int">7</newVarValue>
+          </innerSeq>
+        </nvi12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="varInstance_14" root="nvi14"
+    model="v"
+    description="Demonstrates that newVariableInstance correctly goes into and out of scope with backtracking">
+
+    <tdml:document><![CDATA[nest2_nvi2_default2]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <nvi14 xmlns="http://example.com">
+          <nest1>
+            <nest2>
+              <choice>
+                <c3_v2>nest2_nvi2_default2</c3_v2>
+              </choice>
+              <d>v1_nest2_nvi2_default</d>
+              <e>v2_c3_set</e>
+            </nest2>
+            <f>v1_nest1_nvi1_default</f>
+            <g>v2_nest1_nvi1_set</g>
+          </nest1>
+          <h>v1_global_set</h>
+        </nvi14>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="defineVariable_nonConstantExpression" root="defNonConst"
+    model="v"
+    description="defineVariable with a non-constant expression as defaultValue">
+
+    <tdml:document><![CDATA[7]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <defNonConst xmlns="http://example.com">
+          <test>7</test>
+          <value>36</value>
+          <value2>36</value2>
+        </defNonConst>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="defineVariable_nonConstantExpression_unp" root="defNonConst"
+    model="v"
+    description="defineVariable with a non-constant expression as defaultValue" roundTrip="false">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <defNonConst xmlns="http://example.com">
+          <test>7</test>
+          <value>36</value>
+          <value2>36</value2>
+        </defNonConst>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document><![CDATA[7]]></tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="varAsSeparator" root="e1"
+    model="v"
+    description="variable referenced as a separator; the defineVariable annotation occurs after the element declaration that references it - DFDL-7-107R">
+    <tdml:document><![CDATA[23,45,110]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1 xmlns="http://example.com">
+          <b xsi:type="xsd:int">23</b>
+          <b xsi:type="xsd:int">45</b>
+          <b xsi:type="xsd:int">110</b>
+        </e1>
+
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="setVarOnSeqAndElemRef"
+    root="e3" model="v"
+    description="setVariable on a sequence and an element reference - DFDL-7-121R">
+    <tdml:document><![CDATA[23]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3 xmlns="http://example.com">
+          <month>January</month>
+          <day>23</day>
+          <hour>9</hour>
+        </e3>
+
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse_setVarOnSeq"
+    root="e7" model="v"
+    description="setVariable on a sequence and an element reference - DFDL-7-121R">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e7 xmlns="http://example.com">
+          <month>January</month>
+          <day>23</day>
+          <hour>9</hour>
+        </e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>January-23-9</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="setVarChoice" root="e4"
+    model="v"
+    description="setVariable on a choice and choice branches - DFDL-7-132R, DFDL-7-121R">
+    <tdml:document><![CDATA[Monday]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4 xmlns="http://example.com">
+          <NoSale>Monday</NoSale>
+          <month>January</month>
+          <price>36</price>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse_setVarChoice" root="e9"
+    model="v"
+    description="setVariable on a choice and choice branches - DFDL-7-132R, DFDL-7-121R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e9 xmlns="http://example.com">
+          <NoSale>Monday</NoSale>
+          <month>January</month>
+          <price>36</price>
+        </e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>Monday,January,36</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="setVarOnGroupRef" root="e5"
+    model="v" description="setVariable on a group reference - DFDL-7-121R">
+    <tdml:document><![CDATA[23]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5 xmlns="http://example.com">
+          <month>January</month>
+          <day>23</day>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse_setVarOnGroupRef" root="e8" roundTrip="false"
+    model="v" description="setVariable on a group reference - DFDL-7-121R">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e8 xmlns="http://example.com">
+          <month>anything</month>
+          <day>23</day>
+        </e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>23</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="setVarSimpleType" root="e6"
+    model="v" description="setVariable on a simpleType - DFDL-7-121R">
+    <tdml:document><![CDATA[23]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6 xmlns="http://example.com">
+          <e1>23</e1>
+          <e2>41</e2>
+        </e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="resetVar_01" root="e10"
+    model="v"
+    description="Demonstrates that a variables state is properly reset after a read">
+    <tdml:document><![CDATA[branch2]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e10 xmlns="http://example.com">
+          <branch2>branch2</branch2>
+          <s_no_default>s_no_branch2</s_no_default>
+          <s_with_default>s_def_branch2</s_with_default>
+        </e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="resetVar_02" root="e10"
+    model="v"
+    description="Demonstrates that a variables state is properly reset after a set and read">
+    <tdml:document><![CDATA[branch3]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e10 xmlns="http://example.com">
+          <branch3>branch3</branch3>
+          <s_no_default>s_no_branch3</s_no_default>
+          <s_with_default>default</s_with_default>
+        </e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="unsignedIntVarCast" root="u1"
+    model="v"
+    description="Variable of type unsignedInt used to indicate element length">
+    <tdml:document><![CDATA[ab]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <u1>
+          <a xsi:type="xs:string">ab</a>
+        </u1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="setVarSchema">
+    <dfdl:defineVariable name="v_no_default" type="xs:int" />
+    <dfdl:defineVariable name="v_with_default" type="xs:int"
+      defaultValue="42" />
+    <dfdl:defineVariable name="myVar1" type="xs:int" />
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="r1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:int" dfdl:inputValueCalc="{ $ex:v_with_default }" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v_no_default" value="{ 41 }" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="two" type="xs:int" dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ $ex:v_no_default }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:int" dfdl:inputValueCalc="{ $ex:v_with_default }" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v_no_default" value="{ 41 }">{ 42 }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="two" type="xs:int" dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ $ex:v_no_default }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r3">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:int" dfdl:inputValueCalc="{ $ex:v_with_default }" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:v_no_default">{ xs:int("BEEEP") }</dfdl:setVariable>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="two" type="xs:int" dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ $ex:v_no_default }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="holder" type="xs:int" />
+
+    <xs:element name="r4">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:int" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:holder" value="{ (.) }" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="two" type="xs:int" dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ $ex:holder - 1 }"/>
+          <xs:element name="three" type="xs:int" dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ $ex:holder + 1 }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="holder2" type="xs:int" />
+
+    <xs:element name="r5">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:string" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:holder2" value="{ xs:int(.) }" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="two" type="xs:int" dfdl:lengthKind="delimited" dfdl:inputValueCalc="{ $ex:holder - 1 }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <dfdl:defineVariable name="counter" type="xs:int" />
+
+    <xs:element name="r6">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:int" dfdl:lengthKind="delimited"/>
+          <xs:element name="two" type="xs:string" dfdl:lengthKind="delimited">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:counter" value="{ if ((xs:int(../ex:one)) lt 5) then 1 else 0 }" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="three" type="xs:int" dfdl:inputValueCalc=" { $ex:counter } " dfdl:lengthKind="delimited"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r7" type="xs:int" dfdl:inputValueCalc=" { $ex:badscope } " dfdl:lengthKind="delimited"/>
+    <xs:element name="r8" type="xs:int" dfdl:inputValueCalc=" { $ex:v_no_default } " dfdl:lengthKind="delimited"/>
+
+    <dfdl:defineVariable name="varb" type="xs:int" />
+
+    <xs:element name="r9">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="." dfdl:separatorPosition="infix">
+        <xs:choice>
+          <xs:element name="one" type="xs:int" dfdl:lengthKind="delimited"/>
+          <xs:element name="two" type="xs:string" dfdl:lengthKind="delimited"/>
+        </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="absolutePath" elementFormDefault="qualified">
+
+  <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"/>
+
+    <xs:element name="elem">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="|">
+          <xs:element name="header">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="sep" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+                <xs:element name="term" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="item" type="ex:reffed" dfdl:lengthKind="explicit" dfdl:length="4"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:simpleType name="reffed" dfdl:terminator="{ /ex:elem/ex:header/ex:term }">
+      <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+
+  </tdml:defineSchema>
+
+<!--
+     Test: setVarAbsolutePath
+   Schema: absolutePath
+     Root: elem
+  Purpose: This test uses the parsed values of elements as formatting parameters WITHOUT
+           using setVariable
+-->
+
+  <tdml:parserTestCase name="setVarAbsolutePath" root="elem"
+    model="absolutePath" description="Section 7 - setVariable - DFDL-7-127R">
+    <tdml:document>,.|test.</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>
+          <header>
+            <sep>,</sep>
+            <term>.</term>
+          </header>
+          <item>test</item>
+        </elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarValAttribute
+   Schema: setVarSchema
+     Root: r1
+  Purpose: This test uses a schema that demonstrates the use of the dfdl:value attribute to specify a variable value
+-->
+
+  <tdml:parserTestCase name="setVarValAttribute" root="r1"
+    model="setVarSchema" description="Section 7 - setVariable supports both a value attribute and a 'value' - DFDL-7-122R">
+    <tdml:document/>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r1 xmlns="http://example.com">
+          <one>42</one>
+          <two>41</two>
+        </r1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarValAttribute2
+   Schema: setVarSchema
+     Root: r2
+  Purpose: This test uses a schema uses both the dfdl:value attribute and the element value
+           to specify a variable value and should cause an error
+-->
+
+  <tdml:parserTestCase name="setVarValAttribute2" root="r2"
+    model="setVarSchema" description="Section 7 - setVariable supports both a value attribute and a 'value' - DFDL-7-122R">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Cannot have both a value attribute and an element value</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarTypeMismatch
+   Schema: setVarSchema
+     Root: r3
+  Purpose: This test sets an int variable to a string and should fail
+-->
+
+  <tdml:parserTestCase name="setVarTypeMismatch" root="r3"
+    model="setVarSchema" description="Section 7 - setVariable - value matches defineVariable - DFDL-7-124R">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Cannot convert</tdml:error>
+      <tdml:error>BEEEP</tdml:error>
+      <tdml:error>string</tdml:error>
+      <tdml:error>long</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarCurrVal
+   Schema: setVarSchema
+     Root: r4
+  Purpose: This test sets a variable with the value of the first element
+-->
+
+  <tdml:parserTestCase name="setVarCurrVal" root="r4"
+    model="setVarSchema" description="Section 7 - setVariable - relative path value - DFDL-7-125R">
+    <tdml:document>54</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+      <r4>
+        <one>54</one>
+        <two>53</two>
+        <three>55</three>
+      </r4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarMismatchRelative
+   Schema: setVarSchema
+     Root: r5
+  Purpose: This test sets a variable with the value of the first element with an incorrect type
+-->
+
+  <tdml:parserTestCase name="setVarMismatchRelative" root="r5"
+    model="setVarSchema" description="Section 7 - setVariable - relative path value - DFDL-7-125R">
+    <tdml:document>boat</tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>cannot convert</tdml:error>
+      <tdml:error>boat</tdml:error>
+      <tdml:error>string</tdml:error>
+      <tdml:error>long</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarExpression
+   Schema: setVarSchema
+     Root: r6
+  Purpose: This test sets a variable with a relative expression
+-->
+
+  <tdml:parserTestCase name="setVarExpression" root="r6"
+    model="setVarSchema" description="Section 7 - setVariable - relative path expression - DFDL-7-126R">
+    <tdml:document>8,is it less than 5</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r6>
+          <one>8</one>
+          <two>is it less than 5</two>
+          <three>0</three>
+        </r6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarExpression2
+   Schema: setVarSchema
+     Root: r6
+  Purpose: This test sets a variable with a relative expression
+-->
+
+  <tdml:parserTestCase name="setVarExpression2" root="r6"
+    model="setVarSchema" description="Section 7 - setVariable - relative path expression - DFDL-7-126R">
+    <tdml:document>3,is it less than 5</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r6>
+          <one>3</one>
+          <two>is it less than 5</two>
+          <three>1</three>
+        </r6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarBadScope
+   Schema: setVarSchema
+     Root: r7
+  Purpose: This test tries to use a variable that is defined in another schema
+-->
+
+  <tdml:parserTestCase name="setVarBadScope" root="r7"
+    model="setVarSchema" description="Section 7 - setVariable - variable scope - DFDL-7-128R">
+    <tdml:document>6</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test: setVarBadScope2
+   Schema: setVarSchema
+     Root: r8
+  Purpose: This test tries to use a variable that is given a value outside of the scope
+-->
+
+  <tdml:parserTestCase name="setVarBadScope2" root="r8"
+    model="setVarSchema" description="Section 7 - setVariable - variable scope - DFDL-7-128R">
+    <tdml:document>6</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Variable map (runtime): variable</tdml:error>
+      <tdml:error>v_no_default has no value</tdml:error>
+      <tdml:error>It was not set, and has no default value.</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choiceInSequenceWithSeparators">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="ch1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="/" dfdl:separatorPosition="infix">
+          <xs:choice>
+            <xs:element name="foo" type="xs:int" />
+            <xs:element name="bar" type="xs:string" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="separatorAsVar">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <dfdl:defineVariable name="v3_with_default" type="xs:string"
+      defaultValue="ASDF" />
+
+    <xs:element name="e7">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="{$ex:v3_with_default}"
+            dfdl:separatorSuppressionPolicy="anyEmpty" dfdl:separatorPosition="prefix"
+            dfdl:terminator="--">
+          <xs:element name="a" dfdl:lengthKind="delimited"
+            minOccurs="1" maxOccurs="unbounded" type="xsd:string"
+            dfdl:occursCountKind="implicit" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="varAsSeparator2" root="e7"
+    model="separatorAsVar"
+    description="variable referenced as a separator">
+    <tdml:document><![CDATA[ASDF23ASDF45ASDF110--]]></tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e7>
+          <a>23</a>
+          <a>45</a>
+          <a>110</a>
+        </e7>
+
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="emptyDefault">
+    <dfdl:defineVariable name="v_default" type="xs:string" >test</dfdl:defineVariable>
+    <dfdl:defineVariable name="v_empty_default" type="xs:string"
+      defaultValue="" />
+    <dfdl:defineVariable name="v_empty_default2" type="xs:string" >{ "" }</dfdl:defineVariable>
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="r1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:string" dfdl:inputValueCalc="{ $ex:v_empty_default }" dfdl:lengthKind="delimited" />
+          <xs:element name="two" type="xs:string" dfdl:inputValueCalc="{ $ex:v_default }" dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="r2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="one" type="xs:string" dfdl:inputValueCalc="{ $ex:v_empty_default2 }" dfdl:lengthKind="delimited" />
+          <xs:element name="two" type="xs:string" dfdl:inputValueCalc="{ $ex:v_default }" dfdl:lengthKind="delimited" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+<!--
+     Test: emptyDefault
+   Schema: emptyDefault
+     Root: r1
+  Purpose: This test uses empty string as the default value by setting the defaultValue attribute.
+-->
+
+  <tdml:parserTestCase name="emptyDefault" root="r1"
+    model="emptyDefault" description="Section 7 - setVariable supports both a value attribute and a 'value' - DFDL-7-122R">
+    <tdml:document/>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r1>
+          <one/>
+	  <two>test</two>
+        </r1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test: emptyDefault2
+   Schema: emptyDefault
+     Root: r2
+  Purpose: This test uses empty string as the default value by using an expression.
+-->
+
+  <tdml:parserTestCase name="emptyDefault2" root="r2"
+    model="emptyDefault" description="Section 7 - setVariable supports both a value attribute and a 'value' - DFDL-7-122R">
+    <tdml:document/>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r2>
+          <one/>
+	  <two>test</two>
+        </r2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="emptyDefaultInvalid">
+    <dfdl:defineVariable name="v_empty_default_invalid" type="xs:string"
+      defaultValue="">{ "" }</dfdl:defineVariable>
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="r2" type="xs:string" dfdl:inputValueCalc="{ $ex:v_empty_default_invalid }" dfdl:lengthKind="delimited" />
+  </tdml:defineSchema>
+
+<!--
+     Test: doubleEmptyDefault
+   Schema: emptyDefaultInvalid
+     Root: r2
+  Purpose: This test uses an element that had a default set with an attribute and an element value and should fail.
+-->
+
+  <tdml:parserTestCase name="doubleEmptyDefault" root="r2"
+    model="emptyDefaultInvalid" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Default value of variable was supplied both as attribute and element value</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="variable_path">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="var" defaultValue="e1" />
+    <dfdl:defineVariable name="var2" defaultValue="r" />
+
+    <xs:element name="r">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="e1" type="xs:string" dfdl:inputValueCalc="{ $var }" />
+          <xs:element name="e2" type="xs:string" dfdl:inputValueCalc="{ /ex:r/$var }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e3" type="xs:string" dfdl:inputValueCalc="{ $var2/ex:e1 }" />
+
+  </tdml:defineSchema>
+
+<!--
+     Test: var_end_path
+   Schema: variable_path
+     Root: r
+  Purpose: This test uses a variable at the end of a path and should fail since it is invalid to have a variable in a path expression.
+-->
+
+  <tdml:parserTestCase name="var_end_path" root="r"
+    model="variable_path" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Variables</tdml:error>
+      <tdml:error>path expressions</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test: var_in_path
+   Schema: variable_path
+     Root: e3
+  Purpose: This test uses a variable in a path and should fail since it is invalid to have a variable in a path expression.
+-->
+
+  <tdml:parserTestCase name="var_in_path" root="e3"
+    model="variable_path" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Unable to parse expression</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="logical_default_values">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="float" type="xs:float" defaultValue="-INF" />
+    <dfdl:defineVariable name="double" type="xs:double" defaultValue="1.0e-5" />
+    <dfdl:defineVariable name="bool" type="xs:boolean" defaultValue="false" />
+    <dfdl:defineVariable name="string" type="xs:string" defaultValue="str" />
+    <dfdl:defineVariable name="date" type="xs:date" defaultValue="1999-12-31" />
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="float" type="xs:float" dfdl:inputValueCalc="{ $float }" />
+          <xs:element name="double" type="xs:double" dfdl:inputValueCalc="{ $double + 2.0 }" />
+          <xs:element name="bool" type="xs:boolean" dfdl:inputValueCalc="{ $bool }" />
+          <xs:element name="string" type="xs:string" dfdl:inputValueCalc="{ $string }" />
+          <xs:element name="date" type="xs:date" dfdl:inputValueCalc="{ $date }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="logical_default_values" root="root"
+    model="logical_default_values" description="Section 7 - ">
+    <tdml:document/>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root xmlns="http://example.com">
+          <float>-INF</float>
+          <double>2.00001</double>
+          <bool>false</bool>
+          <string>str</string>
+          <date>1999-12-31</date>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="logical_default_values_err">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="float" type="xs:float" defaultValue="float" />
+    <xs:element name="float" type="xs:float" dfdl:inputValueCalc="{ $float }" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="logical_default_values_err" root="float"
+    model="logical_default_values_err" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Unable to convert logical value</tdml:error>
+      <tdml:error>float</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="choice_branch_variables">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="var1" type="xs:string" defaultValue="false" />
+    <dfdl:defineVariable name="var2" type="xs:string" defaultValue="false" />
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="record" minOccurs="0" maxOccurs="2">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="id" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="1" />
+                <xs:choice>
+                  <xs:choice dfdl:choiceDispatchKey="{ xs:string(ex:id) }">
+                    <xs:sequence dfdl:choiceBranchKey="1">
+                      <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                          <dfdl:setVariable ref="var1" value="true" />
+                        </xs:appinfo>
+                      </xs:annotation>
+                    </xs:sequence>
+                    <xs:sequence dfdl:choiceBranchKey="2">
+                      <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                          <dfdl:setVariable ref="var2" value="true" />
+                        </xs:appinfo>
+                      </xs:annotation>
+                    </xs:sequence>
+                  </xs:choice>
+                  <xs:sequence />
+                </xs:choice>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="var1_val" type="xs:string" dfdl:inputValueCalc="{ $ex:var1 }" />
+          <xs:element name="var2_val" type="xs:string" dfdl:inputValueCalc="{ $ex:var2 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!-- This test describes a situation where a choice is used to simply set a variable and nothing else.
+    In the choice of this test the branches only contain empty sequences that call setVariable on different
+    variables, depending on the branch. This works as expected during parsing, but because nothing gets
+    added to the infoset for these setVariable calls, on unparsing only the first branch of the choice is
+    ever used, which if the choice is part of an array, as it is in this test, results in the setVariable
+    call in the first branch being called multiple times, resulting in a double set error.
+  -->
+  <tdml:unparserTestCase name="multipleBranchesWithNoElementsSetVariableError" root="root"
+    model="choice_branch_variables" description="Section 7 - setVariable - relative path expression - DFDL-7-126R">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <record>
+            <id>1</id>
+          </record>
+          <record>
+            <id>2</id>
+          </record>
+          <var1_val>true</var1_val>
+          <var2_val>true</var2_val>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Cannot set variable</tdml:error>
+      <tdml:error>twice</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="variables_nilled_element">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"
+      nilKind="literalValue" nilValue="%ES;" useNilForDefault="no" nilValueDelimiterPolicy="none" />
+
+    <dfdl:defineVariable name="var1" type="xs:string" defaultValue="false" />
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="id" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="1">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="var1" value="true" />
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="nillable_but_present" type="xs:string" nillable="true" dfdl:lengthKind="explicit" dfdl:length="4" />
+          <xs:choice dfdl:choiceDispatchKey="{ $ex:var1 }">
+            <xs:element name="var1_true" type="xs:string" dfdl:choiceBranchKey="true" dfdl:lengthKind="explicit" dfdl:length="7" />
+            <xs:element name="var1_false" type="xs:string" dfdl:choiceBranchKey="false" dfdl:lengthKind="explicit" dfdl:length="7" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="variables_nilled_element" root="root"
+    model="variables_nilled_element" description="Section 7 - setVariable - verify that variables aren't getting reset incorrectly - DAFFODIL-2374">
+    <tdml:document>1,test,is set?</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <id>1</id>
+          <nillable_but_present>test</nillable_but_present>
+          <var1_true>is set?</var1_true>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="newVariableInstance_choiceDispatchKey">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+    <dfdl:format ref="GeneralFormat" />
+    <dfdl:defineVariable name="type" type="xs:int" />
+    <dfdl:defineVariable name="count" type="xs:int" />
+
+    <xs:element name="file">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="records" maxOccurs="unbounded" dfdl:terminator=",">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="type" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1" />
+                <xs:element name="count" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1" />
+                <xs:sequence>
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:newVariableInstance ref="ex:type" />
+                      <dfdl:newVariableInstance ref="ex:count" />
+                    </xs:appinfo>
+                  </xs:annotation>
+                  <xs:sequence>
+                    <xs:choice dfdl:choiceDispatchKey="{ xs:string(./ex:type) }">
+                      <xs:element name="int" type="xs:int" dfdl:choiceBranchKey="1" maxOccurs="unbounded"
+                        dfdl:occursCountKind="expression" dfdl:occursCount="{ ../ex:count }"
+                        dfdl:lengthKind="explicit" dfdl:length="1" />
+                      <xs:element name="str" type="xs:string" dfdl:choiceBranchKey="2" maxOccurs="unbounded"
+                        dfdl:occursCountKind="expression" dfdl:occursCount="{ ../ex:count }"
+                        dfdl:lengthKind="explicit" dfdl:length="1" />
+                    </xs:choice>
+                  </xs:sequence>
+                </xs:sequence>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="NVI_with_CDK1" root="file"
+    model="newVariableInstance_choiceDispatchKey" description="Combination of choice dispatch key with newVaribleInstance causing mark state errors - DAFFODIL-2354">
+  <tdml:document>1512345,26abcdef,</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <file>
+          <records>
+            <type>1</type>
+            <count>5</count>
+            <int>1</int>
+            <int>2</int>
+            <int>3</int>
+            <int>4</int>
+            <int>5</int>
+          </records>
+          <records>
+            <type>2</type>
+            <count>6</count>
+            <str>a</str>
+            <str>b</str>
+            <str>c</str>
+            <str>d</str>
+            <str>e</str>
+            <str>f</str>
+          </records>
+        </file>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="circular_defineVariable">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="circular1" type="xs:int"
+      defaultValue="{ $ex:circular2 }" />
+    <dfdl:defineVariable name="circular2" type="xs:int"
+      defaultValue="{ $ex:circular1 }" />
+    <xs:element name="root" type="xs:int" dfdl:inputValueCalc="{ $ex:circular1 }" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="circular_defineVariable_err" root="root"
+    model="circular_defineVariable" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Runtime Schema Definition Error</tdml:error>
+      <tdml:error>part of a circular definition</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="defineVariable_ref_infoset">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="badRef" type="xs:int"
+      defaultValue="{ ex:root }" />
+    <xs:element name="root" type="xs:int" dfdl:inputValueCalc="{ 42 }" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="defineVariable_ref_infoset_err" root="root"
+    model="defineVariable_ref_infoset" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>????</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="defineVariable_ref_noDefault">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="noDefault" type="xs:int" />
+    <dfdl:defineVariable name="badRef" type="xs:int"
+      defaultValue="{ $ex:noDefault }" />
+    <xs:element name="root" type="xs:int" dfdl:inputValueCalc="{ $ex:badRef }" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="defineVariable_ref_noDefault_err" root="root"
+    model="defineVariable_ref_noDefault" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Runtime Schema Definition Error</tdml:error>
+      <tdml:error>has no value. It was not set</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="defineVariable_nonConstantExpression_setVar">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <dfdl:defineVariable name="var1" type="xs:int"
+      defaultValue="{ 5 }" />
+    <dfdl:defineVariable name="var2" type="xs:int"
+      defaultValue="{ $ex:var1 }" />
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:var2">2</dfdl:setVariable>
+              <dfdl:setVariable ref="ex:var1">1</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="e1" type="xs:int" dfdl:inputValueCalc="{ $ex:var1 }" />
+          <xs:element name="e2" type="xs:int" dfdl:inputValueCalc="{ $ex:var2 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="defineVariable_nonConstantExpression_setVar_err" root="root"
+    model="defineVariable_nonConstantExpression_setVar" description="Section 7 - ">
+    <tdml:document/>
+    <tdml:warnings>
+      <tdml:warning>Runtime Schema Definition Warning</tdml:warning>
+      <tdml:warning>Cannot set variable</tdml:warning>
+      <tdml:warning>after reading the default value</tdml:warning>
+      <tdml:warning>State was: VariableRead</tdml:warning>
+    </tdml:warnings>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <e1>1</e1>
+          <e2>2</e2>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineConfig name="escalateWarnings">
+    <daf:tunables>
+      <daf:escalateWarningsToErrors>true</daf:escalateWarningsToErrors>
+    </daf:tunables>
+  </tdml:defineConfig>
+
+  <tdml:parserTestCase name="defineVariable_nonConstantExpression_setVar_err2" root="root"
+    model="defineVariable_nonConstantExpression_setVar" description="escalate warning"
+    config="escalateWarnings">
+    <tdml:document/>
+    <tdml:errors>
+      <tdml:error>Schema Definition Warning Escalated Error</tdml:error>
+      <tdml:error>variableSet</tdml:error>
+      <tdml:error>Cannot set variable</tdml:error>
+      <tdml:error>after reading the default value</tdml:error>
+      <tdml:error>State was: VariableRead</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="variable_direction_schema">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"
+      representation="binary"/>
+
+    <dfdl:defineVariable name="remainingDottedAddr" type="xs:string" dfdlx:direction="unparseOnly" />
+    <dfdl:defineVariable name="priorRemainingDottedAddr" type="xs:string" dfdlx:direction="unparseOnly" />
+    <dfdl:defineVariable name="ipAddr" type="xs:string" dfdlx:direction="unparseOnly" />
+
+		 <xs:group name="IPSrcGrp">
+			<xs:sequence>
+				<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+					<dfdl:newVariableInstance ref="ex:ipAddr" defaultValue='{ ex:IPSrc }'/><!-- example 1.2.3.4 -->
+				</xs:appinfo></xs:annotation>
+				<xs:element name="IPSrcString">
+					<xs:complexType>
+						<xs:group ref="ex:IPAddressGroup"/>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:group>
+
+		<xs:group name="IPAddressGroup">
+			<xs:sequence>
+				<xs:sequence>
+					<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+						<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:ipAddr }'/><!-- example 1.2.3.4 -->
+						<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ $ex:priorRemainingDottedAddr }'/><!-- example 1.2.3.4 -->
+					</xs:appinfo></xs:annotation>
+					<xs:element name="Byte1" type="xs:unsignedByte" dfdl:outputValueCalc="{
+						xs:unsignedByte(fn:substring-before($ex:remainingDottedAddr, '.'))
+						}"/>
+					<xs:sequence>
+						<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+							<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:remainingDottedAddr }'/><!-- example 1.2.3.4 -->
+							<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ fn:substring-after($ex:priorRemainingDottedAddr, ".") }'/><!-- example 2.3.4 -->
+						</xs:appinfo></xs:annotation>
+						<xs:element name="Byte2" type="xs:unsignedByte" dfdl:outputValueCalc="{
+						 xs:unsignedByte(fn:substring-before($ex:remainingDottedAddr, '.'))
+						 }"/>
+						<xs:sequence>
+							<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+								<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:remainingDottedAddr }'/><!-- example 2.3.4 -->
+								<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ fn:substring-after($ex:priorRemainingDottedAddr, ".") }'/><!-- example 3.4 -->
+							</xs:appinfo></xs:annotation>
+							<xs:element name="Byte3" type="xs:unsignedByte" dfdl:outputValueCalc="{
+								xs:unsignedByte(fn:substring-before($ex:remainingDottedAddr, '.'))
+								}"/>
+							<xs:sequence>
+								<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+									<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:remainingDottedAddr }'/><!-- example 3.4 -->
+									<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ fn:substring-after($ex:priorRemainingDottedAddr, ".") }'/><!-- example 4 -->
+								</xs:appinfo></xs:annotation>
+								<xs:element name="Byte4" type="xs:unsignedByte" dfdl:outputValueCalc="{
+									xs:unsignedByte($ex:remainingDottedAddr)
+									}"/>
+							</xs:sequence>
+						</xs:sequence>
+					</xs:sequence>
+				</xs:sequence>
+			</xs:sequence>
+		</xs:group>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:sequence dfdl:hiddenGroupRef="ex:IPSrcGrp" />
+          <xs:element name="IPSrc" type="xs:string" dfdl:inputValueCalc="{ fn:concat(../ex:IPSrcString/ex:Byte1, '.', ../ex:IPSrcString/ex:Byte2, '.', ../ex:IPSrcString/ex:Byte3, '.', ../ex:IPSrcString/ex:Byte4) }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="varDirection_1" root="root"
+    model="variable_direction_schema" description="Section 7 - ">
+    <tdml:document>
+      <tdml:documentPart type="bits">00000001 00000010 00000011 00000100</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <IPSrc>1.2.3.4</IPSrc>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="variable_direction_simple">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"
+      representation="text" textNumberRep="standard" alignment="8" alignmentUnits="bits"
+      lengthUnits="bytes" lengthKind="delimited" />
+
+    <dfdl:defineVariable name="input" type="xs:int" dfdlx:direction="parseOnly" defaultValue="{ 1 }" />
+    <dfdl:defineVariable name="output" type="xs:int" dfdlx:direction="unparseOnly" defaultValue="{ 2 }" />
+
+    <xs:element name="e1" type="xs:int" dfdl:inputValueCalc="{ $ex:input }" />
+    <xs:element name="e2" type="xs:int" dfdl:inputValueCalc="{ $ex:output }" />
+
+    <xs:element name="refSimpleElementWithOvcVar">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="st1" dfdl:outputValueCalc="{ $ex:output }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    <xs:element name="st1" type="xs:int" />
+
+    <xs:element name="refSimpleElementWithOvcVar2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="st1" dfdl:outputValueCalc="{ $ex:input }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="direction_setVar1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:output">{ 4 }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="st1" type="xs:int" dfdl:inputValueCalc="{ $ex:output }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="direction_setVar2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:setVariable ref="ex:output">{ 4 }</dfdl:setVariable>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="st1" type="xs:int" dfdl:outputValueCalc="{ $ex:output }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="direction_nvi1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:output" defaultValue="4" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="st1" type="xs:int" dfdl:inputValueCalc="{ $ex:output }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="direction_nvi2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="ex:output" defaultValue="4" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="st1" type="xs:int" dfdl:outputValueCalc="{ $ex:output }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="varDirection_2" root="e1"
+    model="variable_direction_simple" description="Simple test of parseOnly variable" >
+    <tdml:document />
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>1</e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="varDirection_3" root="refSimpleElementWithOvcVar"
+    model="variable_direction_simple" description="Simple test of unparseOnly variable" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <refSimpleElementWithOvcVar xmlns="http://example.com">
+          <st1>9</st1>
+        </refSimpleElementWithOvcVar>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text">2</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="varDirection_err1" root="e2"
+    model="variable_direction_simple" description="Attempt to read variable marked unparseOnly during parsing" >
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>Attempting to read variable</tdml:error>
+      <tdml:error>marked as unparseOnly</tdml:error>
+      <tdml:error>during parsing</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="varDirection_err2" root="refSimpleElementWithOvcVar2"
+    model="variable_direction_simple" description="Attempt to read a variable marked parseOnly during unparsing" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <refSimpleElementWithOvcVar2 xmlns="http://example.com">
+          <st1>9</st1>
+        </refSimpleElementWithOvcVar2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Attempting to read variable</tdml:error>
+      <tdml:error>marked as parseOnly</tdml:error>
+      <tdml:error>during unparsing</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="varDirection_setVar1" root="direction_setVar1"
+    model="variable_direction_simple" description="Attempt to set a variable marked unparseOnly during parsing. SetVar should be ignored" roundTrip="false">
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>Attempting to read variable</tdml:error>
+      <tdml:error>marked as unparseOnly</tdml:error>
+      <tdml:error>during parsing</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="varDirection_setVar2" root="direction_setVar2"
+    model="variable_direction_simple" description="Attempt to set a variable marked unparseOnly during parsing" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">4</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <direction_setVar2 xmlns="http://example.com">
+          <st1>2</st1>
+        </direction_setVar2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="varDirection_nvi1" root="direction_nvi1"
+    model="variable_direction_simple" description="Attempt to set a variable marked unparseOnly during parsing" roundTrip="false">
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>Attempting to read variable</tdml:error>
+      <tdml:error>marked as unparseOnly</tdml:error>
+      <tdml:error>during parsing</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="varDirection_nvi2" root="direction_nvi2"
+    model="variable_direction_simple" description="Attempt to set a variable marked unparseOnly during parsing" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">4</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <direction_nvi2 xmlns="http://example.com">
+          <st1>2</st1>
+        </direction_nvi2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="variable_suspension_scope">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"
+      representation="text" lengthKind="delimited"/>
+
+    <dfdl:defineVariable name="remainingDottedAddr" type="xs:string" dfdlx:direction="unparseOnly" />
+    <dfdl:defineVariable name="priorRemainingDottedAddr" type="xs:string" dfdlx:direction="unparseOnly" />
+    <dfdl:defineVariable name="ipAddr" type="xs:string" dfdlx:direction="unparseOnly" />
+
+		 <xs:group name="IPSrcGrp">
+			<xs:sequence>
+				<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+					<dfdl:newVariableInstance ref="ex:ipAddr" defaultValue='{ ex:IPSrc }'/><!-- example 1.2.3.4 -->
+				</xs:appinfo></xs:annotation>
+				<xs:element name="IPSrcString">
+					<xs:complexType>
+						<xs:group ref="ex:IPAddressGroup"/>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:group>
+
+		<xs:group name="IPAddressGroup">
+			<xs:sequence dfdl:separator=",">
+				<xs:sequence dfdl:separator=",">
+					<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+						<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:ipAddr }'/><!-- example 1.2.3.4 -->
+						<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ $ex:priorRemainingDottedAddr }'/><!-- example 1.2.3.4 -->
+					</xs:appinfo></xs:annotation>
+					<xs:element name="Byte1" type="xs:unsignedByte" dfdl:outputValueCalc="{
+						xs:unsignedByte(fn:substring-before($ex:remainingDottedAddr, '.'))
+						}"/>
+					<xs:sequence dfdl:separator=",">
+						<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+							<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:remainingDottedAddr }'/><!-- example 1.2.3.4 -->
+							<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ fn:substring-after($ex:priorRemainingDottedAddr, ".") }'/><!-- example 2.3.4 -->
+						</xs:appinfo></xs:annotation>
+						<xs:element name="Byte2" type="xs:unsignedByte" dfdl:outputValueCalc="{
+						 xs:unsignedByte(fn:substring-before($ex:remainingDottedAddr, '.'))
+						 }"/>
+						<xs:sequence dfdl:separator=",">
+							<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+								<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:remainingDottedAddr }'/><!-- example 2.3.4 -->
+								<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ fn:substring-after($ex:priorRemainingDottedAddr, ".") }'/><!-- example 3.4 -->
+							</xs:appinfo></xs:annotation>
+							<xs:element name="Byte3" type="xs:unsignedByte" dfdl:outputValueCalc="{
+								xs:unsignedByte(fn:substring-before($ex:remainingDottedAddr, '.'))
+								}"/>
+							<xs:sequence dfdl:separator=",">
+								<xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+									<dfdl:newVariableInstance ref="ex:priorRemainingDottedAddr" defaultValue='{ $ex:remainingDottedAddr }'/><!-- example 3.4 -->
+									<dfdl:newVariableInstance ref="ex:remainingDottedAddr" defaultValue='{ fn:substring-after($ex:priorRemainingDottedAddr, ".") }'/><!-- example 4 -->
+								</xs:appinfo></xs:annotation>
+								<xs:element name="Byte4" type="xs:unsignedByte" dfdl:outputValueCalc="{
+									xs:unsignedByte($ex:remainingDottedAddr)
+									}"/>
+              </xs:sequence>
+              <xs:element name="checkPrior3" type="xs:string" dfdl:outputValueCalc="{ $ex:priorRemainingDottedAddr }" />
+              <xs:element name="checkRemaining3" type="xs:string" dfdl:outputValueCalc="{ $ex:remainingDottedAddr }" />
+						</xs:sequence>
+            <xs:element name="checkPrior2" type="xs:string" dfdl:outputValueCalc="{ $ex:priorRemainingDottedAddr }" />
+            <xs:element name="checkRemaining2" type="xs:string" dfdl:outputValueCalc="{ $ex:remainingDottedAddr }" />
+					</xs:sequence>
+          <xs:element name="checkPrior1" type="xs:string" dfdl:outputValueCalc="{ $ex:priorRemainingDottedAddr }" />
+          <xs:element name="checkRemaining1" type="xs:string" dfdl:outputValueCalc="{ $ex:remainingDottedAddr }" />
+				</xs:sequence>
+			</xs:sequence>
+		</xs:group>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:sequence dfdl:hiddenGroupRef="ex:IPSrcGrp" />
+          <xs:element name="IPSrc" type="xs:string" dfdl:inputValueCalc="{ fn:concat(../ex:IPSrcString/ex:Byte1, '.', ../ex:IPSrcString/ex:Byte2, '.', ../ex:IPSrcString/ex:Byte3, '.', ../ex:IPSrcString/ex:Byte4) }" />
+
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:unparserTestCase name="varInstance_13" root="root"
+    model="variable_suspension_scope" roundTrip="false"
+    description="Demonstrate suspensions work correctly as NVI goes out of scope">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <IPSrc>1.2.3.4</IPSrc>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text">1,2,3,4,2.3.4,3.4,1.2.3.4,2.3.4,1.2.3.4,1.2.3.4</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="escapeCharVars">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:defineVariable defaultValue="\" name="EscapeChar" type="xs:string"/>
+
+    <dfdl:format ref="GeneralFormat"
+      escapeSchemeRef="escapeScheme" />
+
+    <dfdl:defineEscapeScheme name="escapeScheme">
+      <dfdl:escapeScheme
+        escapeKind="escapeCharacter"
+        escapeCharacter="{ $EscapeChar }"
+        escapeEscapeCharacter="{ $EscapeChar }"
+        extraEscapedCharacters=""/>
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="delims" dfdl:initiator="[" dfdl:terminator="]" dfdl:length="1" dfdl:lengthKind="explicit" minOccurs="0">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="escapeChar" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" dfdl:escapeSchemeRef="">
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:setVariable ref="EscapeChar" value="{ . }" />
+                    </xs:appinfo>
+                  </xs:annotation>
+                </xs:element>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:sequence dfdl:separator=",">
+            <xs:element name="field" type="xs:string" dfdl:lengthKind="delimited" maxOccurs="unbounded" />
+          </xs:sequence>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="escapeCharVars_01" root="root" model="escapeCharVars">
+    <tdml:document>[=]fieldOne,field=,Two,fieldThree</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root xmlns="http://example.com">
+          <delims>
+            <escapeChar>=</escapeChar>
+          </delims>
+          <field>fieldOne</field>
+          <field>field,Two</field>
+          <field>fieldThree</field>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <!-- test will fail after escapeScheme is refactored -->
+    <tdml:warnings>
+      <tdml:warning>Cannot set variable</tdml:warning>
+      <tdml:warning>EscapeChar</tdml:warning>
+      <tdml:warning>after reading</tdml:warning>
+      <tdml:warning>default value</tdml:warning>
+    </tdml:warnings>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="escapeCharVars_02" root="root" model="escapeCharVars">
+    <tdml:document>fieldOne,field\,Two,fieldThree</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root xmlns="http://example.com">
+          <field>fieldOne</field>
+          <field>field,Two</field>
+          <field>fieldThree</field>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:defineSchema name="multipleVarReadInPoU">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:defineVariable defaultValue="x" name="var1" type="xs:string"/>
+
+    <dfdl:format ref="GeneralFormat" />
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="opt" minOccurs="0">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:sequence>
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:assert test="{ $var1 eq 'x' }" />
+                    </xs:appinfo>
+                  </xs:annotation>
+                </xs:sequence>
+                <xs:sequence>
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:assert test="{ $var1 eq 'y' }" />
+                    </xs:appinfo>
+                  </xs:annotation>
+                </xs:sequence>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="multipleVarReadInPoU_01" root="root" model="multipleVarReadInPoU">
+    <tdml:document></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root xmlns="http://example.com"></root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="nviInGroupDecl">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:defineVariable defaultValue="x" name="var1" type="xs:string"/>
+
+    <dfdl:format ref="GeneralFormat" />
+
+    <xs:group name="g1">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:newVariableInstance ref="ex:var1" defaultValue="test"/>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:sequence>
+        <xs:element name="e1" type="xs:string" dfdl:inputValueCalc="{ $ex:var1 }"/>
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:group ref="ex:g1"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="nviInGroupDecl_01" root="root" model="nviInGroupDecl">
+    <tdml:document></tdml:document>
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>Annotations</tdml:warning>
+      <tdml:warning>group definition</tdml:warning>
+      <tdml:warning>ignored</tdml:warning>
+    </tdml:warnings>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <e1>x</e1>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="backwardsDefines">
+    <!--
+      Daffodil evaluates variable defaults in the order the variables are
+      defined. This schema ensures that variable defaults that reference later
+      defined variables still works, i.e. defineVariable order does not matter
+    -->
+    <dfdl:defineVariable name="three" type="xs:int" defaultValue="{ $two + 1 }" />
+    <dfdl:defineVariable name="two" type="xs:int" defaultValue="{ $one + 1 }" />
+    <dfdl:defineVariable name="one" type="xs:int" defaultValue="1" />
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="three" type="xs:int" dfdl:inputValueCalc="{ $three }" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="backwardsDefines_01" root="three" model="backwardsDefines">
+    <tdml:document></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <three>3</three>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="defaultValue">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"/>
+    <dfdl:defineVariable name="pi" type="xs:double" defaultValue="3.141592653589793" />
+    <xs:element name="data" type="xs:double" dfdl:inputValueCalc="{ $ex:pi }"/>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="variables2" root="data" model="defaultValue">
+    <tdml:document/>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:data>3.141592653589793</ex:data>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="setVariable">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"/>
+    <dfdl:defineVariable name="x" type="xs:double"/>
+    <xs:element name="data">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:double" dfdl:lengthKind="delimited" dfdl:textNumberPattern="#.###############">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:setVariable ref="ex:x" value="{ . }"/>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="e2" type="xs:double" dfdl:inputValueCalc="{ $ex:x - 0.141592653589793 }"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="variables3" root="data" model="setVariable">
+    <tdml:document>3.141592653589793</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:data><ex:e1>3.141592653589793</ex:e1><ex:e2>3.0</ex:e2></ex:data>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

@@ -1,0 +1,655 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  suiteName="escapeSchemeUnparse">
+
+  <tdml:defineSchema name="delimitedStringsEscapeScheme">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="ascii" lengthUnits="bytes" outputNewLine="%CR;%LF;"/>
+      <dfdl:defineEscapeScheme name="pound">
+        <dfdl:escapeScheme escapeCharacter='#'
+          escapeKind="escapeCharacter" escapeEscapeCharacter="" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+        </dfdl:defineEscapeScheme>
+      <dfdl:defineEscapeScheme name="pound2">
+        <dfdl:escapeScheme escapeCharacter='#'
+          escapeKind="escapeCharacter" escapeEscapeCharacter="/" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+        </dfdl:defineEscapeScheme>
+        <dfdl:defineEscapeScheme name='cStyleComment'>
+          <dfdl:escapeScheme escapeBlockStart='/*'
+            escapeBlockEnd='*/' escapeKind="escapeBlock"
+            escapeEscapeCharacter="#" generateEscapeBlock="whenNeeded" extraEscapedCharacters="" />
+        </dfdl:defineEscapeScheme>
+      
+      <dfdl:defineEscapeScheme name="slashes">
+        <dfdl:escapeScheme escapeCharacter='/'
+          escapeKind="escapeCharacter" escapeEscapeCharacter="\" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+      </dfdl:defineEscapeScheme>
+
+      <dfdl:defineEscapeScheme name="invalidEEC">
+        <dfdl:escapeScheme escapeCharacter='/'
+          escapeKind="escapeCharacter" escapeEscapeCharacter="\" extraEscapedCharacters="A BB C" generateEscapeBlock="whenNeeded" />
+      </dfdl:defineEscapeScheme>
+
+      <xs:element name="e1" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound" />
+            <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="cStyleComment" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    
+      <xs:element name="e2">
+        <xs:complexType>
+          <xs:sequence dfdl:separator=",">
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound"/>
+            <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e3">
+        <xs:complexType>
+          <xs:sequence dfdl:separator=",">
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound"/>
+            <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="slashes"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e4" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="cStyleComment" />
+            <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e5">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="#">
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound"/>
+            <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e5b">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="#">
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound2"/>
+            <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound2"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e6">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="cStyleComment" minOccurs="0" maxOccurs="5" dfdl:occursCountKind="parsed"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e7">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound" minOccurs="0" maxOccurs="5" dfdl:occursCountKind="parsed"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e8">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="slashes" minOccurs="0" maxOccurs="5" dfdl:occursCountKind="parsed"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="e9">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="invalidEEC" minOccurs="0" maxOccurs="5" dfdl:occursCountKind="parsed"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+  
+      <xs:element name="e10">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="| ; ," >
+            <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound" minOccurs="0" maxOccurs="6" dfdl:occursCountKind="parsed"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+  </tdml:defineSchema>
+
+<!--
+      Test Name: unparseDelimitedEscapedString01
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString01" model="delimitedStringsEscapeScheme" root="e1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1 xmlns:ex="http://example.com">
+          <ex:s1>one, two</ex:s1>
+          <ex:s2>, three and four*/</ex:s2>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one#, two,/*, three and four#*/*/</tdml:document>
+  </tdml:unparserTestCase>
+  
+  <tdml:parserTestCase name="parseDelimitedEscapedString01" model="delimitedStringsEscapeScheme" root="e1">
+    <tdml:document>one#, two,/*, three and four#*/*/</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1 xmlns:ex="http://example.com">
+          <ex:s1>one, two</ex:s1>
+          <ex:s2>, three and four*/</ex:s2>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString02
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString02" model="delimitedStringsEscapeScheme" root="e2">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e2 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s2>three</ex:s2>
+        </ex:e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one#,two,three</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString03
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString03" model="delimitedStringsEscapeScheme" root="e3" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s2>three,four/five</ex:s2>
+        </ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one#,two,three/,four\/five</tdml:document>
+  </tdml:unparserTestCase>
+  
+  <tdml:parserTestCase name="parseDelimitedEscapedString03" model="delimitedStringsEscapeScheme" root="e3">
+    <tdml:document>one#,two,three/,four\/five</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s2>three,four/five</ex:s2>
+        </ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString04
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString04" model="delimitedStringsEscapeScheme" root="e4" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e4 xmlns:ex="http://example.com">
+          <ex:s1>/*three</ex:s1>
+          <ex:s2>*/four</ex:s2>
+        </ex:e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>/*/*three*/,*/four</tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: parseDelimitedEscapedString04
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test was previously failing with memory issues. The test would spin and eventually fail with a Java heap space error (DFDL-1315). This test will remain to demonstrate that the issue has been fixed. The intended functionality of this test is now covered by unparseDelimitedEscapedString04 with roundTrip="true"
+-->
+  <tdml:parserTestCase name="parseDelimitedEscapedString04" model="delimitedStringsEscapeScheme" root="e4">
+    <tdml:document>/*three,#*/four</tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString05
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString05" model="delimitedStringsEscapeScheme" root="e5b">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e5b xmlns:ex="http://example.com">
+          <ex:s1>test</ex:s1>
+          <ex:s2>double te#st</ex:s2>
+        </ex:e5b>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>dfdl:terminator and dfdl:separator</tdml:error>
+      <tdml:error>may not begin with the dfdl:escapeCharacter</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString06
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString06" model="delimitedStringsEscapeScheme" root="e6" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s1>/*three*/</ex:s1>
+        </ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>/*one,two*/,/*/*three#*/*/</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString07
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString07" model="delimitedStringsEscapeScheme" root="e6" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6 xmlns:ex="http://example.com">
+          <ex:s1>one,</ex:s1>
+          <ex:s1>two</ex:s1>
+        </ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>/*one,*/,two</tdml:document>
+ </tdml:unparserTestCase>
+ 
+<!--
+      Test Name: unparseDelimitedEscapedString08
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString08" model="delimitedStringsEscapeScheme" root="e7" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e7 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s1>three</ex:s1>
+          <ex:s1>fou,,,,r</ex:s1>
+        </ex:e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one#,two,three,fou#,#,#,#,r</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString09
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString09" model="delimitedStringsEscapeScheme" root="e8" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e8 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s1>three</ex:s1>
+          <ex:s1>fou/,r</ex:s1>
+        </ex:e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one/,two,three,fou\//,r</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString10
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString10" model="delimitedStringsEscapeScheme" root="e8" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e8 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s1>three</ex:s1>
+          <ex:s1>four/</ex:s1>
+          <ex:s1>five</ex:s1>
+        </ex:e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one/,two,three,four\/,five</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseInvalidExtraEscapedCharacters
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates an SDE when extra escaped characters contains a non-single character string
+-->
+  <tdml:unparserTestCase name="unparseInvalidExtraEscapedCharacters" model="delimitedStringsEscapeScheme" root="e9" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e9 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s1>three</ex:s1>
+          <ex:s1>four/</ex:s1>
+          <ex:s1>five</ex:s1>
+        </ex:e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>extraEscapedCharacters</tdml:error>
+      <tdml:error>exactly 1 character</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString22
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with escape schemes
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString22" model="delimitedStringsEscapeScheme" root="e10" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e10 xmlns:ex="http://example.com">
+          <ex:s1>one,two</ex:s1>
+          <ex:s1>three|four</ex:s1>
+          <ex:s1>five;six</ex:s1>
+        </ex:e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>one#,two|three#|four|five#;six</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="foo">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="ascii" lengthUnits="bytes" outputNewLine="%CR;%LF;"/>
+        <dfdl:defineEscapeScheme name='quoteSlash'>
+          <dfdl:escapeScheme escapeBlockStart='"'
+            escapeBlockEnd='"' escapeKind="escapeBlock"
+            escapeEscapeCharacter="\" generateEscapeBlock="whenNeeded" extraEscapedCharacters="" />
+        </dfdl:defineEscapeScheme>
+        <dfdl:defineEscapeScheme name='quoteSlash2'>
+          <dfdl:escapeScheme escapeBlockStart='"'
+            escapeBlockEnd="'" escapeKind="escapeBlock"
+            escapeEscapeCharacter="\" generateEscapeBlock="whenNeeded" extraEscapedCharacters="" />
+        </dfdl:defineEscapeScheme>
+        <dfdl:defineEscapeScheme name='quoteSlash3'>
+          <dfdl:escapeScheme escapeBlockStart='"'
+            escapeBlockEnd="'" escapeKind="escapeBlock"
+            escapeEscapeCharacter="\" generateEscapeBlock="whenNeeded" extraEscapedCharacters=", | ;" />
+        </dfdl:defineEscapeScheme>
+        <dfdl:defineEscapeScheme name='quoteSlash4'>
+          <dfdl:escapeScheme escapeBlockStart='"'
+            escapeBlockEnd="'" escapeKind="escapeBlock"
+            escapeEscapeCharacter="\" generateEscapeBlock="whenNeeded" extraEscapedCharacters="%SP; %#126; %#x21; , | ;" />
+        </dfdl:defineEscapeScheme>
+        <dfdl:defineEscapeScheme name='quoteSlash5'>
+          <dfdl:escapeScheme escapeBlockStart='"'
+            escapeBlockEnd="'" escapeKind="escapeBlock"
+            escapeEscapeCharacter="\" generateEscapeBlock="whenNeeded" extraEscapedCharacters="%#r0A; , | ;" />
+        </dfdl:defineEscapeScheme>
+        <dfdl:defineEscapeScheme name='quoteSlash6'>
+          <dfdl:escapeScheme escapeBlockStart='"'
+            escapeBlockEnd="'" escapeKind="escapeBlock"
+            escapeEscapeCharacter="\" generateEscapeBlock="whenNeeded" extraEscapedCharacters="%#WSP*; , | ;" />
+        </dfdl:defineEscapeScheme>
+
+      <xs:element name="foo" dfdl:lengthKind="delimited" type="xs:string" dfdl:escapeSchemeRef="quoteSlash"/>
+      <xs:element name="foo2" dfdl:lengthKind="delimited" type="xs:string" dfdl:escapeSchemeRef="quoteSlash2"/>
+      <xs:element name="foo3" dfdl:lengthKind="delimited" type="xs:string" dfdl:escapeSchemeRef="quoteSlash3"/>
+      <xs:element name="foo4" dfdl:lengthKind="delimited" type="xs:string" dfdl:escapeSchemeRef="quoteSlash4"/>
+      <xs:element name="foo5" dfdl:lengthKind="delimited" type="xs:string" dfdl:escapeSchemeRef="quoteSlash5"/>
+      <xs:element name="foo6" dfdl:lengthKind="delimited" type="xs:string" dfdl:escapeSchemeRef="quoteSlash6"/>
+ 
+   </tdml:defineSchema>
+    
+<!--
+      Test Name: unparseDelimitedEscapedString12
+      Schema: foo
+      Purpose: This test demonstrates unparsing escaping a block end character during unparse
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString12" model="foo" root="foo" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo>This contains a block end " followed by more text</ex:foo>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>"This contains a block end \" followed by more text"</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString13
+      Schema: foo2
+      Purpose: This test demonstrates unparsing escaping a block end character during unparse
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString13" model="foo" root="foo2" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo2>This contains a block end ' followed by more text</ex:foo2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>"This contains a block end \' followed by more text'</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedEscapedString14
+      Schema: delimitedStringsEscapeScheme
+      Purpose: This test demonstrates escaping a block end character during unparse
+-->
+  <tdml:unparserTestCase name="unparseDelimitedEscapedString14" model="delimitedStringsEscapeScheme" root="e6" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6 xmlns:ex="http://example.com">
+          <ex:s1>one*/two</ex:s1>
+        </ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>/*one#*/two*/</tdml:document>
+ </tdml:unparserTestCase>
+ 
+<!--
+      Test Name: unparseDelimitedEscapedString15
+      Schema: foo3
+      Purpose: This test demonstrates unparsing escaping a block end character during unparse
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString15" model="foo" root="foo3" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo3>This contains an extra escaped character , followed by more text</ex:foo3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>"This contains an extra escaped character , followed by more text'</tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString16
+      Schema: foo4
+      Purpose: This test demonstrates unparsing extraEscapedCharacters using Basic DFDL entity SP
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString16" model="foo" root="foo4" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo4>Spaces are the extra escaped character.</ex:foo4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>"Spaces are the extra escaped character.'</tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString17
+      Schema: foo4
+      Purpose: This test demonstrates unparsing extraEscapedCharacters using basic DFDL entity SP but
+               no spaces are present, so the text is not escaped by the block.
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString17" model="foo" root="foo4" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo4>Spaces_are_the_extra_escaped_character.</ex:foo4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>Spaces_are_the_extra_escaped_character.</tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString18
+      Schema: foo4
+      Purpose: This test demonstrates unparsing extraEscapedCharacters using basic DFDL decimal entity for tilde.
+               Because the tilde is present, the text is escaped by the blocks.
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString18" model="foo" root="foo4" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo4>Tilde_is_the_extra~escaped_character.</ex:foo4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>"Tilde_is_the_extra~escaped_character.'</tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString19
+      Schema: foo5
+      Purpose: This test demonstrates unparsing extraEscapedCharacters cannot have raw bytes.
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString19" model="foo" root="foo5" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo5>This should error. Raw bytes are not allowed for extraEscapedCharacters.</ex:foo5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Byte Entity</tdml:error>
+      <tdml:error>not allowed</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString20
+      Schema: foo4
+      Purpose: This test demonstrates unparsing extraEscapedCharacters are escaped using basic DFDL hex entity for
+               the exclamation point.  Because it is present, the text is escaped by the block.
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString20" model="foo" root="foo4" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo4>Exclamation_is_the_extra!escaped_character.</ex:foo4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>"Exclamation_is_the_extra!escaped_character.'</tdml:document>
+  </tdml:unparserTestCase>
+  
+<!--
+      Test Name: unparseDelimitedEscapedString21
+      Schema: foo6
+      Purpose: This test demonstrates unparsing extraEscapedCharacters fail for DFDL Character Classes
+-->
+    
+    <tdml:unparserTestCase name="unparseDelimitedEscapedString21" model="foo" root="foo6" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:foo6>This should error. DFDL Character Class Entities are not allowed for extraEscapedCharacters.</ex:foo6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Invalid DFDL Entity</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="runtimeDelimiterEscapeConflict">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="ascii" lengthUnits="bytes" outputNewLine="%CR;%LF;"/>
+    <dfdl:defineEscapeScheme name="pound2">
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="/" extraEscapedCharacters="" generateEscapeBlock="whenNeeded" />
+    </dfdl:defineEscapeScheme>
+
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="sep" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:element name="seq">
+            <xs:complexType>
+              <xs:sequence dfdl:separator="{ ../ex:sep }">
+                <xs:element name="s1" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound2"/>
+                <xs:element name="s2" type="xs:string" dfdl:lengthKind="delimited" dfdl:escapeSchemeRef="pound2"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+<!--
+      Test Name: runtimeUnparseDelimiterEscapeConflict
+      Schema: runtimeUnparseDelimiterEscapeConflict
+      Purpose: This test checks for a runtime SDE for a conflicting delimiter and escapeCharacter
+-->
+  <tdml:unparserTestCase name="runtimeUnparseDelimiterEscapeConflict" model="runtimeDelimiterEscapeConflict" root="e1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1 xmlns:ex="http://example.com">
+          <ex:sep>#</ex:sep>
+          <ex:seq>
+            <ex:s1>test</ex:s1>
+            <ex:s2>test2</ex:s2>
+          </ex:seq>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>dfdl:terminator and dfdl:separator</tdml:error>
+      <tdml:error>may not begin with the dfdl:escapeCharacter</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

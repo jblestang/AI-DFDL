@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/dfdl-core",
+    "crates/dfdl-xml",
+    "crates/dfdl-schema",
+    "crates/dfdl-std",
+    "crates/dfdl-cli",
+    "crates/dfdl-tests",
+    "crates/dfdl-fuzz",
+]
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(dfdl_no_std)'] }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"

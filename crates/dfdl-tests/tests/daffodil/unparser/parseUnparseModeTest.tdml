@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="parser and unparser mode experiments"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" 
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  defaultRoundTrip="true">
+
+  <tdml:parserTestCase name="parse1" root="root" model="parseUnparseModeTest.dfdl.xsd"
+    roundTrip="false">
+    <tdml:document>24</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root><a>24</a><b>parsing</b></ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse1" root="root" model="parseUnparseModeTest.dfdl.xsd"
+    roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root><a1>42</a1><c>255</c></ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="byte">3432FF</tdml:documentPart>
+     </tdml:document>
+  </tdml:unparserTestCase>
+  
+  <tdml:unparserTestCase name="unparse2" root="rootAmbiguous" model="parseUnparseModeTest.dfdl.xsd"
+    roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:rootAmbiguous><a>42</a><c>255</c></ex:rootAmbiguous>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>UPA Violation</tdml:error>
+      <tdml:error>multiple choice</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparse3" root="entirelyOptionalChoice" model="parseUnparseModeTest.dfdl.xsd"
+    roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:entirelyOptionalChoice><a>1</a></ex:entirelyOptionalChoice>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <!--
+    We no longer produce this warning for this test.
+    Choices with entirely optional content are legal, so long as there is
+    no ambiguity nor UPA violation with things before/after the choice.
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>entirely optional content</tdml:warning>
+    </tdml:warnings>
+    -->
+    <tdml:document>1</tdml:document>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

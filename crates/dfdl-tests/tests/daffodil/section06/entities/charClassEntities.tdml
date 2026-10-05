@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<testSuite suiteName="Newlines" description="Different representations of newline"
+  xmlns="http://www.ibm.com/xmlns/dfdl/testData" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:tns="http://www.example.org/example1/"
+  defaultRoundTrip="true">
+
+  <parserTestCase name="LineFeed" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R">
+
+    <document>
+      <documentPart type="text"><![CDATA[0,1,2,3,4
+5,6,7,8,9
+10,11,12,13,14]]></documentPart>
+    </document>
+
+    <infoset>
+      <dfdlInfoset>
+        <tns:matrix>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="CarriageReturn" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+    <!-- two pass because CR in data will be converted to LF due to outputNewLine -->
+    <document>
+      <documentPart type="text" replaceDFDLEntities="true"><![CDATA[0,1,2,3,4%CR;]]></documentPart>
+      <documentPart type="text" replaceDFDLEntities="true"><![CDATA[5,6,7,8,9%CR;]]></documentPart>
+      <documentPart type="text" replaceDFDLEntities="true"><![CDATA[10,11,12,13,14]]></documentPart>
+    </document>
+
+    <infoset>
+      <dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <matrix xmlns="http://www.example.org/example1/"
+          xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0">
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="LineSeparator" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+
+    <document>
+      <documentPart type="text"><![CDATA[0,1,2,3,4 5,6,7,8 10,11,12,13,14]]></documentPart>
+    </document>
+
+    <infoset>
+      <dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <matrix xmlns="http://www.example.org/example1/"
+          xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0">
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="NextLine" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+
+    <document>
+      <documentPart type="text"><![CDATA[0,1,2,3,45,6,7,8,910,11]]></documentPart>
+    </document>
+
+    <infoset>
+      <dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <matrix xmlns="http://www.example.org/example1/"
+          xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0">
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+          </row>
+        </matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="LineFeed_byte" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R">
+
+    <document>
+      <documentPart type="byte">302C312C322C332C340a352C362C372C382C390a31302C31312C31322C31332C3134</documentPart>
+      <!-- The bytes above represent 0,1,2,3,4%NL;5,6,7,8,9%NL;10,11,12,13,14 
+        where %NL; is 0x0a -->
+    </document>
+
+    <infoset>
+      <dfdlInfoset>
+        <tns:matrix>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="CarriageReturn_byte" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+
+    <document>
+      <documentPart type="byte">302C312C322C332C340d352C362C372C382C390d31302C31312C31322C31332C3134</documentPart>
+      <!-- The bytes above represent 0,1,2,3,4%NL;5,6,7,8,9%NL;10,11,12,13,14 
+        where %NL; is 0x0d -->
+    </document>
+
+    <infoset>
+      <dfdlInfoset >
+        <tns:matrix>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="CRLF_byte" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+
+    <document>
+      <documentPart type="byte">302C312C322C332C340d0a352C362C372C382C390d0a31302C31312C31322C31332C3134</documentPart>
+      <!-- The bytes above represent 0,1,2,3,4%NL;5,6,7,8,9%NL;10,11,12,13,14 
+        where %NL; is 0x0d0a -->
+    </document>
+
+    <infoset>
+      <dfdlInfoset>
+        <tns:matrix>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="LineSeparator_byte" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+
+    <document>
+      <documentPart type="byte">302C312C322C332C34e280a8352C362C372C382C39e280a831302C31312C31322C31332C3134</documentPart>
+      <!-- The bytes above represent 0,1,2,3,4%#x2028;5,6,7,8,9%#x2028;10,11,12,13,14 
+        where %NL; is U+2028 aka "Line Separator" -->
+    </document>
+
+    <infoset>
+      <dfdlInfoset>
+        <tns:matrix>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="NextLine_byte" root="matrix"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %NL; - DFDL-6-045R"
+    roundTrip="twoPass">
+
+    <document>
+      <documentPart type="byte">302C312C322C332C34c285352C362C372C382C39c28531302C31312C31322C31332C3134</documentPart>
+      <!-- The bytes above represent 0,1,2,3,4%NL;5,6,7,8,9%NL;10,11,12,13,14 
+        where %NL; is 0xc285 -->
+    </document>
+
+    <infoset>
+      <dfdlInfoset>
+        <tns:matrix>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="FormFeed" root="matrix_01"
+    model="charClassEntities.dfdl.xsd" description="CSV-style tests and use of %FF; - DFDL-6-042R">
+
+    <document>
+      <documentPart type="byte">302C312C322C332C340C352C362C372C382C390C31302C31312C31322C31332C3134</documentPart>
+      <!-- The bytes above represent 0,1,2,3,4%FF;5,6,7,8,9%FF;10,11,12,13,14 -->
+    </document>
+
+    <infoset>
+      <dfdlInfoset>
+        <tns:matrix_01>
+          <row>
+            <cell>0</cell>
+            <cell>1</cell>
+            <cell>2</cell>
+            <cell>3</cell>
+            <cell>4</cell>
+          </row>
+          <row>
+            <cell>5</cell>
+            <cell>6</cell>
+            <cell>7</cell>
+            <cell>8</cell>
+            <cell>9</cell>
+          </row>
+          <row>
+            <cell>10</cell>
+            <cell>11</cell>
+            <cell>12</cell>
+            <cell>13</cell>
+            <cell>14</cell>
+          </row>
+        </tns:matrix_01>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="HexCodePoint" root="hcp"
+    model="charClassEntities.dfdl.xsd"
+    description="Hexadecimal code point used in document tag - DFDL-6-044R">
+
+    <document><documentPart replaceDFDLEntities="true" type="text">%#x0040;</documentPart></document>
+    <infoset>
+      <dfdlInfoset>
+        <tns:hcp>&#64;</tns:hcp>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <!--
+    Test Name: entityInError
+       Schema: charClassEntities.dfdl.xsd
+      Purpose: This test verifies the fix for DFDL-646. There should be no error
+               stating "[Conversion = 'N']" when this test is run.
+  -->
+
+  <parserTestCase name="entityInError" root="file"
+    model="charClassEntities.dfdl.xsd"
+    description="Hexadecimal code point used in document tag - DFDL-6-044R">
+
+    <!-- this fails to parse the first data row because it has too many elements.
+         At the point where it expects the NL (postfix sep), it instead finds 
+         the comma for another row element.  -->
+    <document><![CDATA[last,first,middle,DOB
+jones,robert,brandon,1988-03-24,extra,extra
+johnson,john,henry,1986-01-23
+jonesington,david,frederick,1986-02-19
+]]></document>
+   <errors>
+     <error>Parse error</error>
+     <error>postfix separator</error>
+   </errors>
+  </parserTestCase>
+  
+  <!--
+    Test Name: doubleNL2
+       Schema: TopLevel.dfdl.xsd
+      Purpose: This test demonstrates a workaround for the bug in test doubleNL 
+  -->
+
+  <parserTestCase name="doubleNL2" root="TopLevel"
+    model="TopLevel.dfdl.xsd"
+    description=""
+    roundTrip="twoPass">
+    <document>
+      <documentPart type="file">02nine_headers.txt</documentPart>
+    </document>
+    <infoset>
+      <dfdlInfoset>
+        <ex:TopLevel xmlns:ex="http://example.com">
+          <MessageHeaders><![CDATA[Date: Fri, 15 Feb 2013 08:54:52 -0500
+From: john@doe.com
+To: jane@doe.com
+Message-ID: <OFB0B2662B.92FC9941-ON80257B1F.0045CE19-80257B1F.004ADB2A@doe.com>
+Subject: Hello World!
+Return-Path: <bob@smith.com>
+Thread-Index: Ac3NbaI+1oo+ltP4SSqsh0WAhpIVagAAZVmwAALaigABACxfkAAPsjwAAA8SeAAABZb0A==
+User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:16.0) Gecko/20120828 Thunderbird/16.0 Lightning/1.8b1
+Content-Type: multipart/mixed; boundary=gc0p4Jq0M2Yt08jU534c0p]]></MessageHeaders>
+          <Body><![CDATA[This is the body
+]]></Body>
+          </ex:TopLevel>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+</testSuite>

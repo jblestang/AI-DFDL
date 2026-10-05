@@ -1,0 +1,672 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="BitOrder"
+  description="new property bitOrder='leastSignificantBitFirst'" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  xmlns:tns="http://example.com"
+  defaultRoundTrip="true">
+
+
+  <tdml:defineSchema name="s">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary"
+      lengthUnits="bits" bitOrder='leastSignificantBitFirst' lengthKind='explicit'
+      byteOrder='littleEndian' alignmentUnits='bits' alignment='1'
+      encoding="X-DFDL-US-ASCII-7-BIT-PACKED"/>
+
+    <xs:element name="tabBI" dfdl:lengthKind='implicit' >
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="Version" type="xs:unsignedInt"
+            dfdl:length="4" />
+          <xs:element name="FPI" type="xs:unsignedInt" dfdl:length="1" />
+          <xs:element name="GPI_OriginatorAddress" type="xs:unsignedInt"
+            dfdl:length="1" />
+          <xs:element name="FPI_URN" type="xs:unsignedInt"
+            dfdl:length="1" />
+          <xs:element name="URN" type="xs:unsignedInt" dfdl:length="24" />
+          <xs:element name="FPI_UnitName" type="xs:unsignedInt"
+            dfdl:length="1" />
+          <xs:element name="UnitName" type="xs:string" 
+            dfdl:lengthKind="delimited" dfdl:terminator="&#x7F;" />
+          <xs:element name="GPI_RecipAddrGroup" type="xs:unsignedInt"
+            dfdl:length="1" />
+          <xs:element name="GRI_R1" type="xs:unsignedInt"
+            dfdl:length="1" />
+          <xs:element name="FPI_URN2" type="xs:unsignedInt"
+            dfdl:length="1" />
+          <xs:element name="URN2" type="xs:unsignedInt" dfdl:length="24" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="ver" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="URN" type="xs:unsignedInt" dfdl:length="24" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="span3Bytes" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="before" type="xs:unsignedInt" dfdl:length="5" />
+          <xs:element name="middle" type="xs:unsignedInt" dfdl:length="13" />
+          <xs:element name="after" type="xs:unsignedInt" dfdl:length="6" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+
+  </tdml:defineSchema>
+
+ <tdml:parserTestCase name="TestMIL2045_47001D_1"
+    root="ver" model="s" description="Verification that user's test works for DFDL-677">
+    <document bitOrder="LSBFirst" xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" byteOrder="RTL">URN  X0000000 00000000 01100111 1XXX XXXX</documentPart>      
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <ver>
+          <URN>207</URN>
+        </ver>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="TestMIL2045_47001D_Page70_TableB_I_with_string"
+    root="tabBI" model="s" description="Verification that user's test works for DFDL-677">
+    <document bitOrder="LSBFirst" xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" byteOrder="RTL">Version                         XXXX 0011</documentPart>
+      <documentPart type="bits" byteOrder="RTL">FPI                             XXX0 XXXX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">Compression                     NA       </documentPart>
+      <documentPart type="bits" byteOrder="RTL">GPI for Originator Address      XX1X XXXX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">FPI for URN                     X1XX XXXX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">URN  X0000000 00000000 01100111 1XXX XXXX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">FPI for Unit Name               1XXX XXXX</documentPart>
+      <documentPart type="text" encoding="X-DFDL-US-ASCII-7-BIT-PACKED">UNITA&#x7F;</documentPart>
+      <documentPart type="bits" byteOrder="RTL">GPI for Recip. Addr Group       XXXX X1XX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">GRI for R_ONE                   XXXX 0XXX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">FPI for URN                     XXX1 XXXX</documentPart>
+      <documentPart type="bits" byteOrder="RTL">URN XXXX00000 00000000 00000000 011X XXXX</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <tabBI>
+          <Version>3</Version>
+          <FPI>0</FPI>
+          <GPI_OriginatorAddress>1</GPI_OriginatorAddress>
+          <FPI_URN>1</FPI_URN>
+          <URN>207</URN>
+          <FPI_UnitName>1</FPI_UnitName>
+          <UnitName>UNITA</UnitName>
+          <GPI_RecipAddrGroup>1</GPI_RecipAddrGroup>
+          <GRI_R1>0</GRI_R1>
+          <FPI_URN2>1</FPI_URN2>
+          <URN2>3</URN2>
+        </tabBI>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+ <tdml:parserTestCase name="TestLSBFirstSpan3Bytes"
+    root="span3Bytes" model="s" description="13 bits from the middle of a 24 bit field">
+    <document bitOrder="LSBFirst" xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" byteOrder="RTL">010110|10 00110111 011|10001</documentPart>      
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <span3Bytes>
+          <before>17</before>
+          <middle>4539</middle>
+          <after>22</after>
+        </span3Bytes>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="s2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary"
+      lengthUnits="bits" bitOrder='leastSignificantBitFirst' lengthKind='explicit'
+      alignmentUnits='bits' alignment='1' binaryNumberRep='binary'
+      byteOrder="littleEndian"/>
+
+    <xs:element name="leastFirst" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="A" type="xs:int" dfdl:length="3" />
+          <xs:element name="B" type="xs:int" dfdl:length="7" />
+          <xs:element name="C" type="xs:int" dfdl:length="4" />
+          <xs:element name="D" type="xs:int" dfdl:length="2" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="switchOrder" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="A" type="xs:int" dfdl:length="3" dfdl:bitOrder="leastSignificantBitFirst" />
+          <xs:element name="B" type="xs:int" dfdl:length="7" dfdl:bitOrder="mostSignificantBitFirst" />
+          <xs:element name="C" type="xs:int" dfdl:length="4" dfdl:bitOrder="leastSignificantBitFirst" />
+          <xs:element name="D" type="xs:int" dfdl:length="2" dfdl:bitOrder="leastSignificantBitFirst" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="leastFirstFloat" type="xs:float" dfdl:lengthKind='implicit' />
+    <xs:element name="leastFirstDouble" type="xs:double" dfdl:lengthKind='implicit' />
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: leastSignificantBitFirst
+        Schema: s2
+          Root: leastFirst
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst'.
+-->
+ <tdml:parserTestCase name="leastSignificantBitFirst"
+    root="leastFirst" model="s2" description="Tests the bit order of 'leastSignificantBitFirst'">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01001|011 01|0101|00</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <leastFirst>
+          <A>3</A>
+          <B>9</B>
+          <C>5</C>
+          <D>1</D>
+        </leastFirst>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: leastSigBitFirstFloat
+        Schema: s2
+          Root: leastFirstFloat
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst' and byte order of 'littleEndian' with a float.
+-->
+ <tdml:unparserTestCase name="leastSigBitFirstFloat"
+    root="leastFirstFloat" model="s2" description="Tests the bit order of 'leastSignificantBitFirst'">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <leastFirstFloat>47.0</leastFirstFloat>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >00000000 00000000 00111100 01000010</documentPart>
+    </document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: leastSigBitFirstDouble
+        Schema: s2
+          Root: leastFirstDouble
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst' and byte order of 'littleEndian' with a double.
+-->
+ <tdml:unparserTestCase name="leastSigBitFirstDouble"
+    root="leastFirstDouble" model="s2" description="Tests the bit order of 'leastSignificantBitFirst'">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <leastFirstDouble>196.0</leastFirstDouble>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >00000000 00000000 00000000 00000000 00000000 10000000 01101000 01000000</documentPart>
+    </document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: leastSignificantBitFirstRTL
+        Schema: s2
+          Root: leastFirst
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst' with a byte order of right to left.
+-->
+ <tdml:parserTestCase name="leastSignificantBitFirstRTL" root="leastFirst" model="s2"
+    description="Tests the bit order of 'leastSignificantBitFirst' with byte order of right to left">
+    <document bitOrder="LSBFirst" xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" byteOrder="RTL">01|0101|00 01001|011</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <leastFirst>
+          <A>3</A>
+          <B>9</B>
+          <C>5</C>
+          <D>1</D>
+        </leastFirst>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="s3">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary"
+      lengthUnits="bits" bitOrder='mostSignificantBitFirst' lengthKind='explicit'
+      alignmentUnits='bits' alignment='1' binaryNumberRep='binary'/>
+
+    <xs:element name="mostFirst" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="A" type="xs:int" dfdl:length="3" />
+          <xs:element name="B" type="xs:int" dfdl:length="7" />
+          <xs:element name="C" type="xs:int" dfdl:length="4" />
+          <xs:element name="D" type="xs:int" dfdl:length="2" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="mostFirstFloat" type="xs:float" dfdl:lengthKind='implicit' />
+    <xs:element name="mostFirstDouble" type="xs:double" dfdl:lengthKind='implicit' />
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: mostSignificantBitFirst
+        Schema: s3
+          Root: mostFirst
+       Purpose: This test shows the bit order of 'mostSignificantBitFirst'.
+-->
+ <tdml:parserTestCase name="mostSignificantBitFirst1"
+    root="mostFirst" model="s3" description="Tests the bit order of 'mostSignificantBitFirst'">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >011|00010 01|0101|01</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <mostFirst>
+          <A>3</A>
+          <B>9</B>
+          <C>5</C>
+          <D>1</D>
+        </mostFirst>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: mostSigBitFirstFloat
+        Schema: s3
+          Root: mostFirstFloat
+       Purpose: This test shows the bit order of 'mostSignificantBitFirst' and byte order of 'bigEndian' with a float.
+-->
+ <tdml:unparserTestCase name="mostSigBitFirstFloat"
+    root="mostFirstFloat" model="s3" description="Tests the bit order of 'mostSignificantBitFirst'">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <mostFirstFloat>47.0</mostFirstFloat>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01000010 00111100 00000000 00000000</documentPart>
+    </document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: mostSigBitFirstDouble
+        Schema: s3
+          Root: mostFirstDouble
+       Purpose: This test shows the bit order of 'mostSignificantBitFirst' and byte order of 'bigEndian' with a double.
+-->
+ <tdml:unparserTestCase name="mostSigBitFirstDouble"
+    root="mostFirstDouble" model="s3" description="Tests the bit order of 'mostSignificantBitFirst'">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <mostFirstDouble>196.0</mostFirstDouble>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01000000 01101000 10000000 00000000 00000000 00000000 00000000 00000000</documentPart>
+    </document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="s4">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary" lengthUnits="bytes"
+      lengthKind='explicit' alignmentUnits='bytes' alignment='1' binaryNumberRep='binary' />
+
+      <xs:element name="littleLeast" type="xs:hexBinary" dfdl:byteOrder="littleEndian"
+        dfdl:bitOrder='leastSignificantBitFirst' dfdl:length="3"/>
+
+  </tdml:defineSchema>
+
+  <!--
+     Test Name: littleEndianLeastFirstLTR
+        Schema: s4
+          Root: littleLeast
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst' with a byteOrder of 'littleEndian' with bytes left to right.
+  -->
+ <tdml:parserTestCase name="littleEndianLeastFirstLTR" root="littleLeast" model="s4"
+    description="Tests the bit order of 'leastSignificantBitFirst' with byteOrder of 'littleEndian' with bytes left to right">
+    <document bitOrder="LSBFirst" xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" byteOrder="LTR">01011010 10010010 00000000</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <littleLeast>5A9200</littleLeast>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+     Test Name: littleEndianLeastFirstRTL
+        Schema: s4
+          Root: littleLeast
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst' with a byteOrder of 'littleEndian' with bytes right to left.
+  -->
+ <tdml:parserTestCase name="littleEndianLeastFirstRTL" root="littleLeast" model="s4"
+    description="Tests the bit order of 'leastSignificantBitFirst' with byteOrder of 'littleEndian' with bytes right to left">
+    <document bitOrder="LSBFirst" xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" byteOrder="RTL">01011010 10010010 00000000</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <littleLeast>00925A</littleLeast>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="s5">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary" lengthUnits="bytes"
+      lengthKind='explicit' alignmentUnits='bytes' alignment='1' binaryNumberRep='binary' />
+
+      <xs:element name="bigLeast" type="xs:int" dfdl:byteOrder="bigEndian"
+        dfdl:representation="binary" dfdl:bitOrder='leastSignificantBitFirst' dfdl:length="1"/>
+
+  </tdml:defineSchema>
+
+  <!--
+     Test Name: bigEndianLeastFirst
+        Schema: s5
+          Root: bigLeast
+       Purpose: This test has a byteOrder of 'bigEndian' and a bitOrder of 'leastSignificantBitFirst' and should have a Schema Definition Error.
+  -->
+ <tdml:parserTestCase name="bigEndianLeastFirst" root="bigLeast" model="s5"
+    description="Tests that byteOrder of 'bigEndian' with a bitOrder of 'leastSignificantBitFirst' should throw a SDE.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits">01011010</documentPart>
+    </document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error></tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: bitOrderChangeInvalid2
+        Schema: s2
+          Root: switchOrder
+       Purpose: This test changes bitOrder when not on a byte boundary and should produce an error.
+-->
+ <tdml:parserTestCase name="bitOrderChangeInvalid2"
+    root="switchOrder" model="s2" description="Tests changing bitOrder when not on a byte boundary and should produce an error.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01001|011 01|0101|00</documentPart>
+    </document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>bitOrder</tdml:error>
+      <tdml:error>byte boundary</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <tdml:unparserTestCase name="bitOrderChangeInvalid2Unparser"
+    root="switchOrder" model="s2" description="Tests changing bitOrder when not on a byte boundary and should produce an error.">
+    <tdml:infoset>
+    <tdml:dfdlInfoset>
+      <switchOrder xmlns="http://example.com">
+        <A>9</A><B>13</B><C>5</C><D>0</D>
+      </switchOrder>
+    </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>bitOrder</tdml:error>
+      <tdml:error>byte boundary</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="s6">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary"
+      lengthUnits="bits" lengthKind='explicit'
+      alignmentUnits='bits' alignment='1' binaryNumberRep='binary'/>
+
+    <xs:element name="noBitOrder" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="A" type="xs:unsignedInt" dfdl:length="3" />
+          <xs:element name="B" type="xs:unsignedInt" dfdl:length="5" />
+          <xs:element name="C" type="xs:unsignedInt" dfdl:length="6" />
+          <xs:element name="D" type="xs:unsignedInt" dfdl:length="2" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: bitOrderDocument
+        Schema: s6
+          Root: noBitOrder
+       Purpose: This test specifies the bitOrder in the document.
+-->
+ <tdml:parserTestCase name="bitOrderDocument"
+    root="noBitOrder" model="s6" description="Tests specifying the bitOrder on the document.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" bitOrder="LSBFirst">
+      <documentPart type="bits" >01001|011 00|010101</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <noBitOrder>
+          <A>3</A>
+          <B>9</B>
+          <C>21</C>
+          <D>0</D>
+        </noBitOrder>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: bitOrderChange
+        Schema: s6
+          Root: noBitOrder
+       Purpose: This test changes bitOrder when on a byte boundary.
+-->
+ <tdml:parserTestCase name="bitOrderChange"
+    root="noBitOrder" model="s6" description="Tests changing bitOrder when on a byte boundary.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" bitOrder="LSBFirst">
+      <documentPart type="bits" bitOrder="LSBFirst" >01001|011</documentPart>
+      <documentPart type="bits" bitOrder="MSBFirst" >010101|00</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <noBitOrder>
+          <A>3</A>
+          <B>9</B>
+          <C>21</C>
+          <D>0</D>
+        </noBitOrder>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: bitOrderTypeByte
+        Schema: s6
+          Root: noBitOrder
+       Purpose: This test specifies the bitOrder in the document when the type is 'byte'.
+-->
+ <tdml:parserTestCase name="bitOrderTypeByte"
+    root="noBitOrder" model="s6" description="Tests specifying the bitOrder on the document when the type is 'byte'.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" bitOrder="LSBFirst">
+      <documentPart type="byte" >C6 A2</documentPart>
+    </document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <noBitOrder>
+          <A>6</A>
+          <B>24</B>
+          <C>34</C>
+          <D>2</D>
+        </noBitOrder>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: bitOrderChangeInvalid3
+        Schema: s6
+          Root: noBitOrder
+       Purpose: This test changes bitOrder when on a byte boundary but doesn't have bitOrder on the document element.
+-->
+ <tdml:parserTestCase name="bitOrderChangeInvalid3"
+    root="noBitOrder" model="s6" description="Changes bitOrder but doesn't have bitOrder on the document element.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" bitOrder="LSBFirst">01001|011</documentPart>
+      <documentPart type="bits" bitOrder="MSBFirst">010101|00</documentPart>
+    </document>
+    <tdml:errors>
+      <tdml:error>Error</tdml:error>
+      <tdml:error>Must specify bitOrder on document element when parts have a mixture of bit orders</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="s7">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="binary"
+      lengthUnits="bits" bitOrder='mostSignificantBitFirst' lengthKind='explicit'
+      alignmentUnits='bits' alignment='1' binaryNumberRep='binary'
+      byteOrder="littleEndian"/>
+
+    <xs:element name="mostFirstLEFloat" type="xs:float" dfdl:lengthKind='implicit' />
+    <xs:element name="mostFirstLEDouble" type="xs:double" dfdl:lengthKind='implicit' />
+
+  </tdml:defineSchema>
+
+<!--
+     Test Name: mostSigBitFirstLEFloat
+        Schema: s7
+          Root: mostFirstLEFloat
+       Purpose: This test shows the bit order of 'mostSignificantBitFirst' with byteOrder of 'littleEndian' with float.
+-->
+ <tdml:unparserTestCase name="mostSigBitFirstLEFloat"
+    root="mostFirstLEFloat" model="s7" description="Tests the bit order of 'mostSignificantBitFirst' with byteOrder of 'littleEndian'">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <mostFirstLEFloat>47.0</mostFirstLEFloat>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >00000000 00000000 00111100 01000010</documentPart>
+    </document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: mostSigBitFirstLEDouble
+        Schema: s7
+          Root: mostFirstLEDouble
+       Purpose: This test shows the bit order of 'mostSignificantBitFirst' with byteOrder of 'littleEndian' with double.
+-->
+ <tdml:unparserTestCase name="mostSigBitFirstLEDouble"
+    root="mostFirstLEDouble" model="s7" description="Tests the bit order of 'mostSignificantBitFirst' with byteOrder of 'littleEndian'">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://example.com">
+        <mostFirstLEDouble>196.0</mostFirstLEDouble>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >00000000 00000000 00000000 00000000 00000000 10000000 01101000 01000000</documentPart>
+    </document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="s8">
+    <dfdl:format representation="binary" lengthUnits="bits" lengthKind='explicit'
+      alignmentUnits='bits' alignment='1' binaryNumberRep='binary'
+      binaryFloatRep="ieee" calendarPatternKind="implicit" documentFinalTerminatorCanBeMissing="no"
+      emptyValueDelimiterPolicy="both" encoding="US-ASCII" escapeSchemeRef="" ignoreCase="no"
+      initiatedContent="no" initiator="" leadingSkip="0" occursCountKind="parsed"
+      separator="" separatorPosition="infix" separatorSuppressionPolicy="anyEmpty"
+      terminator="" textNumberCheckPolicy="lax" textNumberRep="standard" textStandardBase="10"
+      textStringJustification="left" textTrimKind="none" trailingSkip="0" utf16Width="fixed"
+      textStandardDecimalSeparator="." textStandardGroupingSeparator="," textStandardExponentRep="E"
+      textStandardZeroRep="0" textStandardInfinityRep="Inf" textStandardNaNRep="NaN"
+      textNumberPattern="#,##0.###;-#,##0.###" textNumberRounding="explicit"
+      textNumberRoundingMode="roundUnnecessary" textNumberRoundingIncrement="0" decimalSigned="yes"
+      encodingErrorPolicy="replace" sequenceKind="ordered" calendarFirstDayOfWeek='Sunday'
+      calendarDaysInFirstWeek='4' calendarTimeZone='UTC' calendarCheckPolicy='strict' calendarLanguage='en'
+      bitOrder="leastSignificantBitFirst" outputNewLine="%LF;" textPadKind="none" fillByte="%#r20;"
+      truncateSpecifiedLengthString="no" textStringPadCharacter="%SP;" textNumberPadCharacter="%SP;"
+      textBooleanPadCharacter="%SP;" textCalendarPadCharacter="%SP;" textCalendarJustification="left"
+      textNumberJustification="right" textOutputMinLength="0" floating="no" textBidi="no" />
+
+    <xs:element name="e1" dfdl:lengthKind='implicit'>
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="A" type="xs:int" dfdl:length="3" />
+          <xs:element name="B" type="xs:int" dfdl:length="5" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+     Test Name: noByteOrder
+        Schema: s8
+          Root: e1
+       Purpose: This test shows the bit order of 'leastSignificantBitFirst' with no byte order defined.
+  -->
+ <tdml:parserTestCase name="noByteOrder"
+    root="e1" model="s8" description="Tests having a bit order with no byte order assigned.">
+    <document xmlns="http://www.ibm.com/xmlns/dfdl/testData" >
+      <documentPart type="bits" >01001011</documentPart>
+    </document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>byteOrder</tdml:error>
+      <tdml:error>not defined</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

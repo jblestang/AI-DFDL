@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<xs:schema targetNamespace="http://example.com/3"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:foo="http://example.com/3">
+
+  <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+  
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:defineFormat name="myFmt" xmlns:d="http://www.ogf.org/dfdl/dfdl-1.0/">
+        <d:format xmlns:ex="http://example.com/3" ref="ex:GeneralFormat" initiator=""
+          terminator="" separator="" encoding="utf-8" ignoreCase="no"
+          representation="text" lengthUnits="characters" textNumberRep="standard" />
+      </dfdl:defineFormat>
+    </xs:appinfo>
+  </xs:annotation>
+  
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/"> 
+      <dfdl:defineEscapeScheme name="esc1">
+        <dfdl:escapeScheme escapeCharacter='\'
+          escapeKind="escapeCharacter" escapeEscapeCharacter="\"
+          extraEscapedCharacters="?" generateEscapeBlock="whenNeeded" />
+      </dfdl:defineEscapeScheme>
+    </xs:appinfo>
+  </xs:annotation>
+
+</xs:schema>

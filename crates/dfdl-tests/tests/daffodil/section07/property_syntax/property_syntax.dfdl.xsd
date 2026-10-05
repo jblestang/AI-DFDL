@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+
+  <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="GeneralFormat" separator="" initiator="" terminator="" leadingSkip='0' textTrimKind="none" initiatedContent="no"
+        ignoreCase="no" alignment='implicit' alignmentUnits='bytes' trailingSkip='0'
+        lengthKind="delimited"/>
+    </xs:appinfo>
+  </xs:annotation>
+  
+      <xs:element name="houseNumber" type="xs:int">
+        <xs:annotation> 
+          <xs:appinfo source="http://www.ogf.org/dfdl/" >
+            <dfdl:element representation="text" 
+                          textNumberRep="standard"  
+                          lengthKind="delimited" 
+                          encoding="ASCII" 
+                          textNumberPattern="##0"/>           
+          </xs:appinfo> 
+        </xs:annotation> 
+      </xs:element>
+      
+      <xs:element name="houseNumber1" type="xs:int"> 
+        <xs:annotation> 
+          <xs:appinfo source="http://www.ogf.org/dfdl/" > 
+            <dfdl:element> 
+               <dfdl:property name="representation">text</dfdl:property> 
+               <dfdl:property name="textNumberRep">standard</dfdl:property>  
+               <dfdl:property name="lengthKind">delimited</dfdl:property> 
+               <dfdl:property name="encoding">ASCII</dfdl:property> 
+               <dfdl:property name="textNumberPattern">##0</dfdl:property>
+             </dfdl:element>
+          </xs:appinfo>
+        </xs:annotation> 
+      </xs:element>
+      
+      <xs:element name="houseNumber2" type="xs:int" 
+            dfdl:representation="text" 
+            dfdl:textNumberRep="standard"  
+            dfdl:lengthKind="delimited" 
+            dfdl:encoding="ASCII" 
+            dfdl:textNumberPattern="##0" />
+            
+            
+            
+     <xs:element name="badElementFormProperty" type="xs:int">
+        <xs:annotation>
+          <xs:documentation><![CDATA[ 
+            Example of a User mistake. They forgot that element form property
+            syntax must be contained within dfdl:element.
+            JIRA DFDL-1722
+          ]]></xs:documentation> 
+          <xs:appinfo source="http://www.ogf.org/dfdl/" > 
+               <dfdl:property name="representation">text</dfdl:property>      
+           </xs:appinfo>
+        </xs:annotation> 
+      </xs:element>
+      
+      <xs:element name="badElementFormProperty2" type="xs:int">
+        <xs:annotation>
+          <xs:documentation><![CDATA[ 
+            Example of a User mistake. They forgot that element form property
+            syntax must be contained within a format element that matches the
+            annotated object. I.e., dfdl:sequence on an xs:sequence.
+            This was causing DAFFODIL-2202 bug. 
+          ]]></xs:documentation> 
+          <xs:appinfo source="http://www.ogf.org/dfdl/" > 
+             <dfdl:sequence>
+               <dfdl:property name="representation">text</dfdl:property>
+             </dfdl:sequence>
+           </xs:appinfo>
+        </xs:annotation> 
+      </xs:element>
+</xs:schema>

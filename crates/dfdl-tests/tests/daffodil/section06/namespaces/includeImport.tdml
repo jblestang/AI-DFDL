@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="Namespaces"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:gpf="http://www.ibm.com/dfdl/GeneralPurposeFormat"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" 
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:a01="http://a01.com"
+  xmlns:b01="http://b01.com"
+  xmlns:ex="http://example.com/"
+  defaultRoundTrip="true">
+  
+  <tdml:defineSchema name="embeddedWithInclude">
+    <xs:include schemaLocation="/IBMdefined/GeneralPurposeFormat.xsd" />
+    <dfdl:format ref="GeneralPurposeFormat"/>
+    <xs:element name="basic" type="xs:string" dfdl:lengthKind="delimited"/>
+  </tdml:defineSchema>
+  
+ 
+  <!-- Test that we search not only the classpath directories, but 
+  once we have found a file somewhere beneath there, then one can include files
+  relative to that new location. Such relative path names are not directly
+  decending from somewhere on the classpath.
+   -->
+  <tdml:parserTestCase name="include01" root="r01"
+    model="include01.dfdl.xsd" description="include a schema. Use self-relative paths - DFDL-6-007R">
+    <tdml:document><![CDATA[123]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <r01>123</r01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!-- 
+  Negative test. Should include information that we searched in testData_onClassPath/childDir
+  becasue that is NOT a directory on the class path, but searched it because that was where the 
+  file doing the include (that failed) is located, and self-relative is also searched.
+  
+  However, unclear how to check this in an error message. Just testData_onClassPath/childDir
+  won't do it because that will be mentioned in the path of the file having the error.
+  
+  Perhaps that is sufficient.
+   -->
+  <tdml:parserTestCase name="include02" root="r01"
+    model="include02.dfdl.xsd" description="include a schema. Use self-relative paths. - DFDL-6-007R">
+    <tdml:document><![CDATA[123]]></tdml:document>
+    <tdml:errors>
+    <tdml:error>anotherChildDir/thisFileIsNotThere.dfdl.xsd</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  
+  <tdml:defineSchema name="deprecatedSchemaLocation">
+    <xs:include schemaLocation="org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+    <dfdl:format ref="GeneralFormat"/>
+    <xs:element name="basic" type="xs:string" dfdl:lengthKind="delimited"/>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="deprecatedSchemaLocation01" model="deprecatedSchemaLocation">
+    <tdml:document><![CDATA[123]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <basic>123</basic>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:warnings>
+      <tdml:warning>relative</tdml:warning>
+      <tdml:warning>schemaLocation</tdml:warning>
+      <tdml:warning>/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd</tdml:warning>
+    </tdml:warnings>
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="generalFormat01" model="generalFormat01.dfdl.xsd">
+    <tdml:document><![CDATA[example]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>example</ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="generalFormat02" model="generalFormat02.dfdl.xsd">
+    <tdml:document><![CDATA[example]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>example</ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="generalFormat03" model="generalFormat03.dfdl.xsd">
+    <tdml:document><![CDATA[example]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>example</ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="generalFormat04" model="generalFormat04.dfdl.xsd" root="root">
+    <tdml:document></tdml:document>
+    <tdml:errors>
+      <tdml:error>defineFormat</tdml:error>
+      <tdml:error>{}GeneralFormat</tdml:error>
+      <tdml:error>not found</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+ 
+</tdml:testSuite>

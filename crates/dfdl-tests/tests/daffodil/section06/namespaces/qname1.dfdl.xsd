@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<xs:schema targetNamespace="http://example.com/1"
+  xmlns="urn:NothingUseful"
+  xmlns:ex1="urn:ex1.NothingUseful"
+  xmlns:foobar="urn:foobar.NothingUseful"  
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+<!-- 
+  <xs:import namespace="http://example.com/2"
+    schemaLocation="/org/apache/daffodil/section06/namespaces/qname2.dfdl.xsd" />
+ -->    
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:defineFormat name="myFmt" xmlns:d="http://www.ogf.org/dfdl/dfdl-1.0/">
+        <d:format xmlns:ex="http://example.com/1" ref="ex:GeneralFormat" initiator=""
+          terminator="" separator="" encoding="ascii" ignoreCase="no"
+          representation="text" lengthUnits="characters" textNumberRep="standard" />
+      </dfdl:defineFormat>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:annotation xmlns="http://example.com/1">
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format xmlns:ex="http://example.com/1" ref="ex:myFmt" />
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xsd:element name="len" xmlns:xsd="http://www.w3.org/2001/XMLSchema" type="xsd:int" dfdl:lengthKind="explicit"
+    dfdl:length="1" />
+
+  <xs:simpleType name="numType" dfdl:lengthKind="explicit">
+    <xs:annotation xmlns:ex1="http://example.com/1">
+      <xs:appinfo source="http://www.ogf.org/dfdl/">
+        <dfdl:simpleType length="{ ../ex1:len }" textNumberPattern="#####"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:int"/>
+  </xs:simpleType>
+
+  <xs:element name="e">
+    <xs:complexType xmlns:ex2="http://example.com/1">
+      <xs:sequence>
+        <xs:element ref="ex2:len" />
+        <xs:element name="num">
+          <xs:simpleType xmlns:foobar="http://example.com/1">
+            <xs:restriction base="foobar:numType" />
+          </xs:simpleType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+
+</xs:schema>

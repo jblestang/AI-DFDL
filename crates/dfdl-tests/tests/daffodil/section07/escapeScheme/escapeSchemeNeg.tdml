@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<testSuite suiteName="escapeSchemeNeg" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:tns="http://example.com" xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="es1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+    <dfdl:defineEscapeScheme name="pound"/>
+    <xs:element name="elem" type="xs:int"/>
+  </tdml:defineSchema>
+
+  <defineSchema name="es2">
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="delimited" />
+    <dfdl:defineEscapeScheme NCName="foo:bar">
+      <dfdl:escapeScheme escapeCharacter='#'
+        escapeKind="escapeCharacter" escapeEscapeCharacter="" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    <xs:element name="elem" type="xs:int"/>
+  </defineSchema>
+  
+
+  <!--
+       Test Name: escapeSchemeNeg
+          Schema: es1
+            Root: elem
+         Purpose: This is a negative test to demonstrate that defineEscapeScheme requires a child escapeScheme tag 
+  -->
+
+  <tdml:parserTestCase name="escapeSchemeNeg" model="es1"
+    description="Section 7 defineEscapeScheme - DFDL-7-082R" root="elem">
+    <tdml:document><![CDATA[123]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>The content of element 'dfdl:defineEscapeScheme' is not complete</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+
+  <!--
+       Test Name: escapeSchemeNeg_NCName
+          Schema: es:2
+            Root: elem
+         Purpose: This is a negative test to demonstrate that an NCNamed schema that contains a colon will be caught  
+  -->
+
+  <tdml:parserTestCase name="escapeSchemeNeg2" model="es2"
+    description="Section 7 defineEscapeScheme - DFDL-7-082R" root="elem">
+    <tdml:document><![CDATA[123]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>
+      </tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+</testSuite>

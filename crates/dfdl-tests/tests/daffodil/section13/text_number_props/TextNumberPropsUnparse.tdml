@@ -1,0 +1,787 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  suiteName="textNumberPropsUnparse"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="delimitedStringsPadding">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="ascii" lengthUnits="bytes" outputNewLine="%CR;%LF;" />
+
+      <xs:element name="e1" dfdl:lengthKind="implicit" dfdl:initiator="!#" dfdl:terminator="#!">
+        <xs:complexType>
+          <xs:sequence  dfdl:separator="," >
+            <xs:element name="s1" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="left" />
+            <xs:element name="s2" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="right"/>
+            <xs:element name="s3" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center"/>
+          </xs:sequence>
+        </xs:complexType>
+     </xs:element>
+ 
+      <xs:element name="e2" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence  dfdl:separator="," >
+            <xs:element name="s1" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="#" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center" />
+            <xs:element name="s2" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center"/>
+            <xs:element name="s3" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="#" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e3" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence  dfdl:separator="," >
+            <xs:element name="s1" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="#" dfdl:textPadKind="none" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center" />
+            <xs:element name="s2" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center"/>
+            <xs:element name="s3" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="#" dfdl:textPadKind="none" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e4" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence  dfdl:separator="," >
+            <xs:element name="s1" type="st" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="%SP;" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:element name="e5" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence  dfdl:separator="," >
+            <xs:element name="s1" type="st10" dfdl:lengthKind="delimited" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:simpleType name="st">
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="3" />
+          <xs:minLength value="3" />
+        </xs:restriction>
+      </xs:simpleType>
+      
+      <xs:simpleType name="st10">
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="10" />
+          <xs:minLength value="10" />
+        </xs:restriction>
+      </xs:simpleType>
+
+      <xs:simpleType name="stLen10">
+        <xs:restriction base="xs:string">
+          <xs:length value="10" />
+        </xs:restriction>
+      </xs:simpleType>
+      
+      <xs:simpleType name="st3to10">
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="10" />
+          <xs:minLength value="3" />
+        </xs:restriction>
+      </xs:simpleType>
+      
+      <xs:element name="e6" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:truncateSpecifiedLengthString="yes" dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center" />
+
+      <xs:element name="e7" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:truncateSpecifiedLengthString="yes" dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="left" />
+      
+      <xs:element name="e8" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:truncateSpecifiedLengthString="yes" dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="right" />
+      
+      <xs:element name="e9" type="ex:st3to10" dfdl:lengthKind="delimited" dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="right" />
+      
+      <xs:element name="e10" type="ex:st3to10" dfdl:lengthKind="delimited" dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="center" />
+      
+      <xs:element name="e11" type="ex:st10" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:textStringPadCharacter="#" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="left" />
+      
+      <xs:element name="e12" type="ex:st10" dfdl:lengthKind="explicit" dfdl:length="{ 2 }" dfdl:textStringPadCharacter="#" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="left" />
+
+      <xs:element name="e12_dfdlLength2" type="ex:stLen10" dfdl:lengthKind="explicit" dfdl:length="{ 2 }" dfdl:textStringPadCharacter="#" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="left" />
+
+      <xs:element name="e12bits" type="ex:st3to10" dfdl:lengthKind="explicit" dfdl:length="{ 8 }" dfdl:lengthUnits="bits" dfdl:textStringJustification="left" />
+
+      <xs:element name="e13" dfdl:lengthKind="implicit">
+        <xs:complexType>
+          <xs:sequence  dfdl:separator="," >
+            <xs:element name="len" type="xs:int" dfdl:lengthKind="delimited"/>
+            <xs:element name="s1" type="st10" dfdl:lengthKind="explicit" dfdl:length="{ ../ex:len }" 
+                dfdl:textStringPadCharacter="_" dfdl:textPadKind="padChar" dfdl:textTrimKind="padChar" dfdl:textStringJustification="right" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <xs:simpleType name="st10vals" dfdl:textTrimKind="padChar" dfdl:textPadKind="padChar" dfdl:textStringPadCharacter="*" dfdl:textStringJustification="right">
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="10" />
+          <xs:minLength value="10" />
+        </xs:restriction>
+      </xs:simpleType>
+      
+      <xs:element name="e14" type="ex:st10vals" dfdl:lengthKind="delimited" />
+
+      <xs:element name="e15" type="ex:st10" dfdl:lengthKind="delimited" dfdl:textPadKind="padChar" dfdl:textStringPadCharacter="%WSP+;" dfdl:textStringJustification="right" />
+      <xs:element name="e16" type="ex:st10" dfdl:lengthKind="delimited" dfdl:textPadKind="padChar" dfdl:textStringPadCharacter="%NL;" dfdl:textStringJustification="right" />
+      <xs:element name="e17" type="ex:st10" dfdl:lengthKind="delimited" dfdl:textPadKind="padChar" dfdl:textStringPadCharacter="%ES;" dfdl:textStringJustification="right" />
+
+  </tdml:defineSchema>
+
+<!--
+      Test Name: unparseDelimitedPaddedString01
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with padding
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString01" model="delimitedStringsPadding" root="e1" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1 xmlns:ex="http://example.com">
+          <ex:s1>1</ex:s1>
+          <ex:s2>2</ex:s2>
+          <ex:s3>3</ex:s3>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>!#1__,__2,_3_#!</tdml:document>
+  </tdml:unparserTestCase>
+  
+  <tdml:parserTestCase name="parseDelimitedPaddedString01" model="delimitedStringsPadding" root="e1">
+    <tdml:document>!#1__,__2,_3_#!</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1 xmlns:ex="http://example.com">
+          <ex:s1>1</ex:s1>
+          <ex:s2>2</ex:s2>
+          <ex:s3>3</ex:s3>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString02
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with padding
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString02" model="delimitedStringsPadding" root="e2" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e2 xmlns:ex="http://example.com">
+          <ex:s1>1</ex:s1>
+          <ex:s2>2</ex:s2>
+          <ex:s3>3</ex:s3>
+        </ex:e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>#1#,_2_,#3#</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString03
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with padding, where
+               in some cases textPadKind is "none"
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString03" model="delimitedStringsPadding" root="e3" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3 xmlns:ex="http://example.com">
+          <ex:s1>1</ex:s1>
+          <ex:s2>2</ex:s2>
+          <ex:s3>3</ex:s3>
+        </ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>1,_2_,3</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString04
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with padding, where the
+                padChar is a DFDL character entity (ES)
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString04" model="delimitedStringsPadding" root="e4" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e4 xmlns:ex="http://example.com">
+          <ex:s1>1</ex:s1>
+        </ex:e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document> 1 </tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString05
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a sequence of delimited strings with padding, where the
+                padChar is a DFDL character entity (ES)
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString05" model="delimitedStringsPadding" root="e5" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e5 xmlns:ex="http://example.com">
+          <ex:s1>1</ex:s1>
+        </ex:e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>_____1____</tdml:document>
+    <!--<tdml:document>____1_____</tdml:document>--> <!-- actual unparsed output currently-->
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparsePaddedStringTruncate01
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding, where truncateSpecifiedLengthString is set to "yes"
+               In this case, the string needs to be truncated, but the justification is "center", so a processing error occurs.
+-->
+  <tdml:unparserTestCase name="unparsePaddedStringTruncate01" model="delimitedStringsPadding" root="e6">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6 xmlns:ex="http://example.com">123456789100000</ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>textStringJustification</tdml:error>
+      <tdml:error>center</tdml:error>
+      <tdml:error>truncateSpecifiedLengthString</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparsePaddedStringTruncate02
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding, where truncateSpecifiedLengthString is set to "yes"
+               In this case, the string needs to be truncated and the justification is "left", so the data is truncated from the right.
+               Note that this test does not round trip.
+-->
+  <tdml:unparserTestCase name="unparsePaddedStringTruncate02" model="delimitedStringsPadding" root="e7" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e7 xmlns:ex="http://example.com">123456789100000</ex:e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>1234567891</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparsePaddedStringTruncate03
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding, where truncateSpecifiedLengthString is set to "yes"
+               In this case, the string needs to be truncated and the justification is "right", so the data is truncated from the left.
+               Note that this test does not roundt trip.
+-->
+  <tdml:unparserTestCase name="unparsePaddedStringTruncate03" model="delimitedStringsPadding" root="e8" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e8 xmlns:ex="http://example.com">123456789100000</ex:e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>6789100000</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparsePaddedStringTruncate04
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding, where truncateSpecifiedLengthString is set to "yes"
+               In this case, the string does not need to be truncated, and should be output with centered justification.
+-->
+  <tdml:unparserTestCase name="unparsePaddedStringTruncate04" model="delimitedStringsPadding" root="e6">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6 xmlns:ex="http://example.com">123456</ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>__123456__</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparsePaddedStringTruncate05
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding, where truncateSpecifiedLengthString is set to "yes"
+               In this case, the string does not need to be truncated and the justification is "left", so the data is output justified to the left.
+-->
+  <tdml:unparserTestCase name="unparsePaddedStringTruncate05" model="delimitedStringsPadding" root="e7">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e7 xmlns:ex="http://example.com">123456</ex:e7>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>123456____</tdml:document>
+  </tdml:unparserTestCase>
+
+
+<!--
+      Test Name: unparsePaddedStringTruncate06
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding, where truncateSpecifiedLengthString is set to "yes"
+               In this case, the string does not need to be truncated and the justification is "right", is output right justified.
+-->
+  <tdml:unparserTestCase name="unparsePaddedStringTruncate06" model="delimitedStringsPadding" root="e8">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e8 xmlns:ex="http://example.com">123456</ex:e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>____123456</tdml:document>
+  </tdml:unparserTestCase>
+
+
+<!--
+      Test Name: unparseDelimitedPaddedString06
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, we see that the data value is padded to the length given by minLength
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString06" model="delimitedStringsPadding" root="e9">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e9 xmlns:ex="http://example.com">X</ex:e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>__X</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString07
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, we see that the data value is padded to the length given by minLength
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString07" model="delimitedStringsPadding" root="e10">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e10 xmlns:ex="http://example.com">X</ex:e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>_X_</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString08
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, we see that the data value is padded to the length given by minLength.
+               Note that this test does not round trip.
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString08" model="delimitedStringsPadding" root="e10" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e10 xmlns:ex="http://example.com">_</ex:e10>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>___</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString09
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, lengthKind is explicit and an expression, so the value is padded to the length given by dfdl:length.
+               Because the facet minLength (and maxLength) is 10, but the length expression is only 2
+               when we unparse, we'll show a Schema Definition Warning and only pad to dfdl:length,
+               as is described in DFDL Erratum 5.18
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString09" model="delimitedStringsPadding" root="e11"
+    roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e11 xmlns:ex="http://example.com">O</ex:e11>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>Calculated infoset length</tdml:warning>
+      <tdml:warning>out of range</tdml:warning>
+      <tdml:warning>facet minLength</tdml:warning>
+    </tdml:warnings>
+    <tdml:document>O#</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparsePaddedString10
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, lengthKind is explicit and an expression, so the value is padded to the length given by dfdl:length.
+               Because the facet minLength (and maxLength) is 10, but the length expression is only 2
+               when we unparse, we'll show a Schema Definition Warning and only pad to dfdl:length,
+               as is described in DFDL Erratum 5.18
+-->
+  <tdml:unparserTestCase name="unparsePaddedString10" model="delimitedStringsPadding" root="e12"
+   roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e12 xmlns:ex="http://example.com">O</ex:e12>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>Calculated infoset length</tdml:warning>
+      <tdml:warning>out of range</tdml:warning>
+      <tdml:warning>facet minLength</tdml:warning>
+    </tdml:warnings>
+    <tdml:document>O#</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparsePaddedString11" model="delimitedStringsPadding" root="e12_dfdlLength2"
+                         description="ensure length facet results in a similar warning to min/maxLength facets"
+   roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e12_dfdlLength2 xmlns:ex="http://example.com">O</ex:e12_dfdlLength2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>Calculated infoset length</tdml:warning>
+      <tdml:warning>out of range</tdml:warning>
+      <tdml:warning>facet length</tdml:warning>
+    </tdml:warnings>
+    <tdml:document>O#</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparsePaddedString12" model="delimitedStringsPadding" root="e12bits"
+                         description="ensure minLength facet results in a warning taking lengthUnits into account"
+   roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e12bits xmlns:ex="http://example.com">0</ex:e12bits>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:warnings>
+      <tdml:warning>Schema Definition Warning</tdml:warning>
+      <tdml:warning>Calculated infoset length</tdml:warning>
+      <tdml:warning>out of range</tdml:warning>
+      <tdml:warning>facet minLength</tdml:warning>
+    </tdml:warnings>
+    <tdml:document>0</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString11
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, the associated properties are all defined on the simpleType and not the element itself.
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString11" model="delimitedStringsPadding" root="e14">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e14 xmlns:ex="http://example.com">0</ex:e14>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>*********0</tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString12
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, the padChar is a DFDL Character class (WSP+), which is not allowed.
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString12" model="delimitedStringsPadding" root="e15">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e15 xmlns:ex="http://example.com">0</ex:e15>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>textStringPadCharacter contains disallowed character class(es): %WSP+;</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString13
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, the padChar is a DFDL Character class (NL), which is not allowed.
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString13" model="delimitedStringsPadding" root="e16">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e16 xmlns:ex="http://example.com">0</ex:e16>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  <tdml:errors>
+    <tdml:error>Schema Definition Error</tdml:error>
+    <tdml:error>textStringPadCharacter</tdml:error>
+    <tdml:error>contains</tdml:error>
+    <tdml:error>disallowed</tdml:error>
+    <tdml:error>NL</tdml:error>
+  </tdml:errors>
+  </tdml:unparserTestCase>
+
+<!--
+      Test Name: unparseDelimitedPaddedString14
+      Schema: delimitedStringsPadding
+      Purpose: This test demonstrates unparsing a string with padding
+               In this case, the padChar is a DFDL Character class (ES), which is not allowed.
+-->
+  <tdml:unparserTestCase name="unparseDelimitedPaddedString14" model="delimitedStringsPadding" root="e17">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e17 xmlns:ex="http://example.com">0</ex:e17>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  <tdml:errors>
+    <tdml:error>Schema Definition Error</tdml:error>
+    <tdml:error>textStringPadCharacter</tdml:error>
+    <tdml:error>contains</tdml:error>
+    <tdml:error>disallowed</tdml:error>
+    <tdml:error>ES</tdml:error>
+  </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="pattern">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" representation="text"
+        lengthUnits="bytes" encoding="US-ASCII" initiator="" terminator="" textNumberPattern="#,##0.###;-#,##0.###"
+        separator="" textNumberCheckPolicy="lax" ignoreCase="no" textNumberRep="standard"/>
+
+    <xs:element name="e1">
+      <xs:simpleType>
+        <xs:restriction base="xs:int">
+          <xs:minInclusive value="1000"/>
+          <xs:maxInclusive value="99999"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+
+    <xs:element name="tnp01" type="xs:int" dfdl:textNumberRep="standard" dfdl:textNumberPattern="0000;" />
+    <xs:element name="tnp02" type="xs:decimal" dfdl:textNumberRep="standard" dfdl:textNumberPattern="00.000;" />
+    <xs:element name="tnp03" type="xs:decimal" dfdl:textNumberRep="standard" dfdl:textNumberPattern="##.##;" />
+    <xs:element name="tnp04" type="xs:decimal" dfdl:textNumberRep="standard" dfdl:textNumberPattern="#.####;" />
+    <xs:element name="tnp05" type="xs:decimal" dfdl:textNumberRep="standard" dfdl:textNumberPattern="##.##;" dfdl:textNumberRoundingMode="roundUnnecessary" />
+
+  </tdml:defineSchema>
+  
+  <tdml:unparserTestCase name="unparse_int_01" root="e1"
+    model="pattern" description="">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>1576</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[1,576]]></tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="parse_int_01" root="e1"
+    model="pattern" description="" roundTrip="twoPass">
+
+    <tdml:document><![CDATA[1576]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>1576</ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: unparse_tnp_01
+        Schema: pattern
+          Root: tnp01
+       Purpose: This test demonstrates that if the number of actual integer digits is less than the minimum integer digits,
+       then leading zeros are added.
+-->
+
+  <tdml:unparserTestCase name="unparse_tnp_01" root="tnp01"
+    model="pattern" description="DFDL-13-079R" roundTrip="true">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:tnp01>123</ex:tnp01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[0123]]></tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: unparse_tnp_02
+        Schema: pattern
+          Root: tnp02
+       Purpose: This test demonstrates that if the number of actual fraction digits is less than the minimum fraction digits,
+       then trailing zeros are added.
+-->
+
+  <tdml:unparserTestCase name="unparse_tnp_02" root="tnp02"
+    model="pattern" description="DFDL-13-081R" roundTrip="true">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:tnp02>12.1</ex:tnp02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[12.100]]></tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: unparse_tnp_03
+        Schema: pattern
+          Root: tnp03
+       Purpose: This test demonstrates that if the number of actual fraction digits exceeds the maximum fraction digits,
+       then half-even rounding it performed to the maximum fraction digits.
+       Note that this test does not round trip.
+-->
+
+  <tdml:unparserTestCase name="unparse_tnp_03" root="tnp03"
+    model="pattern" description="DFDL-13-080R" roundTrip="false">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:tnp03>0.125</ex:tnp03>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[0.12]]></tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: unparse_tnp_04
+        Schema: pattern
+          Root: tnp04
+       Purpose: This test demonstrates that trailing fractional zeros are not displayed if they occur j positions after the decimal,
+       where j is less than the maximum fraction digits.
+       Note that this test does not round trip.
+-->
+
+  <tdml:unparserTestCase name="unparse_tnp_04" root="tnp04"
+    model="pattern" description="DFDL-13-082R" roundTrip="false">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:tnp04>0.10004</ex:tnp04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[0.1]]></tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: unparse_tnp_05a
+        Schema: pattern
+          Root: tnp05
+       Purpose: This test demonstrates that it is a processing error if rounding is required with roundingMode of roundUnnecessary
+-->
+
+  <tdml:unparserTestCase name="unparse_tnp_05a" root="tnp05"
+    model="pattern" description="DFDL-13-080R" roundTrip="false">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:tnp05>0.125</ex:tnp05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>rounding</tdml:error>
+    </tdml:errors>
+    <tdml:document><![CDATA[0.12]]></tdml:document>
+  </tdml:unparserTestCase>
+
+<!--
+     Test Name: unparse_tnp_05b
+        Schema: pattern
+          Root: tnp05
+       Purpose: This test demonstrates that it unparse succeeds if rounding is not required with roundingMode of roundUnnecessary
+-->
+
+  <tdml:unparserTestCase name="unparse_tnp_05b" root="tnp05"
+    model="pattern" description="DFDL-13-080R">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:tnp05>0.12</ex:tnp05>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[0.12]]></tdml:document>
+  </tdml:unparserTestCase>
+
+
+  <tdml:defineSchema name="textNumbers">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"/>
+
+    <xs:element name="e18" type="xs:double"
+                dfdl:textNumberCheckPolicy="strict"
+                dfdl:textNumberPattern="000.00"
+                dfdl:lengthKind="delimited"/>
+
+    <xs:element name="e19" type="xs:double"
+                dfdl:textNumberCheckPolicy="strict"
+                dfdl:textNumberPattern="000.00"
+                dfdl:textStandardZeroRep="zero"
+                dfdl:lengthKind="delimited"/>
+
+    <!--
+    This element demonstrates why the default value for dfdl:textStandardZeroRep needs to be "" (turns the feature off)
+    which is because if it is defined to be "0", then it overrides the dfdl:textNumberPattern.
+
+    People shouldn't even have to remember this property exists unless they need it for their format. So by default
+    it needs to be off.
+
+    People waste quite a bit of time on this, permuting their textNumberPattern, but not understanding why it is
+    not working.
+    -->
+    <xs:element name="e20" type="xs:double"
+                dfdl:textNumberCheckPolicy="strict"
+                dfdl:textNumberPattern="000.00"
+                dfdl:textStandardZeroRep="0"
+                dfdl:lengthKind="delimited"/>
+
+  </tdml:defineSchema>
+
+  <tdml:unparserTestCase name="textStandardZeroRepNotDefinedByDefault" model="textNumbers" root="e18" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e18>0.0</ex:e18>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>000.00</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="textStandardZeroRep1" model="textNumbers" root="e19" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e19>0.0</ex:e19>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>zero</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="textStandardZeroRep2" model="textNumbers" root="e20" roundTrip="true">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e20>0.0</ex:e20>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>0</tdml:document>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

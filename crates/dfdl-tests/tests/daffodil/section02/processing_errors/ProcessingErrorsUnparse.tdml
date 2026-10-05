@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="ProcessingErrorUnparseTests"
+  description="Section 2.3 - Processing Errors" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  defaultRoundTrip="true">
+
+  <!-- ===================================================================== 
+    Schemas ======================================================================= -->
+
+  <!--
+    Schema name: upaFailure
+    Purpose: This schema does not adhere to the Unique Particule Attribution 
+    schema constraint
+  -->
+
+  <tdml:defineSchema name="upaFailure">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" initiator=""
+      terminator="" textBidi="no" floating="no" encoding="ascii"
+      byteOrder="bigEndian" alignment="1" alignmentUnits="bytes"
+      fillByte="f" occursCountKind="implicit"
+      truncateSpecifiedLengthString="no" ignoreCase="no" representation="text"
+      lengthKind="delimited" nilValueDelimiterPolicy="both"
+      emptyValueDelimiterPolicy="none"
+      documentFinalTerminatorCanBeMissing="yes" initiatedContent="no"
+      separatorSuppressionPolicy="never" separatorPosition="infix"/>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="a1" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{ 4 }" />
+          <xs:element name="a1">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="a1" type="xs:string"
+                  dfdl:lengthKind="delimited" minOccurs="0"/>
+                <xs:element name="a1" type="xs:string"
+                  dfdl:lengthKind="delimited" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="root2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="a1" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="1" minOccurs="1"
+            maxOccurs="4" />
+          <xs:element name="a1" type="xs:string" minOccurs="2"
+            maxOccurs="3" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="okSchema">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" initiator=""
+      terminator="" textBidi="no" floating="no" encoding="ascii"
+      byteOrder="bigEndian" alignment="1" alignmentUnits="bytes"
+      fillByte="f" occursCountKind="implicit"
+      truncateSpecifiedLengthString="no" ignoreCase="no" representation="text"
+      lengthKind="delimited" nilValueDelimiterPolicy="both"
+      emptyValueDelimiterPolicy="none"
+      documentFinalTerminatorCanBeMissing="yes" initiatedContent="no"
+      separatorSuppressionPolicy="never" separatorPosition="infix"/>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="a1" type="xs:string"
+            dfdl:lengthKind="explicit" dfdl:length="{ 4 }" />
+          <xs:element name="a2">
+            <xs:complexType>
+              <xs:sequence dfdl:separator=",">
+                <xs:element name="b1" type="xs:string"
+                  dfdl:lengthKind="delimited" minOccurs="1"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>  
+
+  <!--
+    Test name: upaInvalidSchemaUnparse
+    Schema: upaFailure
+    Purpose: This test uses an invalid schema and should fail.
+  -->
+
+  <tdml:unparserTestCase name="upaInvalidSchemaUnparse" root="root"
+    model="upaFailure" description="Section 2 - Schema Component Constraint - DFDL-2-005R5-1">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:a1>1234</ex:a1>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Multiple elements with name 'a1', with different types, appear in the model group</tdml:error>
+    </tdml:errors>
+
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: upaInvalidSchemaUnparse2
+    Schema: upaFailure
+    Purpose: This test uses an invalid schema and should fail.
+  -->
+
+  <tdml:unparserTestCase name="upaInvalidSchemaUnparse2"
+    root="root2" model="upaFailure"
+    description="Section 2 - Schema Component Constraint - DFDL-2-005R5-1">
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root2>
+          <ex:a1>one</ex:a1>
+          <ex:a1>one</ex:a1>
+        </ex:root2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Multiple elements with name 'a1', with different types, appear in the model group</tdml:error>
+    </tdml:errors>
+
+  </tdml:unparserTestCase>
+  
+  <!--
+    Test name: missingNamespacePrefixUnparse
+    Schema: okSchema
+    Purpose: This infoset does not use namespace prefixes and should fail
+  -->
+
+  <tdml:unparserTestCase name="missingNamespacePrefixUnparse"
+    root="root" model="okSchema">
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <a1>four</a1>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>expected element start</tdml:error>
+      <tdml:error>{http://example.com}root</tdml:error>
+      <tdml:error>{}root</tdml:error>
+    </tdml:errors>
+
+  </tdml:unparserTestCase>
+
+  <!--
+    Test name: incorrectRootUnparse
+    Schema: okSchema
+    Purpose: This infoset uses the wrong root element and should fail
+  -->
+
+  <!-- 
+  This inconsistency of root="root" and the ex:arbitrary element of 
+  the infoset is now detected by the TDML runner. So this test is no longer
+  relevant. 
+   -->
+  <!-- 
+  <tdml:unparserTestCase name="incorrectRootUnparse"
+    root="root" model="okSchema">
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:arbitrary>
+          <ex:a1>four</ex:a1>
+        </ex:arbitrary>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>root</tdml:error>
+      <tdml:error>does not match</tdml:error>
+      <tdml:error>arbitrary</tdml:error>
+    </tdml:errors>
+
+  </tdml:unparserTestCase>
+  -->
+  
+  <!--
+    Test name: incorrectNamespaceUnparse
+    Schema: okSchema
+    Purpose: This infoset uses the wrong root namespace and should fail
+  -->
+
+  <tdml:unparserTestCase name="incorrectNamespaceUnparse"
+    root="root" model="okSchema">
+    
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <xs:root>
+          <ex:a1>four</ex:a1>
+        </xs:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>No global element</tdml:error>
+      <tdml:error>{http://www.w3.org/2001/XMLSchema}root</tdml:error>
+    </tdml:errors>
+
+  </tdml:unparserTestCase>
+  
+  <tdml:defineSchema name="roundTripErr">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format lengthKind="explicit" length="1" ref="ex:GeneralFormat"
+      separator="" initiator="" terminator="" occursCountKind="parsed"
+      ignoreCase="no" textNumberRep="standard" representation="text"
+      textPadKind='padChar' textStringPadCharacter="%SP;" textNumberJustification="center"/>
+    <dfdl:defineFormat name="root">
+      <dfdl:format lengthKind="implicit" ref="ex:GeneralFormat" textNumberJustification="center"
+        separator="" initiator="" terminator="" representation="text" />
+    </dfdl:defineFormat>
+    
+    <xs:element name="r1" dfdl:ref="ex:root">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="opt" type="xs:string" minOccurs="0" />
+          <xs:element name="sca" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+<!--
+  Test Name: roundTripErrorHalfwayThrough
+     Schema: roundTripErr
+       Root: r1
+    Purpose: This test demonsrates that if an error is detected in the parse step of a roundtrip
+             unparse test, the error is properly propagated to the user. To run this test, set 
+             roundTrip = "true", since there is currently no method for expecting an error partway
+             through a roundTrip test.
+-->
+
+  <tdml:unparserTestCase name="roundTripErrorHalfwayThrough" root="r1"
+    model="roundTripErr" roundTrip="false">
+
+    <tdml:infoset xmlns="http://example.com">
+      <tdml:dfdlInfoset>
+        <r1>
+          <opt/>
+          <sca>3</sca>
+        </r1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[ 3]]></tdml:document>
+
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://www.example.org/example1/" xmlns:tns="http://www.example.org/example1/"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" dfdl:documentFinalSeparatorCanBeMissing="yes">
+
+   <annotation><appinfo source="http://www.ogf.org/dfdl/">
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="tns:def1" encoding="utf-8"
+        lengthKind="explicit" lengthUnits="characters" length="5"
+        textNumberRep="zoned" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="def2">
+      <dfdl:format ref="tns:def3" lengthKind="explicit"
+        lengthUnits="characters" length="4" representation="text"
+        textNumberRep="standard" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="def3">
+      <dfdl:format ref="tns:GeneralFormat" representation="binary" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="def1">
+      <dfdl:format ref="tns:def2" />
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="tns:GeneralFormat" lengthKind="explicit"
+      lengthUnits="characters" length="3" />
+
+</appinfo></annotation>
+
+    <element name="easy" type="int" dfdl:textNumberRep="standard">
+      <annotation>
+        <appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:element>
+            <dfdl:property name="ref">tns:def</dfdl:property><!-- not allowed for ref -->
+          </dfdl:element>
+        </appinfo>
+      </annotation>
+    </element>
+
+</schema>

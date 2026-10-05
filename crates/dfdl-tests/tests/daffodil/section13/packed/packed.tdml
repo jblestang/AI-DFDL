@@ -1,0 +1,1053 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="packed"
+  description="Packed Number Properties" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:ex="http://example.com" xmlns="http://example.com" xmlns:tns="http://example.com" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="s1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:length="2" dfdl:textNumberPattern="0000" />
+    <xs:element name="int02" type="xs:int" dfdl:length="2" dfdl:textNumberPattern="'C'000;'D'000" />
+
+     <xs:element name="flt01" type="xs:float" dfdl:length="2" dfdl:textNumberPattern="00V00"/>
+
+     <xs:element name="cal01" type="xs:date" dfdl:length="3"
+       dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="MMddyy"/>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="3" />
+    <xs:element name="int02" type="xs:int" dfdl:representation="binary" dfdl:length="2" />
+
+    <xs:element name="dec01" type="xs:decimal" dfdl:representation="binary" dfdl:binaryDecimalVirtualPoint="2" dfdl:length="3" />
+
+     <xs:element name="cal01" type="xs:date" dfdl:length="3"
+       dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="MMddyy"/>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s3">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="bcd" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="uint01" type="xs:unsignedInt" dfdl:representation="binary" dfdl:length="4" />
+    <xs:element name="uint02" type="xs:unsignedInt" dfdl:representation="binary" dfdl:length="2" />
+    <xs:element name="byte01" type="xs:byte" dfdl:representation="binary" dfdl:length="2" />
+    <xs:element name="short01" type="xs:short" dfdl:representation="binary" dfdl:length="2" />
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="2" />
+    <xs:element name="long01" type="xs:long" dfdl:representation="binary" dfdl:length="2" />
+
+    <xs:element name="dec01" type="xs:decimal" dfdl:representation="binary" dfdl:binaryDecimalVirtualPoint="2" dfdl:length="2" />
+
+     <xs:element name="cal01" type="xs:date" dfdl:length="3"
+       dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="MMddyy"/>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s4">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="ibm4690Packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="2" />
+    <xs:element name="int02" type="xs:int" dfdl:representation="binary" dfdl:length="2" />
+
+    <xs:element name="dec01" type="xs:decimal" dfdl:representation="binary" dfdl:binaryDecimalVirtualPoint="2" dfdl:length="2" />
+
+     <xs:element name="cal01" type="xs:date" dfdl:length="3"
+       dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="MMddyy"/>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s5">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="implicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s6">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="implicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="bcd" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="uint01" type="xs:unsignedInt" dfdl:representation="binary" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s7">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="implicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="ibm4690Packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s8">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bits" binaryNumberRep="packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="7" />
+
+    <xs:element name="int02" type="xs:decimal" dfdl:representation="binary" dfdl:length="0" dfdl:binaryDecimalVirtualPoint="0" />
+
+    <xs:element name="int03" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="len" type="xs:unsignedInt" dfdl:length="1" dfdl:lengthUnits="bytes"/>
+          <xs:element name="value" type="xs:decimal" dfdl:representation="binary" dfdl:length="{ ../ex:len}" dfdl:binaryDecimalVirtualPoint="0" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s9">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bits" binaryNumberRep="bcd" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="uint01" type="xs:unsignedInt" dfdl:representation="binary" dfdl:length="7" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s10">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bits" binaryNumberRep="ibm4690Packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="7" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s11">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bits" binaryNumberRep="packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"
+    alignmentUnits="bits" alignment="1"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="8" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s12">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bits" binaryNumberRep="bcd" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"
+    alignmentUnits="bits" alignment="1"/>
+
+    <xs:element name="uint01" type="xs:unsignedInt" dfdl:representation="binary" dfdl:length="8" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s13">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bits" binaryNumberRep="ibm4690Packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"
+    alignmentUnits="bits" alignment="1"/>
+
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="8" />
+
+  </tdml:defineSchema>
+
+  <tdml:defineSchema name="s14">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" encoding="ISO-8859-1" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"
+    binaryDecimalVirtualPoint="2"/>
+
+  <xs:element name="packedIntSeq" dfdl:lengthKind="delimited">
+    <xs:complexType>
+      <xs:sequence dfdl:initiatedContent="no" dfdl:separatorPosition="infix"
+        dfdl:sequenceKind="ordered" dfdl:separator="*" dfdl:terminator=";">
+        <xs:element name="num" type="xs:int" dfdl:representation="binary" dfdl:binaryNumberRep="packed" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="packedDecSeq" dfdl:lengthKind="delimited" >
+    <xs:complexType>
+      <xs:sequence dfdl:initiatedContent="no" dfdl:separatorPosition="infix"
+        dfdl:sequenceKind="ordered" dfdl:separator="*" dfdl:terminator=";">
+        <xs:element name="num" type="xs:decimal" dfdl:representation="binary" dfdl:binaryNumberRep="packed" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="bcdIntSeq" dfdl:lengthKind="delimited" >
+    <xs:complexType>
+      <xs:sequence dfdl:initiatedContent="no" dfdl:separatorPosition="infix"
+        dfdl:sequenceKind="ordered" dfdl:separator="," dfdl:terminator=";">
+        <xs:element name="num" type="xs:unsignedInt" dfdl:representation="binary" dfdl:binaryNumberRep="bcd" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="bcdDecSeq" dfdl:lengthKind="delimited" >
+    <xs:complexType>
+      <xs:sequence dfdl:initiatedContent="no" dfdl:separatorPosition="infix"
+        dfdl:sequenceKind="ordered" dfdl:separator="," dfdl:terminator=";">
+        <xs:element name="num" type="xs:decimal" dfdl:representation="binary" dfdl:binaryNumberRep="bcd" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ibmIntSeq" dfdl:lengthKind="delimited" >
+    <xs:complexType>
+      <xs:sequence dfdl:initiatedContent="no" dfdl:separatorPosition="infix"
+        dfdl:sequenceKind="ordered" dfdl:separator="," dfdl:terminator=";">
+        <xs:element name="num" type="xs:int" dfdl:representation="binary" dfdl:binaryNumberRep="ibm4690Packed" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ibmDecSeq" dfdl:lengthKind="delimited" >
+    <xs:complexType>
+      <xs:sequence dfdl:initiatedContent="no" dfdl:separatorPosition="infix"
+        dfdl:sequenceKind="ordered" dfdl:separator="," dfdl:terminator=";">
+        <xs:element name="num" type="xs:decimal" dfdl:representation="binary" dfdl:binaryNumberRep="ibm4690Packed" maxOccurs="unbounded" minOccurs="0"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  </tdml:defineSchema>
+
+
+  <tdml:parserTestCase name="hexCharset01" root="int01" model="s1"
+    description="hex works as a charset encoding">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">1988</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int01>1988</int01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="hexCharset02" root="int02" model="s1"
+    description="hex works as a charset encoding, with C and D as sign characters">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">D123</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int02>-123</int02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="hexCharset03" root="flt01" model="s1"
+    description="hex works as a charset encoding, P number pattern character">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">1234</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <flt01>12.34</flt01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="hexCharset04" root="cal01" model="s1"
+    description="hex works as a charset encoding for calendars">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">020161</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <cal01>1961-02-01</cal01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+   <tdml:parserTestCase name="packedCharset01" root="int01" model="s2"
+    description="Using Packed Decimal formatted hex with C inicating a positive integer">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">01988C</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int01>1988</int01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset02" root="int02" model="s2"
+    description="Using Packed Decimal formatted hex with D to indicate a negative integer">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">123D</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int02>-123</int02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+   <tdml:parserTestCase name="packedCharset03" root="dec01" model="s2"
+    description="Using Packed Decimal formatted hex with a C indicating a positive decimal number">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">01234C</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dec01>12.34</dec01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset04" root="cal01" model="s2"
+    description="Using Packed Decimal formatted hex for a calendar">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">020161</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <cal01>1961-02-01</cal01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset05" root="int02" model="s2"
+    description="Using Packed Decimal formatted hex with an invalid sign nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">123B</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid sign nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset06" root="int02" model="s2"
+    description="Using Packed Decimal formatted hex with an invalid high nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">F23D</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid high nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset07" root="int02" model="s2"
+    description="Using Packed Decimal formatted hex with an invalid low nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">1F3D</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid low nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset08" root="int01" model="s5"
+    description="Using implicit length with Packed Decimal formatted hex should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">123D</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>lengthKind='implicit' is not allowed with packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset09" root="int01" model="s8"
+    description="Attempting to use a length of 7 bits with IBM4690 Packed Decimal should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0010101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>The given length</tdml:error>
+      <tdml:error>must be a multiple of 4 when using packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="zeroLengthPackedCharset" root="int02" model="s8"
+      description="Attempting to use a length of 0 bits with IBM4690 Packed Decimal should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0010101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>bits 0 out of range</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="runtimeLengthPackedCharset1" root="int03" model="s8"
+      description="Attempting to use a runtime length with IBM4690 Packed Decimal should result in PE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00</tdml:documentPart>
+      <tdml:documentPart type="bits">0010101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>bits 0 out of range</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="runtimeLengthPackedCharset2" root="int03" model="s8"
+      description="Attempting to use a runtime length with IBM4690 Packed Decimal should result in PE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">07</tdml:documentPart>
+      <tdml:documentPart type="bits">0010101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>The given length</tdml:error>
+      <tdml:error>must be a multiple of 4 when using packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedCharset10" root="int01" model="s11"
+    description="Attempting to use an alignment of 1 bit with Packed Decimal should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00101011</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>The given alignment</tdml:error>
+      <tdml:error>must be a multiple of 4</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+
+   <tdml:parserTestCase name="bcdCharset01" root="uint01" model="s3"
+    description="Using BCD formatted hex to indicate a positive number">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">00000011</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uint01>11</uint01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset02" root="uint02" model="s3"
+    description="Using BCD formatted hex to indicate an integer number">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0123</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <uint02>123</uint02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+   <tdml:parserTestCase name="bcdCharset03" root="dec01" model="s3"
+    description="Using BCD formatted hex to indicate a decimal number">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">1234</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dec01>12.34</dec01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset04" root="cal01" model="s3"
+    description="Using BCD formatted hex for a calendar">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">020161</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <cal01>1961-02-01</cal01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset05" root="uint02" model="s3"
+    description="Using Packed Decimal formatted hex with an invalid high nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">01F3</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid high nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset06" root="uint02" model="s3"
+    description="Using BCD Decimal formatted hex with an invalid low nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">012F</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid low nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset07" root="byte01" model="s3"
+    description="Using invalid type (byte) to store BCD value, should SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>not an allowed type for bcd</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset08" root="short01" model="s3"
+    description="Using invalid type (short) to store BCD value, should SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>not an allowed type for bcd</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  <tdml:parserTestCase name="bcdCharset09" root="int01" model="s3"
+    description="Using invalid type (int) to store BCD value, should SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>not an allowed type for bcd</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  <tdml:parserTestCase name="bcdCharset10" root="long01" model="s3"
+    description="Using invalid type (long) to store BCD value, should SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>not an allowed type for bcd</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset11" root="uint01" model="s6"
+    description="Attempting to use a length of 7 bits with IBM4690 Packed Decimal should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>lengthKind='implicit' is not allowed with packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset12" root="uint01" model="s9"
+    description="Using implicit length with Packed Decimal formatted hex should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0010101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>The given length</tdml:error>
+      <tdml:error>must be a multiple of 4 when using packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="bcdCharset13" root="uint01" model="s12"
+    description="Attempting to use an alignment of 1 bit with BCD should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00101011</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>The given alignment</tdml:error>
+      <tdml:error>must be a multiple of 4</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="IBM4690Charset01" root="int01" model="s4"
+    description="Using IBM4690 packed decimal charset to indicate a positive int">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">1088</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int01>1088</int01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset02" root="int02" model="s4"
+    description="Using IBM4690 packed decimal formatted hex with D signifying a negative int">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">D123</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <int02>-123</int02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+   <tdml:parserTestCase name="IBM4690Charset03" root="dec01" model="s4"
+    description="Using IBM4690 packed decimal formatted hex to indicate a decimal number">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">1234</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dec01>12.34</dec01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset04" root="cal01" model="s4"
+    description="Using IBM4690 packed decimal formatted hex for a calendar">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">020161</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <cal01>1961-02-01</cal01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset05" root="int02" model="s4"
+    description="Using Packed IBM4690 Decimal formatted hex with an invalid sign nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">B123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid high nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset06" root="int02" model="s4"
+    description="Using IBM4690 Packed Decimal formatted hex with an invalid high nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">D1F3</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid high nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset07" root="int02" model="s4"
+    description="Using IBM4690 Packed Decimal formatted hex with an invalid low nibble">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">D12F</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Invalid low nibble</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset08" root="int01" model="s7"
+    description="Using implicit length with IBM4690 Packed Decimal formatted hex should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">D123</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>lengthKind='implicit' is not allowed with packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset09" root="int01" model="s10"
+    description="Attempting to use a length of 7 bits with IBM4690 Packed Decimal should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">0010101</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>The given length</tdml:error>
+      <tdml:error>must be a multiple of 4 when using packed binary formats</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="IBM4690Charset10" root="int01" model="s13"
+    description="Attempting to use an alignment of 1 bit with IBM4690 Packed Decimal should result in SDE">
+
+    <tdml:document>
+      <tdml:documentPart type="bits">00101011</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>The given alignment</tdml:error>
+      <tdml:error>must be a multiple of 4</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="DelimitedPackedIntSeq" root="packedIntSeq" model="s14"
+    description="Parsing a delimited sequence of the various packed formats"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">003C 2A 123D 3B</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <packedIntSeq>
+          <num>3</num>
+          <num>-123</num>
+        </packedIntSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="DelimitedPackedDecSeq" root="packedDecSeq" model="s14"
+    description="Parsing a delimited sequence of the various packed formats"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">003C 2A 123D 3B</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <packedDecSeq>
+          <num>0.03</num>
+          <num>-1.23</num>
+        </packedDecSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="DelimitedPackedIntSeqUnparser" root="packedIntSeq" model="s14"
+    description="Parsing a delimited sequence of the various packed formats">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <packedIntSeq>
+          <num>3</num>
+          <num>-123</num>
+        </packedIntSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>
+      <tdml:documentPart type="byte">3C 2A 123D 3B</tdml:documentPart>
+    </tdml:document>
+
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="DelimitedPackedDecSeqUnparser" root="packedDecSeq" model="s14"
+    description="Parsing a delimited sequence of the various packed formats">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <packedDecSeq>
+          <num>0.03</num>
+          <num>-1.23</num>
+        </packedDecSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>
+      <tdml:documentPart type="byte">3C 2A 123D 3B</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:parserTestCase name="DelimitedBCDIntSeq" root="bcdIntSeq" model="s14"
+    description="Parsing a delimited sequence of the various bcd formats"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0003 2C 0123 3B</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bcdIntSeq>
+          <num>3</num>
+          <num>123</num>
+        </bcdIntSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="DelimitedBCDDecSeq" root="bcdDecSeq" model="s14"
+    description="Parsing a delimited sequence of the various bcd formats"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0003 2C 0123 3B</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bcdDecSeq>
+          <num>0.03</num>
+          <num>1.23</num>
+        </bcdDecSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="DelimitedBCDIntSeqUnparser" root="bcdIntSeq" model="s14"
+    description="Parsing a delimited sequence of the various bcd formats">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bcdIntSeq>
+          <num>3</num>
+          <num>123</num>
+        </bcdIntSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>
+      <tdml:documentPart type="byte">03 2C 0123 3B</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="DelimitedBCDDecSeqUnparser" root="bcdDecSeq" model="s14"
+    description="Parsing a delimited sequence of the various bcd formats">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bcdDecSeq>
+          <num>0.03</num>
+          <num>1.23</num>
+        </bcdDecSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>
+      <tdml:documentPart type="byte">03 2C 0123 3B</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+
+  <tdml:parserTestCase name="DelimitedIBM4690IntSeq" root="ibmIntSeq" model="s14"
+    description="Parsing a delimited sequence of the various ibm formats"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">FFF3 2C D123 3B</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ibmIntSeq>
+          <num>3</num>
+          <num>-123</num>
+        </ibmIntSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="DelimitedIBM4690DecSeq" root="ibmDecSeq" model="s14"
+    description="Parsing a delimited sequence of the various ibm formats"
+    roundTrip="twoPass">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">FFF3 2C D123 3B</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ibmDecSeq>
+          <num>0.03</num>
+          <num>-1.23</num>
+        </ibmDecSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="DelimitedIBM4690IntSeqUnparser" root="ibmIntSeq" model="s14"
+    description="Parsing a delimited sequence of the various ibm formats">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ibmIntSeq>
+          <num>3</num>
+          <num>-123</num>
+        </ibmIntSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>
+      <tdml:documentPart type="byte">F3 2C D123 3B</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="DelimitedIBM4690DecSeqUnparser" root="ibmDecSeq" model="s14"
+    description="Parsing a delimited sequence of the various ibm formats">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ibmDecSeq>
+          <num>0.03</num>
+          <num>-1.23</num>
+        </ibmDecSeq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document>
+      <tdml:documentPart type="byte">F3 2C D123 3B</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="bcdBigIntToLongExprSch">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="bcd" binaryNumberCheckPolicy="strict"/>
+    <xs:element name="bcdBigIntToLong" dfdl:lengthKind="delimited">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="uint01" type="xs:unsignedInt" dfdl:representation="binary" dfdl:length="1" />
+          <xs:element name="string01" type="xs:string" dfdl:encoding="US-ASCII" dfdl:length="{ xs:int(fn:ceiling(../ex:uint01)) }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <!-- Daffodil 2961 -->
+  <tdml:parserTestCase name="bcdBigIntToLongExpr" root="bcdBigIntToLong" model="bcdBigIntToLongExprSch"
+    description="Verify that unsigned packed values in an expression work correctly">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">0568656C6C6F</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <bcdBigIntToLong>
+          <uint01>5</uint01>
+          <string01>hello</string01>
+        </bcdBigIntToLong>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="packedDecimalRangeChecks">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" encoding="X-DFDL-HEX-MSBF" occursCountKind="implicit"
+    textNumberCheckPolicy="strict" textNumberPadCharacter="0" textNumberJustification="right"
+    lengthUnits="bytes" binaryNumberRep="packed" binaryPackedSignCodes="C D F C" binaryNumberCheckPolicy="strict"/>
+
+    <xs:element name="uint01" type="xs:unsignedInt" dfdl:representation="binary" dfdl:length="2" />
+    <xs:element name="int01" type="xs:int" dfdl:representation="binary" dfdl:length="6" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="packedNegativeUnsigned" root="uint01" model="packedDecimalRangeChecks"
+    description="Using BCD formatted hex to indicate an integer number">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">123D</tdml:documentPart>
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>out of range for type</tdml:error>
+    </tdml:errors>
+    </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedIntTooLarge" root="int01" model="packedDecimalRangeChecks"
+    description="Using BCD formatted hex to indicate INT_MAX + 1">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">02147483648C</tdml:documentPart>
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>Error in packed data</tdml:error>
+      <tdml:error>out of range for type</tdml:error>
+    </tdml:errors>
+    </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="packedIntMax" root="int01" model="packedDecimalRangeChecks"
+    description="Using BCD formatted hex to indicate INT_MAX">
+
+    <tdml:document>
+      <tdml:documentPart type="byte">02147483647C</tdml:documentPart>
+    </tdml:document>
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:int01>2147483647</ex:int01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

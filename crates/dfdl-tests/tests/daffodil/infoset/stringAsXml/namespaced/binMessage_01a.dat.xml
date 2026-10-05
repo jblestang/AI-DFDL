@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<b:binMessageA xmlns:b="urn:bin">
+  <record>
+    <id>1</id>
+    <xmlStr>
+      <stringAsXml xmlns="">
+<p:root xmlns:q="urn:payload" xmlns:p="urn:payload" attr2="4" attr1=" value ">
+  <!-- contains CRLFs and LFs -->
+  <?processing instruction?>
+  <field><![CDATA[Field ]]> with <![CDATA[cdata]]> </field> here is mixed content
+  <field>spaces</field>    <field>   spaces   </field> and more mixed content
+  <field attr="foo"/> and more mixed content
+  <field attr="bar"></field>
+  <field>entity references: &lt; > &amp; " ' ©</field>
+  <field>CR</field>&#xd;<field>LF</field>
+<field>CRLF</field>&#xd;
+<field>end</field>
+  <field>CR</field>
+  <field>LF</field>
+  <field>CRLF</field>
+  <field>=invalid field</field>
+</p:root>
+      </stringAsXml>
+    </xmlStr>
+    <priority>5</priority>
+  </record>
+  <record>
+    <id>2</id>
+    <xmlStr>
+      <stringAsXml xmlns="">
+        <r:root xmlns:r="urn:payload">
+          <foo  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:int">
+            <!-- inline comment -->
+            5
+          </foo>
+        </r:root>
+      </stringAsXml>
+    </xmlStr>
+    <priority>1</priority>
+  </record>
+</b:binMessageA>

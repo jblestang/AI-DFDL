@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="choice" description="Tests for choice construct"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset" xmlns:ex="http://example.com"
+  xmlns="http://example.com" defaultRoundTrip="true">
+
+  <tdml:defineSchema name="model1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" nilKind="literalValue" nilValue="%ES;" />
+
+    <xs:element name="root1">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="one" type="xs:string" />
+          <xs:element name="two" type="xs:string" />
+          <xs:choice>
+            <xs:element name="c1" type="xs:string" />
+            <xs:element name="c2" type="xs:string" />
+          </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="root2">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="c1" type="xs:string" />
+          <xs:element name="c2" type="xs:string" />
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="root3">
+      <xs:complexType>
+        <xs:choice>
+          <xs:element name="c1" type="xs:string" nillable="true" />
+          <xs:element name="c2" type="xs:string" nillable="true" />
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="root4">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="complex" nillable="true">
+            <xs:complexType>
+              <xs:choice>
+                <xs:element name="c1" type="xs:string" />
+                <xs:element name="c2" type="xs:string" />
+              </xs:choice>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <tdml:unparserTestCase name="schemaElementRoot1Good" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:one>1</ex:one>
+          <ex:two>2</ex:two>
+          <ex:c1>c1</ex:c1>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>1;2;c1</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="schemaElementRoot2Good" root="root2" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root2>
+          <ex:c1>1</ex:c1>
+        </ex:root2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>1</tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unexpectedNextNone" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:one>1</ex:one>
+          <ex:two>1</ex:two>
+          <ex:c1>1</ex:c1>
+          <ex:foo>1</ex:foo>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>expected element end</tdml:error>
+      <tdml:error>root1</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unexpectedNextSingle" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:one>1</ex:one>
+          <ex:foo>1</ex:foo>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>expected element start</tdml:error>
+      <tdml:error>two</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unexpectedNextMultiple" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:one>1</ex:one>
+          <ex:two>1</ex:two>
+          <ex:foo>1</ex:foo>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Found next element</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>expected one of</tdml:error>
+      <tdml:error>c1</tdml:error>
+      <tdml:error>c2</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+  
+  <!-- consistency of root="root1" with the infoset root element is checked
+  by TDML runner now. Not a runtime error. -->
+  <!-- 
+  <tdml:unparserTestCase name="unexpectedRootSingle" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:foo>
+          <ex:one>1</ex:one>
+          <ex:two>1</ex:two>
+          <ex:c1>1</ex:c1>
+        </ex:foo>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Found root element</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>expected</tdml:error>
+      <tdml:error>root1</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+  -->
+  
+  <tdml:unparserTestCase name="unexpectedChildSingle" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:foo>1</ex:foo>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>expected element start</tdml:error>
+      <tdml:error>one</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unexpectedChildNone" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:one>
+            <ex:foo>1</ex:foo>
+          </ex:one>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Illegal content</tdml:error>
+      <tdml:error>simple element</tdml:error>
+      <tdml:error>one</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unexpectedChildMultiple" root="root2" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root2>
+          <ex:foo>1</ex:foo>
+        </ex:root2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Found next element</tdml:error>
+      <tdml:error>foo</tdml:error>
+      <tdml:error>expected one of</tdml:error>
+      <tdml:error>c1</tdml:error>
+      <tdml:error>c2</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unexpectedChildSameAsSibling" root="root1" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com">
+        <ex:root1>
+          <ex:one>
+            <ex:two>1</ex:two>
+          </ex:one>
+        </ex:root1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Illegal content</tdml:error>
+      <tdml:error>simple element</tdml:error>
+      <tdml:error>one</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="nilledTrueNonNillable" root="root2" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ex:root2>
+          <ex:c1 xsi:nil="true" />
+        </ex:root2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>defines nil property</tdml:error>
+      <tdml:error>is not nillable</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="nilledFalseNonNillable" root="root2" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ex:root2>
+          <ex:c1 xsi:nil="false" />
+        </ex:root2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>defines nil property</tdml:error>
+      <tdml:error>is not nillable</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="nilledSimpleWithContent" root="root3" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ex:root3>
+          <ex:c1 xsi:nil="true">content</ex:c1>
+        </ex:root3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>nilled simple element</tdml:error>
+      <tdml:error>has content</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="nilledComplexWithContent" root="root4" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ex:root4>
+          <ex:complex xsi:nil="true">
+            <ex:c1>c1</ex:c1>
+          </ex:complex>
+        </ex:root4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>nilled complex element</tdml:error>
+      <tdml:error>has content</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="nilledBadValue" root="root3" model="model1">
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:ex="http://example.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <ex:root3>
+          <ex:c1 xsi:nil="notABoolean" />
+        </ex:root3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>xsi:nil</tdml:error>
+      <tdml:error>notABoolean</tdml:error>
+      <tdml:error>not a valid boolean</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>
+

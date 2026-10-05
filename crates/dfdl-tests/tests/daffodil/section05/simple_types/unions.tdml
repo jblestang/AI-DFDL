@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite 
+  suiteName="unions" description="simple types - unions" 
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:ex="http://example.com" xmlns:tns="http://example.com" 
+  defaultRoundTrip="true"
+  defaultValidation="limited">
+
+  <tdml:defineSchema name="u1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"
+    lengthKind="delimited" />
+
+<xs:element name="uOf1">
+  <xs:simpleType>
+    <xs:union>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="a" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+</xs:element>
+
+<xs:element name="uOf1b">
+  <xs:simpleType>
+    <xs:union memberTypes="ex:uOf1bST" />
+  </xs:simpleType>
+</xs:element>
+
+  <xs:simpleType name="uOf1bST">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="a" />
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:element name="ru" type="ex:restrictedUnionType"/>
+  <xs:simpleType name="restrictedUnionType">
+    <xs:restriction base="ex:unionType">
+      <xs:pattern value="a*|bbb+"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="unionType">
+    <xs:union memberTypes="ex:aType ex:bbbType"/>
+  </xs:simpleType>
+  <xs:simpleType name="aType">
+    <xs:restriction base="ex:uuType"/>
+  </xs:simpleType>
+  <xs:simpleType name="bbbType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="bbb"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="uuType">
+    <xs:union>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="1"/>
+          <xs:minLength value="1"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="6"/>
+          <xs:minLength value="2"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+  
+  
+  <xs:element name="ru2" type="ex:restrictedUnionType2"/>
+  <xs:simpleType name="restrictedUnionType2">
+    <xs:restriction base="ex:unionType2">
+      <xs:pattern value="a{0,5}|bbb+"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="unionType2">
+    <xs:union memberTypes="ex:aType2 ex:bbbType2"/>
+  </xs:simpleType>
+  <xs:simpleType name="aType2">
+    <xs:restriction base="ex:uuType2"/>
+  </xs:simpleType>
+  <xs:simpleType name="bbbType2">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="bbb"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="uuType2">
+    <xs:union>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="1"/>
+          <xs:minLength value="1"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="6"/>
+          <xs:minLength value="2"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+  
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="unionOf1" root="uOf1" model="u1" description="union having only one member">
+    <tdml:document>a</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:uOf1>a</ex:uOf1> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="unionOf1b" root="uOf1b" model="u1" description="union having only one member">
+    <tdml:document>a</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:uOf1b>a</ex:uOf1b> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  
+  <tdml:parserTestCase name="uu1" root="ru" model="u1" description="pattern restriction on a union">
+    <tdml:document>a</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:ru>a</ex:ru> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="uu2" root="ru" model="u1" description="pattern restriction on a union">
+    <tdml:document>aa</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:ru>aa</ex:ru> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="uu3" root="ru" model="u1" description="pattern restriction on a union">
+    <tdml:document>bbb</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:ru>bbb</ex:ru> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="uu1neg" root="ru" model="u1" description="pattern restriction on a union">
+    <tdml:document>aaaaaaa</tdml:document>
+    <tdml:validationErrors>
+      <tdml:error>aaaaaaa</tdml:error>
+      <tdml:error>not one of the union members</tdml:error>
+      <tdml:error>ex:ru</tdml:error>
+    </tdml:validationErrors>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:ru>aaaaaaa</ex:ru> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+    <tdml:parserTestCase name="uu2neg" root="ru2" model="u1" description="pattern restriction on a union">
+    <tdml:document>aaaaaaa</tdml:document>
+    <tdml:validationErrors>
+      <tdml:error>failed facet checks due to: facet pattern</tdml:error>
+      <tdml:error>ex:ru2</tdml:error>
+    </tdml:validationErrors>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns="http://www.example.org/example1/">
+        <ex:ru2>aaaaaaa</ex:ru2> 
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

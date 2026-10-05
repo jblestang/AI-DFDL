@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="backtracking" description="Tests of proper backtracking behavior"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+  xmlns:ex="http://example.com">
+
+  <tdml:defineSchema name="s">
+
+    <!-- Must be utf-8, or it chooses the other backend which does more copying and so doesn't show up the bug. -->
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="UTF-8" lengthKind="delimited" />
+
+    <xsd:element name="A">
+      <xsd:complexType>
+        <xsd:sequence dfdl:separator="//%NL;"
+          dfdl:separatorPosition="postfix">
+          <xsd:element name="S">
+            <xsd:complexType>
+              <xsd:sequence dfdl:separator="//%NL;">
+                <xsd:element name="C" type="xsd:string"
+                  dfdl:initiator="C" />
+                <xsd:element name="LS" maxOccurs="10"
+                  dfdl:occursCountKind="implicit">
+                  <xsd:complexType>
+                    <xsd:sequence dfdl:separator="//%NL;">
+                      <xsd:element name="L" dfdl:initiator="L">
+                        <xsd:complexType>
+                          <xsd:sequence dfdl:separator="/"
+                            dfdl:separatorPosition="prefix">
+                            <xsd:choice>
+                              <xsd:element name="W" type="xsd:string" />
+                              <xsd:element name="X" type="xsd:string" />
+                            </xsd:choice>
+                          </xsd:sequence>
+                        </xsd:complexType>
+                      </xsd:element>
+                    </xsd:sequence>
+                  </xsd:complexType>
+                </xsd:element>
+              </xsd:sequence>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="T" type="xsd:string" dfdl:initiator="T" />
+        </xsd:sequence>
+      </xsd:complexType>
+    </xsd:element>
+  </tdml:defineSchema>
+
+  <!-- Illustrates that if we turn off copying of Instream (line 258 of InStream.scala), then there is a problem with backtracking -->
+  <tdml:parserTestCase name="backtrack1Text" model="s" root="A">
+    <tdml:document><![CDATA[C/c//
+L/W//
+T/t//
+]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <A>
+          <S>
+            <C>/c</C>
+            <LS>
+              <L>
+                <W>W</W>
+              </L>
+            </LS>
+          </S>
+          <T>/t</T>
+        </A>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

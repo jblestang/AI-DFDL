@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+  suiteName="unparser tests involving bitOrder and outputValueCalc interactions"
+  defaultRoundTrip="false"
+  defaultConfig="cfg_noDefaultBitOrder">
+  
+  <tdml:defineConfig name="cfg_noDefaultBitOrder">
+    <daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+      xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <daf:requireBitOrderProperty>true</daf:requireBitOrderProperty>
+    </daf:tunables>
+  </tdml:defineConfig>
+  
+  <tdml:defineSchema name="s1" elementFormDefault="unqualified">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat"
+      textPadKind='none' lengthKind="explicit" lengthUnits="bits" alignmentUnits="bits" alignment="1"
+      fillByte="%#rFF;" representation="binary" binaryNumberRep="binary"
+      leadingSkip="0" trailingSkip="0" initiator="" terminator="" separator="" 
+      ignoreCase="yes" sequenceKind="ordered" encoding="ascii" initiatedContent="no"
+      textOutputMinLength="0" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef=""/>
+
+    <dfdl:defineFormat name="be">
+      <dfdl:format byteOrder="bigEndian" bitOrder="mostSignificantBitFirst" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="le">
+      <dfdl:format byteOrder="littleEndian" bitOrder="leastSignificantBitFirst" />
+    </dfdl:defineFormat>
+
+    <xs:element name="envelope" dfdl:lengthKind="implicit" dfdl:ref="be">
+      <xs:complexType>
+        <xs:sequence dfdl:ref="be">
+          <xs:element name="a" type="xs:unsignedByte" dfdl:length="8" dfdl:ref="be" />
+          <xs:element name="payload" dfdl:ref="le" dfdl:lengthKind="implicit">
+            <xs:complexType>
+              <xs:sequence dfdl:ref="le">
+                <xs:element name="AA" type="xs:string" dfdl:ref="le" dfdl:length="10" dfdl:lengthKind="explicit" dfdl:encoding="X-DFDL-5-BIT-PACKED-LSBF"
+                  dfdl:lengthUnits="bits" dfdl:outputValueCalc='{ fn:substring(../value, 1, 2) }' />
+                <xs:element name="NNN" type="xs:string" dfdl:ref="le" dfdl:length="9" dfdl:lengthKind="explicit" dfdl:encoding="X-DFDL-OCTAL-LSBF"
+                  dfdl:lengthUnits="bits" dfdl:outputValueCalc='{ fn:substring(../value, 3, 3) }' />
+                <xs:element name="value" type="xs:string" dfdl:ref="le" dfdl:inputValueCalc='{ fn:concat(../AA, ../NNN) }' />
+                <xs:element name="padBit" type="xs:unsignedByte" dfdl:ref="le" dfdl:length="1"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>          
+          <xs:sequence dfdl:ref="le" dfdl:alignment="1" dfdl:alignmentUnits="bytes">
+            <xs:element name="b" type="xs:unsignedByte" dfdl:length="8" dfdl:ref="be" dfdl:alignment="1" dfdl:alignmentUnits="bytes" />
+          </xs:sequence>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+
+  <tdml:unparserTestCase name="bitOrderOVC1" root="envelope" model="s1" roundTrip="false">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:envelope>
+          <a>255</a>
+          <payload>
+            <AA>AB</AA>
+            <NNN>123</NNN>
+            <value>XX123</value>
+            <padBit>1</padBit>
+          </payload>
+          <b>165</b>
+        </ex:envelope>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:document bitOrder="MSBFirst">
+      <tdml:documentPart type="bits" bitOrder="MSBFirst" byteOrder="LTR">11111111</tdml:documentPart>
+      <tdml:documentPart type="bits" bitOrder="LSBFirst" byteOrder="RTL">1111 1 011| 010 001 11|101 11101 </tdml:documentPart>
+      <tdml:documentPart type="bits" bitOrder="MSBFirst" byteOrder="LTR">10100101</tdml:documentPart>
+    </tdml:document>
+
+  </tdml:unparserTestCase>
+
+</tdml:testSuite>

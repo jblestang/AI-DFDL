@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="multiple-diagnostics"
+  description="Show that more than one diagnostic is returned from various scenarios."
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset" xmlns:ex="http://example.com"
+  xmlns="http://example.com"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="withValidationErrors">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" length="1"/>
+    <xs:element name="err1" type="xs:int" anAttributeThisIsNot="noise"/>
+    <xs:element name="err2" type="xs:int" notAnAttribute="randomness" />
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="withValidationErrors2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" length="1"/>
+    <xs:element name="err1" type="xs:int" dfdl:byteOrder="anAttributeThisIsNot"/>
+    <xs:element name="err2" type="something"  dfdl:occursCountKind="notAnAttribute"/>
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="withValidationErrors3">
+  <!-- 
+  Daffodil is either going to produce validation errors and stop, or 
+  if there are no validation errors then it will proceed with compilation.
+  So if we want 5 validation errors, then we can't depend on things like
+  referential integrity of the "something" or "notarealthing" type reference
+  below because that isn't checked by DFDL schema validation.
+  
+  We need 5 validation errors. 
+   -->
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" length="1"/>
+    <xs:element name="err1" type="xs:int" anAttributeThisIsNot="blah"/>
+    <xs:element name="something:bar" type="something" />
+    <xs:element name="err3" type="xs:int" stillNotValid="blah"/>
+    <xs:element name="err4">
+      <xs:NotARealThing/>
+    </xs:element>
+    <xs:element name="err5" type="xs:string" dfdl:alignmentUnits="anotherone"/>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="twoDFDLSchemaValidationErrors"
+    root="err1" model="withValidationErrors"
+    description="We would like two errors from two different elements of the same schema document.">
+
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>notAnAttribute</tdml:error>
+      <tdml:error>anAttributeThisIsNot</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="twoDFDLSchemaValidationErrors2"
+    root="err1" model="withValidationErrors2"
+    description="We would like two errors from two different elements of the same schema document.">
+
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>notAnAttribute</tdml:error>
+      <tdml:error>anAttributeThisIsNot</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="fiveDFDLSchemaValidationErrors"
+    root="err1" model="withValidationErrors3"
+    description="We would like five errors from five different elements of the same schema document.">
+
+    <tdml:document />
+    <tdml:errors>
+      <tdml:error>anotherone</tdml:error>
+      <tdml:error>something:bar</tdml:error>
+      <tdml:error>NCName</tdml:error>
+      <tdml:error>Attribute 'anAttributeThisIsNot'</tdml:error>
+      <tdml:error>Attribute 'stillNotValid'</tdml:error>
+      <tdml:error>NotARealThing</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

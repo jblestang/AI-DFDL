@@ -1,0 +1,691 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="PropertyScoping" description="Section 8 - PropertyScoping"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset" xmlns:ex="http://example.com"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="defineFormat-Embedded.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+    <dfdl:defineFormat name="format_01">
+      <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited"
+        lengthUnits="bytes" encoding="UTF-8" separator="" initiator=""
+        terminator="" occursCountKind="parsed" ignoreCase="no"
+        textNumberRep="standard" representation="text" />
+    </dfdl:defineFormat>
+
+    <xs:element name="myStringSeq1" dfdl:ref="format_01">
+      <xs:complexType>
+        <xs:sequence dfdl:initiatedContent="no" dfdl:ref="format_01"
+          dfdl:separatorPosition="infix" dfdl:sequenceKind="ordered"
+          dfdl:separator="~" dfdl:terminator="@">
+          <xs:element name="Test1" type="xs:string" dfdl:ref="format_01">
+
+          </xs:element>
+
+          <xs:element name="Test2">
+            <xs:simpleType>
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:simpleType ref="format_01"/>
+                </xs:appinfo>
+              </xs:annotation>
+              <xs:restriction base="xs:string" />
+            </xs:simpleType>
+          </xs:element>
+
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="property_scoping_01"
+    root="myStringSeq1" model="defineFormat-Embedded.dfdl.xsd"
+    description="Section 8 - reference to a named format - DFDL-8-009R">
+
+    <tdml:document><![CDATA[abcd~efgh@]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <myStringSeq1>
+          <Test1>abcd</Test1>
+          <Test2>efgh</Test2>
+        </myStringSeq1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse_property_scoping_01"
+    root="myStringSeq1" model="defineFormat-Embedded.dfdl.xsd"
+    description="Section 8 - reference to a named format - DFDL-8-009R">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:myStringSeq1>
+          <ex:Test1>abcd</ex:Test1>
+          <ex:Test2>efgh</ex:Test2>
+        </ex:myStringSeq1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><![CDATA[abcd~efgh@]]></tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="defineFormat_01-Embedded.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited"
+      lengthUnits="characters" encoding="UTF-8" separator="" initiator=""
+      terminator="" separatorSuppressionPolicy="anyEmpty" occursCountKind="parsed"
+      ignoreCase="no" textNumberRep="standard" representation="text" />
+
+    <xs:element name="shirt">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=","
+          dfdl:separatorPosition="infix" dfdl:terminator=";">
+          <xs:element name="brand" type="xs:string" />
+          <xs:element name="size" type="xs:int" />
+          <xs:element name="color" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="shirts" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="ex:shirt" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="pant">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=","
+          dfdl:separatorPosition="infix" dfdl:terminator=";">
+          <xs:element name="brand" type="xs:string" />
+          <xs:element name="size" type="xs:string" />
+          <xs:element name="color" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="pants" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="ex:pant" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="property_scoping_06"
+    root="shirts" model="defineFormat_01-Embedded.dfdl.xsd"
+    description="Section 8 An xs:element reference and its referenced global xs:element - DFDL-8-022R">
+
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[Gap,15,blue;Levi,16,green;Arrow,14,white;]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <shirts>
+          <shirt>
+            <brand>Gap</brand>
+            <size>15</size>
+            <color>blue</color>
+          </shirt>
+          <shirt>
+            <brand>Levi</brand>
+            <size>16</size>
+            <color>green</color>
+          </shirt>
+          <shirt>
+            <brand>Arrow</brand>
+            <size>14</size>
+            <color>white</color>
+          </shirt>
+        </shirts>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparse_property_scoping_06"
+    root="pants" model="defineFormat_01-Embedded.dfdl.xsd"
+    description="Section 8 An xs:element reference and its referenced global xs:element - DFDL-8-022R">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:pants>
+          <ex:pant>
+            <ex:brand>Gap</ex:brand>
+            <ex:size>15</ex:size>
+            <ex:color>blue</ex:color>
+          </ex:pant>
+          <ex:pant>
+            <ex:brand>Levi</ex:brand>
+            <ex:size>16</ex:size>
+            <ex:color>green</ex:color>
+          </ex:pant>
+          <ex:pant>
+            <ex:brand>Arrow</ex:brand>
+            <ex:size>14</ex:size>
+            <ex:color>white</ex:color>
+          </ex:pant>
+        </ex:pants>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[Gap,15,blue;Levi,16,green;Arrow,14,white;]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="dfdl_subset-Embedded">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" initiator=""
+      terminator="" encoding="utf-8" byteOrder="bigEndian"
+      occursCountKind="parsed" ignoreCase="no" representation="text"
+      lengthKind="delimited" />
+
+    <xs:element name="description" type="xs:string" />
+    <xs:element name="comment" type="xs:string" />
+    <xs:element name="quantity" type="xs:int" />
+    <xs:element name="price" type="xs:float" />
+
+    <xs:group name="namedGroup">
+      <xs:sequence dfdl:separator=","
+        dfdl:separatorPosition="infix">
+        <xs:element ref="ex:description" />
+        <xs:element ref="ex:comment" />
+        <xs:element ref="ex:quantity" />
+        <xs:element ref="ex:price" dfdl:initiator="$" />
+      </xs:sequence>
+    </xs:group>
+
+    <xs:element name="Item" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:group ref="ex:namedGroup" dfdl:separator="||"
+            dfdl:separatorPosition="prefix" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="list" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="ex:Item" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="group_ref" root="list"
+    model="dfdl_subset-Embedded"
+    description="More than one separator and separatorPosition properties on the sequence in namedGroup - DFDL-8-023R">
+
+    <tdml:document><![CDATA[||Shirts,Sold on Monday,30,$17.99||Shoes,Sold on Tuesday,23,$89.99]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Overlap</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="defineFormat-Nested.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="format_a">
+      <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited"
+        lengthUnits="bytes" encoding="ascii" terminator=";"
+        occursCountKind="parsed" ignoreCase="no" leadingSkip="0" alignment="1" alignmentUnits="bytes" trailingSkip="0"
+        separatorPosition="infix" separatorSuppressionPolicy="anyEmpty" initiatedContent="no"
+        textTrimKind="none"
+        textNumberRep="standard" representation="text" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="format_b">
+      <dfdl:format ref="format_a" separator="," />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="format_c">
+      <dfdl:format ref="format_b" initiator=":" />
+    </dfdl:defineFormat>
+
+    <xs:element name="myStringSeq1" dfdl:ref="format_c" dfdl:lengthKind="delimited" dfdl:initiator="" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:ref="format_c" dfdl:initiator="" dfdl:terminator="">
+          <xs:element name="Test1" type="xs:string" dfdl:ref="format_c"/>
+          <xs:element name="Test2" type="xs:string" dfdl:ref="format_c"/>
+          <xs:element name="Test3" type="xs:string" dfdl:ref="format_c"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="format_nesting_01"
+    root="myStringSeq1" model="defineFormat-Nested.dfdl.xsd"
+    description="Section 8 - reference to a named format - DFDL-8-009R">
+
+    <tdml:document><![CDATA[:abc;,:def;,:ghi;]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <myStringSeq1>
+          <Test1>abc</Test1>
+          <Test2>def</Test2>
+          <Test3>ghi</Test3>
+        </myStringSeq1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="multipleDef">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" lengthUnits="characters" length="4"/>
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="def" />
+
+    <xs:element name="root" dfdl:length="{ 16 }">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" minOccurs="1" dfdl:length="{ 7 }" />
+          <xs:element name="e2" type="xs:string" minOccurs="1" />
+          <xs:element name="e3" type="xs:string" minOccurs="1" dfdl:length="{ 5 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="multipleDefinition" root="root"
+   model="multipleDef" description="Section 8 - property defined locally and on defineFormat - DFDL-8-011R">
+    <tdml:document>testingthisworks</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <e1>testing</e1>
+          <e2>this</e2>
+          <e3>works</e3>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="multipleDef2">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="ex:GeneralFormat" lengthKind="explicit" lengthUnits="characters" length="4"/>
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="def" lengthKind="delimited" separator=";"/>
+
+    <xs:element name="root" >
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" type="xs:string" minOccurs="1" />
+          <xs:element name="e2" type="xs:string" minOccurs="1" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="multipleDefinition2" root="root"
+   model="multipleDef2" description="Section 8 - property defined locally and on defineFormat - DFDL-8-011R">
+    <tdml:document>one;two</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <e1>one</e1>
+          <e2>two</e2>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="multipleDef3">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" separator=","/>
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="def" separator=":"/>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="e1" type="xs:string" />
+          <xs:element name="e2" type="xs:string" />
+          <xs:element name="e3" type="xs:string" />
+          <xs:element name="e4" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="multipleDefinition3" root="root"
+   model="multipleDef3" description="Section 8 - property defined locally and on defineFormat - DFDL-8-011R">
+    <tdml:document>one;:two;t,hree;fo:ur</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <e1>one</e1>
+          <e2>:two</e2>
+          <e3>t,hree</e3>
+          <e4>fo:ur</e4>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="localAnnotationSchema">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited"
+      lengthUnits="bytes" encoding="UTF-8" separator="" initiator=""
+      terminator="" occursCountKind="parsed" ignoreCase="no"
+      textNumberRep="standard" representation="text" />
+
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:sequence separator="/"/>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="inty" type="xs:int" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e2">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="inty" type="xs:int" maxOccurs="unbounded">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:element lengthUnits="characters" lengthKind="explicit" length="1"/>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e3">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="inty" type="xs:int" maxOccurs="unbounded">
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:element lengthUnits="characters" lengthKind="explicit" length="1"/>
+              </xs:appinfo>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="stringy" type="xs:string" dfdl:initiator="[" dfdl:terminator="]" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e4" type="xs:int">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:element representation="binary" lengthKind="explicit" length="1" lengthUnits="bytes"/>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:element>
+
+    <xs:element name="e5">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:sequence sequenceKind="unordered"/>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:element name="A" type="xs:string" dfdl:initiator="A:" maxOccurs="unbounded"/>
+          <xs:element name="B" type="xs:string" dfdl:initiator="B:" maxOccurs="unbounded"/>
+          <xs:element name="C" type="xs:string" dfdl:initiator="C:" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+ 
+  <!--
+    Test name: localAnnotation_01
+    Schema: localAnnotationSchema
+    Purpose: This test demonstrates that DFDL representation properties explicitly defined on 
+             annotations apply locally to that component only
+  -->
+
+  <tdml:parserTestCase name="localAnnotation_01"
+    description="DFDL Property Scoping Rules - DFDL-8-010R"
+    model="localAnnotationSchema" root="e1">
+    <tdml:document>
+      <tdml:documentPart type="text">123/456</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <inty>123</inty>
+          <inty>456</inty>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: localAnnotation_02
+    Schema: localAnnotationSchema
+    Purpose: This test demonstrates that DFDL representation properties explicitly defined on 
+             annotations apply locally to that component only
+  -->
+
+  <tdml:parserTestCase name="localAnnotation_02"
+    description="DFDL Property Scoping Rules - DFDL-8-010R"
+    model="localAnnotationSchema" root="e2">
+    <tdml:document>
+      <tdml:documentPart type="text">123456</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <inty>1</inty>
+          <inty>2</inty>
+          <inty>3</inty>
+          <inty>4</inty>
+          <inty>5</inty>
+          <inty>6</inty>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: localAnnotation_03
+    Schema: localAnnotationSchema
+    Purpose: This test demonstrates that DFDL representation properties explicitly defined on 
+             annotations apply locally to that component only
+  -->
+
+  <tdml:parserTestCase name="localAnnotation_03"
+    description="DFDL Property Scoping Rules - DFDL-8-010R"
+    model="localAnnotationSchema" root="e3">
+    <tdml:document>
+      <tdml:documentPart type="text">123456[one][two][three]</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <inty>1</inty>
+          <inty>2</inty>
+          <inty>3</inty>
+          <inty>4</inty>
+          <inty>5</inty>
+          <inty>6</inty>
+          <stringy>one</stringy>
+          <stringy>two</stringy>
+          <stringy>three</stringy>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: localAnnotation_04
+    Schema: localAnnotationSchema
+    Purpose: This test demonstrates that DFDL representation properties explicitly defined on 
+             annotations apply locally to that component only
+  -->
+
+  <tdml:parserTestCase name="localAnnotation_04"
+    description="DFDL Property Scoping Rules - DFDL-8-010R"
+    model="localAnnotationSchema" root="e4">
+    <tdml:document>
+      <tdml:documentPart type="byte">31</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>49</e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: localAnnotation_05
+    Schema: localAnnotationSchema
+    Purpose: This test demonstrates that DFDL representation properties explicitly defined on 
+             annotations apply locally to that component only
+  -->
+
+  <tdml:parserTestCase name="localAnnotation_05"
+    description="DFDL Property Scoping Rules - DFDL-8-010R"
+    model="localAnnotationSchema" root="e5" roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text">C:catastrophe,B:bologna,A:applesauce</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <A>applesauce</A>
+          <B>bologna</B>
+          <C>catastrophe</C>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: defaultForm_01
+    Schema: defaultForm.dfdl.xsd
+    Purpose: This test demonstrates that default properties can be specified in short, attribute
+             or element form
+  -->
+
+  <tdml:parserTestCase name="defaultForm_01"
+    description="DFDL Property Scoping Rules - DFDL-8-014R"
+    model="defaultForm.dfdl.xsd" root="e1">
+    <tdml:document>
+      <tdml:documentPart type="text">1.2.3</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <inty>1</inty>
+          <inty>2</inty>
+          <inty>3</inty>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: defaultForm_02
+    Schema: defaultForm_02.dfdl.xsd
+    Purpose: This test demonstrates that default properties can be specified in short, attribute
+             or element form
+  -->
+
+  <tdml:parserTestCase name="defaultForm_02"
+    description="DFDL Property Scoping Rules - DFDL-8-014R"
+    model="defaultForm_02.dfdl.xsd" root="e1">
+    <tdml:document>
+      <tdml:documentPart type="text">1.2.3</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <inty>1</inty>
+          <inty>2</inty>
+          <inty>3</inty>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: defaultForm_03
+    Schema: defaultForm_03.dfdl.xsd
+    Purpose: This test demonstrates that default properties can be specified in short, attribute
+             or element form
+  -->
+
+  <tdml:parserTestCase name="defaultForm_03"
+    description="DFDL Property Scoping Rules - DFDL-8-014R"
+    model="defaultForm_03.dfdl.xsd" root="e1">
+    <tdml:document>
+      <tdml:documentPart type="text">1.2.3</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <inty>1</inty>
+          <inty>2</inty>
+          <inty>3</inty>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: defaultForm_04
+    Schema: defaultForm_04.dfdl.xsd
+    Purpose: This test demonstrates that default properties can be specified in short, attribute
+             or element form.
+  -->
+
+  <tdml:parserTestCase name="defaultForm_04"
+    description="DFDL Property Scoping Rules - DFDL-8-014R"
+    model="defaultForm_04.dfdl.xsd" root="e1">
+    <tdml:document>
+      <tdml:documentPart type="text">123</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <inty>123</inty>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="InitiatedContent" description="Section 14 - SequenceGroups"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" 
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com">
+
+  <tdml:defineSchema name="s1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" 
+      occursCountKind='parsed'/>
+
+    <xs:element name="e1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:initiatedContent="yes" dfdl:separator="">
+          <xs:element name="s1" dfdl:initiator="[" type="xs:int"
+            dfdl:terminator="]" minOccurs="0" dfdl:lengthKind="explicit"
+            dfdl:length="{ 3 }" />
+          <xs:element name="s2" dfdl:initiator="( [" type="xs:string"
+            dfdl:terminator=") ]" minOccurs="0" dfdl:lengthKind="explicit"
+            dfdl:length="{ 3 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="e2" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:initiatedContent="yes" dfdl:separator="">
+          <xs:element name="s1" dfdl:initiator="[s1:" type="xs:int"
+            dfdl:terminator="]" dfdl:lengthKind="explicit"
+            dfdl:length="{ 3 }" />
+          <xs:element name="s2" dfdl:initiator="[s2:" type="xs:int"
+            dfdl:terminator="]" minOccurs="0" dfdl:lengthKind="explicit"
+            dfdl:length="{ 3 }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="initiatedContentSeqBaseline"
+    model="s1"
+    description="Baseline to be sure initiated content doesn't prevent basics from parsing.  DFDL-14-002R"
+    root="e1">
+    <tdml:document><![CDATA[[123](abc)]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <s1>123</s1>
+          <s2>abc</s2>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentSeq1"
+    model="s1"
+    description="Verifies that initiatedContent acts as a discriminator, preventing s1 from parsing.  DFDL-14-002R"
+    root="e1">
+    <tdml:document><![CDATA[(abc)[123]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <!-- note: there are 2 s2 elements. Because maxOccurs is only used 
+            to VALIDATE the
+            data, not to decide how to parse (at least when dfdl:occursCountKind='parsed') -->
+          <s2>abc</s2>
+          <s2>123</s2>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentSeq2"
+    model="s1" description="baseline check - DFDL-14-002R" root="e2">
+    <tdml:document><![CDATA[[s1:123]]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <s1>123</s1>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="initiatedContentSeq3"
+    model="s1"
+    description="Verifies that initiatedContent acts as a discriminator - DFDL-14-002R"
+    root="e2">
+    <tdml:document><![CDATA[[s1:ABC]]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>ABC</tdml:error>
+      <tdml:error>xs:int</tdml:error>
+      <tdml:error>s1</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="s2" elementFormDefault="unqualified">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    
+    <dfdl:format ref="ex:GeneralFormat" 
+      occursCountKind='parsed'
+      lengthKind="delimited"/>
+
+    <xs:element name="e1" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice>
+          <xs:choice> <!-- should NOT be discriminated -->
+            <xs:sequence dfdl:initiatedContent="yes" dfdl:separator=",">
+              <xs:sequence dfdl:initiator="seqInit"> <!-- initiator found, but does NOT discriminate -->
+                <xs:annotation>
+                   <xs:appinfo source="http://www.ogf.org/dfdl/">
+                     <!-- this assert will cause backtracking to next choice alternative -->
+                     <dfdl:assert>{ fn:false() }</dfdl:assert>
+                   </xs:appinfo>
+                </xs:annotation>
+              </xs:sequence>
+            </xs:sequence>
+            <xs:element name="correct" type="xs:string"/>
+          </xs:choice>
+          <xs:element name="incorrect" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+   <xs:element name="e2" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice>
+          <xs:choice> <!-- should NOT be discriminated -->
+            <xs:sequence dfdl:initiatedContent="yes" dfdl:separator=",">
+              <xs:element name="elementThatFails" dfdl:initiator="elemInit" type="xs:string">
+                <!-- initiator found, but does NOT discriminate -->
+                <xs:annotation>
+                   <xs:appinfo source="http://www.ogf.org/dfdl/">
+                     <!-- this assert will cause backtracking to next choice alternative -->
+                     <dfdl:assert>{ fn:false() }</dfdl:assert>
+                   </xs:appinfo>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+            <xs:element name="correct" type="xs:string"/>
+          </xs:choice>
+          <xs:element name="incorrect" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+   <xs:element name="e3" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice>
+          <xs:choice> <!-- should NOT be discriminated -->
+            <xs:sequence dfdl:initiatedContent="yes" dfdl:separator=",">
+              <xs:element name="e" dfdl:initiator="+" type="xs:string"
+                 minOccurs="2" maxOccurs="2" dfdl:occursCountKind="fixed">
+                <xs:annotation>
+                   <xs:appinfo source="http://www.ogf.org/dfdl/">
+                     <!-- this assert will cause backtracking to next choice alternative -->
+                     <dfdl:assert>{ fn:false() }</dfdl:assert>
+                   </xs:appinfo>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+            <xs:element name="correct" type="xs:string"/>
+          </xs:choice>
+          <xs:element name="incorrect" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e4" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+        <xs:element name="count" type="xs:int"/>
+        <xs:choice>
+          <xs:choice> <!-- should NOT be discriminated -->
+            <xs:sequence dfdl:initiatedContent="yes" dfdl:separator=",">
+              <xs:element name="e" dfdl:initiator="+" type="xs:string"
+                 minOccurs="2" maxOccurs="2" dfdl:occursCountKind="expression"
+                 dfdl:occursCount="{ ../count }">
+                <xs:annotation>
+                   <xs:appinfo source="http://www.ogf.org/dfdl/">
+                     <!-- this assert will cause backtracking to next choice alternative -->
+                     <dfdl:assert>{ fn:false() }</dfdl:assert>
+                   </xs:appinfo>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+            <xs:element name="correct" type="xs:string"/>
+          </xs:choice>
+          <xs:element name="incorrect" type="xs:string"/>
+        </xs:choice>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e5" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice>
+          <xs:choice> <!-- should NOT be discriminated -->
+            <xs:sequence dfdl:initiatedContent="yes" dfdl:separator=",">
+            <!-- This element is OCK 'implicit' minOccurs 1, so there is no PoU
+            for the first element. So the initiator of the first element does NOT
+            discriminate anything. Only optional elements discriminate.  -->
+              <xs:element name="e" dfdl:initiator="+" type="xs:string"
+                 minOccurs="1" maxOccurs="2" dfdl:occursCountKind="implicit">
+                <xs:annotation>
+                   <xs:appinfo source="http://www.ogf.org/dfdl/">
+                     <!-- this assert will cause backtracking to next choice alternative -->
+                     <dfdl:assert>{ fn:false() }</dfdl:assert>
+                   </xs:appinfo>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+            <xs:element name="correct" type="xs:string"/>
+          </xs:choice>
+          <xs:element name="incorrect" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="e6" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:choice>
+          <xs:choice> <!-- should NOT be discriminated -->
+            <xs:sequence dfdl:initiatedContent="yes" dfdl:separator=",">
+            <!-- This element is OCK 'implicit' minOccurs 0, all occurrences
+              are optional. Therefore once this initiator is found that discriminates
+              the element occurrence -->
+              <xs:element name="e" dfdl:initiator="+" type="xs:string"
+                 minOccurs="0" maxOccurs="2" dfdl:occursCountKind="implicit">
+                <xs:annotation>
+                   <xs:appinfo source="http://www.ogf.org/dfdl/">
+                     <!-- this assert will cause backtracking to next choice alternative -->
+                     <dfdl:assert>{ fn:false() }</dfdl:assert>
+                   </xs:appinfo>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+            <xs:element name="correct" type="xs:string"/>
+          </xs:choice>
+          <xs:element name="incorrect" type="xs:string"/>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+    
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="sequenceScalarChildDoesNotDiscriminateAnything1"
+    model="s2"
+    description="Test that initiatedContent only applies to optional element sequence children.">
+    <tdml:document><![CDATA[seqInit]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <correct>seqInit</correct>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="sequenceScalarChildDoesNotDiscriminateAnything2"
+    model="s2"
+    description="Test that initiatedContent only applies to optional element sequence children.">
+    <tdml:document><![CDATA[elemInit]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <correct>elemInit</correct>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="sequenceFixedOccursChildDoesNotDiscriminateAnything1"
+    model="s2"
+    description="Test that initiatedContent only applies to optional element sequence children.">
+    <tdml:document><![CDATA[+]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <correct>+</correct>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="sequenceExpressionOccursChildDoesNotDiscriminateAnything1"
+    model="s2"
+    description="Test that initiatedContent only applies to optional element sequence children.">
+    <tdml:document><![CDATA[2,+]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <count>2</count>
+          <correct>+</correct>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>  
+  
+  <tdml:parserTestCase name="sequenceImplicitOccursLessThanMinOccursDoesNotDiscriminateAnything1"
+    model="s2"
+    description="Test that initiatedContent only applies to optional element sequence children.">
+    <tdml:document><![CDATA[+]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <correct>+</correct>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="sequenceImplicitOccursZeroOrMoreDiscriminates1"
+    model="s2"
+    description="Test that initiatedContent only applies to optional element sequence children.">
+    <tdml:document><![CDATA[+a]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6>
+          <correct>+a</correct>
+        </e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>   
+     
+</tdml:testSuite>

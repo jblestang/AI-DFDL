@@ -1,0 +1,1430 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="EntitiesTests" description="Section 6 - Entities"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset" xmlns:ex="http://example.com" xmlns:tns="http://example.com"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  defaultRoundTrip="true">
+
+  <tdml:defineSchema name="Entities-Embedded.dfdl.xsd">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+    <dfdl:format ref="rdefFormat" encoding="utf-8"
+      byteOrder="bigEndian" ignoreCase="no" textStringJustification="left"
+      textStringPadCharacter="0" textTrimKind="none" textPadKind="none"
+      documentFinalTerminatorCanBeMissing="no" nilValueDelimiterPolicy="none"
+      emptyValueDelimiterPolicy="none" escapeSchemeRef="" />
+
+    <dfdl:defineFormat name="rdefFormat">
+      <dfdl:format ref="tns:GeneralFormat" initiator="" terminator="" leadingSkip="0"
+        trailingSkip="0" separator="" textBidi="no" floating="no"
+        encoding="ascii" byteOrder="bigEndian" ignoreCase="no"
+        outputNewLine="%LF;" truncateSpecifiedLengthString="no"
+        decimalSigned="yes" alignment="1" alignmentUnits="bytes"
+        fillByte="1" occursCountKind="implicit" escapeSchemeRef=""
+        representation="text" lengthUnits="characters" lengthKind="explicit" />
+    </dfdl:defineFormat>
+
+
+    <xs:element name="element2" type="xs:string"
+      dfdl:initiator="%SP;" dfdl:terminator="%LS;" dfdl:length="2">
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="text_entities_6_02"
+    description="Section 6.3 DFDL Character Entities - single DFDLEntityName in initiator and terminator - SP and LS, the later 
+is multiple bytes in UTF-8 encoding that is used - DFDL-6-042R"
+    model="Entities-Embedded.dfdl.xsd" root="element2">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[ ab ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <element2>ab</element2>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="Entities_01-Embedded.dfdl.xsd">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="utf-8"
+      byteOrder="bigEndian" representation="text" lengthUnits="characters"
+      textNumberRep="standard" lengthKind="delimited" initiator=""
+      ignoreCase="no" initiatedContent="no" />
+
+    <xs:element name="seq_01" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%NUL;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%SOH;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%STX;" />
+          <xs:element name="e4" type="xs:int"
+            dfdl:terminator="%ETX;" />
+          <xs:element name="e5" type="xs:int"
+            dfdl:terminator="%EOT;" />
+          <xs:element name="e6" type="xs:int"
+            dfdl:terminator="%ENQ;" />
+          <xs:element name="e7" type="xs:int"
+            dfdl:terminator="%ACK;" />
+          <xs:element name="e8" type="xs:int"
+            dfdl:terminator="%BEL;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_02" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%BS;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%HT;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%LF;" />
+          <xs:element name="e4" type="xs:int"
+            dfdl:terminator="%VT;" />
+          <xs:element name="e5" type="xs:int"
+            dfdl:terminator="%FF;" />
+          <xs:element name="e6" type="xs:int"
+            dfdl:terminator="%CR;" />
+          <xs:element name="e7" type="xs:int"
+            dfdl:terminator="%SO;" />
+          <xs:element name="e8" type="xs:int"
+            dfdl:terminator="%SI;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_03" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%DLE;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%DC1;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%DC2;" />
+          <xs:element name="e4" type="xs:int"
+            dfdl:terminator="%DC3;" />
+          <xs:element name="e5" type="xs:int"
+            dfdl:terminator="%DC4;" />
+          <xs:element name="e6" type="xs:int"
+            dfdl:terminator="%NAK;" />
+          <xs:element name="e7" type="xs:int"
+            dfdl:terminator="%SYN;" />
+          <xs:element name="e8" type="xs:int"
+            dfdl:terminator="%ETB;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_04" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%CAN;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%EM;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%SUB;" />
+          <xs:element name="e4" type="xs:int"
+            dfdl:terminator="%ESC;" />
+          <xs:element name="e5" type="xs:int"
+            dfdl:terminator="%FS;" />
+          <xs:element name="e6" type="xs:int"
+            dfdl:terminator="%GS;" />
+          <xs:element name="e7" type="xs:int"
+            dfdl:terminator="%RS;" />
+          <xs:element name="e8" type="xs:int"
+            dfdl:terminator="%US;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_05" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%SP;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%DEL;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%NBSP;" />
+          <xs:element name="e4" type="xs:int"
+            dfdl:terminator="%NEL;" />
+          <xs:element name="e5" type="xs:int"
+            dfdl:terminator="%LS;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_06" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%#xc880;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%#xd49b;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%#xc2ae;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_07" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%#51328;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%#54427;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%#49838;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_08" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%SP;"
+          dfdl:separatorPosition="infix" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%%" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%%" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%%" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="seq_08b" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%SP;"
+          dfdl:separatorPosition="infix" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int" dfdl:encoding="UTF-16BE" 
+            dfdl:terminator="%%" />
+          <xs:element name="e2" type="xs:int" dfdl:encoding="UTF-16BE"
+            dfdl:terminator="%%" />
+          <xs:element name="e3" type="xs:int" dfdl:encoding="UTF-16BE"
+            dfdl:terminator="%%" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_09" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%%%SP;"
+          dfdl:separatorPosition="infix" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_10" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator="%#rab;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator="%#r32;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator="%#r7f;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+  
+  </tdml:defineSchema>
+    
+  <tdml:defineSchema name="Entities_02-Embedded">
+  
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text" encoding="utf-16" 
+      separator="/" byteOrder="bigEndian" ignoreCase="no" textNumberRep="standard"
+      initiator="" initiatedContent="no" terminator="" />
+
+    <xs:element name="seq_11">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="e1" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" dfdl:length="4" type="xs:string" />
+          <xs:element name="e2" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" dfdl:length="4" type="xs:string" />
+          <xs:element name="e3" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" dfdl:length="4" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="byte_entities_6_02"
+    description="Section 6.3 DFDL Character Entities - BS, HT, LF, VT, FF, CR, SO, and SI - utf-8 encoding - DFDL-6-042R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_02">
+    <tdml:document>
+      <tdml:documentPart type="byte">30083109320a330b340c350d360e370f</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <seq_02>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+          <e4>3</e4>
+          <e5>4</e5>
+          <e6>5</e6>
+          <e7>6</e7>
+          <e8>7</e8>
+        </seq_02>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_01"
+    description="Section 6.3 DFDL Character Entities - NUL, SOH, STX, ETX, EOT, ENQ, ACK, and BEL - utf-8 encoding - DFDL-6-042R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_01">
+    <tdml:document>
+      <tdml:documentPart type="byte">30003101320233033404350536063707</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <seq_01>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+          <e4>3</e4>
+          <e5>4</e5>
+          <e6>5</e6>
+          <e7>6</e7>
+          <e8>7</e8>
+        </seq_01>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_03"
+    description="Section 6.3 DFDL Character Entities - DLE, DC1, DC2, DC3, DC4, NAK, SYN, and ETB - utf-8 encoding - DFDL-6-042R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_03">
+    <tdml:document>
+      <tdml:documentPart type="byte">30103111321233133414351536163717</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <seq_03>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+          <e4>3</e4>
+          <e5>4</e5>
+          <e6>5</e6>
+          <e7>6</e7>
+          <e8>7</e8>
+        </seq_03>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_04"
+    description="Section 6.3 DFDL Character Entities - CAN, EM, SUB, ESC, FS, GS, RS, and US - utf-8 encoding - DFDL-6-042R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_04">
+    <tdml:document>
+      <tdml:documentPart type="byte">30183119321a331b341c351d361e371f</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <seq_04>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+          <e4>3</e4>
+          <e5>4</e5>
+          <e6>5</e6>
+          <e7>6</e7>
+          <e8>7</e8>
+        </seq_04>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_05"
+    description="Section 6.3 DFDL Character Entities - SP, DEL, NBSP, NEL, and LS - utf-8 encoding - DFDL-6-042R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_05">
+    <tdml:document>
+      <tdml:documentPart type="byte">3020317f32c2a033c28534e280a8</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_05>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+          <e4>3</e4>
+          <e5>4</e5>
+        </seq_05>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_06"
+    description="Section 6.3 DFDL Hexadecimal utf-8 code points - DFDL-6-044R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_06">
+    <tdml:document>
+      <tdml:documentPart type="byte">30eca28031ed929b32ec8aae</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_06>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+        </seq_06>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_07"
+    description="Section 6.3 DFDL decimal utf-8 code points - DFDL-6-043R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_07">
+    <tdml:document>
+      <tdml:documentPart type="byte">30eca28031ed929b32ec8aae</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_07>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+        </seq_07>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="text_entities_6_03"
+    description="Section 6.3 DFDL Character Entities - use of %% - DFDL-6-086R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_08">
+    <tdml:document>
+      <tdml:documentPart replaceDFDLEntities="false" type="text">98% 53% 100%</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_08>
+          <e1>98</e1>
+          <e2>53</e2>
+          <e3>100</e3>
+        </seq_08>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="text_entities_6_03b"
+    description="Section 6.3 DFDL Character Entities - use of %% - DFDL-6-086R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_08b">
+    <tdml:document>
+      <tdml:documentPart type="byte">0039 0038 0025 20 0035 0033 0025 20 0031 0030 0030 0025</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_08b>
+          <e1>98</e1>
+          <e2>53</e2>
+          <e3>100</e3>
+        </seq_08b>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="text_entities_6_04"
+    description="Section 6.3 DFDL Character Entities - use of %% - DFDL-6-086R"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_09">
+    <tdml:document>
+      <tdml:documentPart replaceDFDLEntities="false" type="text">98% 53% 100</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_09>
+          <e1>98</e1>
+          <e2>53</e2>
+          <e3>100</e3>
+        </seq_09>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="byte_entities_6_10"
+    description="Section 6.3 DFDL Character Entities - single DFDLEntityName in initiator and terminator - SP and LS, the later 
+is multiple bytes in UTF-8 encoding that is used"
+    model="Entities_01-Embedded.dfdl.xsd" root="seq_10" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="byte">30 ab 31 32 32 7f</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_10>
+          <e1>0</e1>
+          <e2>1</e2>
+          <e3>2</e3>
+        </seq_10>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="byte_entities_6_08"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-037R"
+    model="Entities_02-Embedded" root="seq_11">
+    <tdml:document>
+      <tdml:documentPart type="byte">0031 0032 002F 0033 0034 002F 0031 0032</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_11>
+          <e1>12</e1>
+          <e2>34</e2>
+          <e3>12</e3>
+        </seq_11>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="EscapesSchema">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="utf-8"
+      byteOrder="bigEndian" ignoreCase="no" textStringJustification="left"
+      textStringPadCharacter="0" textTrimKind="none" textPadKind="none"
+      documentFinalTerminatorCanBeMissing="no" nilValueDelimiterPolicy="none"
+      emptyValueDelimiterPolicy="none" initiator="" terminator=""
+      leadingSkip="0" trailingSkip="0" separator="" textBidi="no"
+      floating="no" truncateSpecifiedLengthString="no" decimalSigned="yes"
+      alignment="1" alignmentUnits="bytes" fillByte="1" occursCountKind="implicit"
+      escapeSchemeRef="" representation="text" lengthUnits="characters"
+      lengthKind="delimited" />
+    
+    <dfdl:defineEscapeScheme name="table1">
+      <dfdl:escapeScheme escapeKind="escapeBlock" escapeBlockStart="[ start ]" escapeBlockEnd="[ end ]"
+        escapeEscapeCharacter="%%" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e1" type="ex:type1" />
+    <xs:complexType name="type1">
+      <xs:sequence dfdl:separator=";">
+        <xs:element name="element1" type="xs:string"
+          dfdl:escapeSchemeRef="ex:table1" minOccurs="1" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+    
+    <dfdl:defineEscapeScheme name="table2">
+      <dfdl:escapeScheme escapeKind="escapeBlock" escapeBlockStart="[%SP;start%SP;]" escapeBlockEnd="[%SP;end%SP;]"
+        escapeEscapeCharacter="%%" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="element1" type="xs:string"
+            dfdl:escapeSchemeRef="ex:table2" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <dfdl:defineEscapeScheme name="char01">
+      <dfdl:escapeScheme escapeKind="escapeCharacter" escapeCharacter=" " escapeEscapeCharacter="%%" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e3">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="element1" type="xs:string"
+            dfdl:escapeSchemeRef="ex:char01" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <dfdl:defineEscapeScheme name="char02">
+      <dfdl:escapeScheme escapeKind="escapeCharacter" escapeCharacter="%SP;" escapeEscapeCharacter="%%" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e4">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="element1" type="xs:string"
+            dfdl:escapeSchemeRef="ex:char02" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <dfdl:defineEscapeScheme name="char03">
+      <dfdl:escapeScheme escapeKind="escapeCharacter" escapeCharacter="|" escapeEscapeCharacter=" " extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e5">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="element1" type="xs:string"
+            dfdl:escapeSchemeRef="ex:char03" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <dfdl:defineEscapeScheme name="char04">
+      <dfdl:escapeScheme escapeKind="escapeCharacter" escapeCharacter="|" escapeEscapeCharacter="%SP;" extraEscapedCharacters="?" generateEscapeBlock="whenNeeded"/>
+    </dfdl:defineEscapeScheme>
+    
+    <xs:element name="e6">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";">
+          <xs:element name="element1" type="xs:string"
+            dfdl:escapeSchemeRef="ex:char04" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <tdml:defineSchema name="whitespaceSchema">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="utf-8"
+      byteOrder="bigEndian" ignoreCase="no" textStringJustification="left"
+      textStringPadCharacter="0" textTrimKind="padChar" textPadKind="padChar"
+      documentFinalTerminatorCanBeMissing="no" nilValueDelimiterPolicy="none"
+      emptyValueDelimiterPolicy="none" initiator="" terminator=""
+      leadingSkip="0" trailingSkip="0" separator="" textBidi="no"
+      floating="no" truncateSpecifiedLengthString="no" decimalSigned="yes"
+      alignment="1" alignmentUnits="bytes" fillByte="1" occursCountKind="implicit"
+      escapeSchemeRef="" representation="text" lengthUnits="characters"
+      lengthKind="delimited"/>
+      
+    <!-- intentional invalid " " for textStringPadCharacter -->
+    <xs:element name="spacePad" type="xs:string" dfdl:textStringJustification="center">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:element>
+            <dfdl:property name="textStringPadCharacter"><![CDATA[ ]]></dfdl:property>
+          </dfdl:element>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:element>
+    <xs:element name="spacePad2" type="xs:string" dfdl:textStringPadCharacter="%SP;" dfdl:textStringJustification="center"/>
+
+    <!-- intentional invalid " " for textNumberPadCharacter -->
+    <xs:element name="spacePad3" type="xs:int" dfdl:textNumberJustification="center">
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:element>
+            <dfdl:property name="textNumberPadCharacter"><![CDATA[ ]]></dfdl:property>
+          </dfdl:element>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:element>
+    <xs:element name="spacePad4" type="xs:int" dfdl:textNumberPadCharacter="%SP;" dfdl:textNumberJustification="center"/>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test name: whitespace_01
+    Schema: EscapesSchema
+    Purpose: This test demonstrates that you cannot use literal whitespace within certain properties 
+  -->
+  
+  <tdml:parserTestCase name="whitespace_01"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="EscapesSchema" root="e1">
+    <tdml:document>
+      <tdml:documentPart type="text">[ start ]hello[ end ]</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>The string ([ start ]) must not contain any whitespace</tdml:error>
+      <tdml:error>Use DFDL Entities</tdml:error>
+      <tdml:error>escapeScheme</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_02
+    Schema: EscapesSchema
+    Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+             entities work.
+  -->
+  
+  <tdml:parserTestCase name="whitespace_02"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="EscapesSchema" root="e2"
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text">[ start ]hello[ end ]</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <element1>hello</element1>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_03
+       Schema: EscapesSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work.
+  -->
+  
+  <tdml:parserTestCase name="whitespace_03"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="EscapesSchema" root="e3">
+    <tdml:document>
+      <tdml:documentPart type="text"> h e l l o</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Use DFDL Entities</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_04
+       Schema: EscapesSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work.
+  -->
+  
+  <tdml:parserTestCase name="whitespace_04"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="EscapesSchema" root="e4"
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text"> h e l l o</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <element1>hello</element1>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_05
+       Schema: EscapesSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work.
+  -->
+  
+  <tdml:parserTestCase name="whitespace_05"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="EscapesSchema" root="e5">
+    <tdml:document>
+      <tdml:documentPart type="text"> |h |e |l |l |o</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Use DFDL Entities</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_06
+       Schema: EscapesSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work.
+  -->
+  
+  <tdml:parserTestCase name="whitespace_06"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="EscapesSchema" root="e6">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[ |h |e |l |l |o]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6>
+          <element1>|h|e|l|l|o</element1>
+        </e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_07
+       Schema: whitespaceSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work. In this case the property is dfdl:textStringPadCharacter
+  -->
+  
+  <tdml:parserTestCase name="whitespace_07"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="whitespaceSchema" root="spacePad">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[      hello      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Use DFDL Entities</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_08
+       Schema: whitespaceSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work. In this case the property is dfdl:textStringPadCharacter
+  -->
+  
+  <tdml:parserTestCase name="whitespace_08"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="whitespaceSchema" root="spacePad2"
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[      hello      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <spacePad2>hello</spacePad2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_09
+       Schema: whitespaceSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work. In this case the property is dfdl:textNumberPadCharacter
+  -->
+  
+  <tdml:parserTestCase name="whitespace_09"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="whitespaceSchema" root="spacePad3">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[      123      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Use DFDL Entities</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: whitespace_10
+       Schema: whitespaceSchema
+      Purpose: This test demonstrates that you cannot use literal whitespace within certain properties, but
+               entities work. In this case the property is dfdl:textNumberPadCharacter
+  -->
+  
+  <tdml:parserTestCase name="whitespace_10"
+    description="Section 6.3 DFDL Character Entities - DFDL-6-036R"
+    model="whitespaceSchema" root="spacePad4"
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[      123      ]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <spacePad4>123</spacePad4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="NLSchema">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="utf-8"
+      byteOrder="bigEndian" representation="text" lengthUnits="characters"
+      textNumberRep="standard" lengthKind="delimited" initiator=""
+      ignoreCase="no" initiatedContent="no" />
+
+    <xs:element name="seq">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="term" minOccurs="2" maxOccurs="2" dfdl:terminator="%NL;%NL;" dfdl:lengthKind="delimited">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:maxLength value="10"/>
+                <xs:minLength value="1"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="seq2">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%NL;%NL;">
+          <xs:element name="sep" minOccurs="2" maxOccurs="2" dfdl:lengthKind="delimited">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:maxLength value="10"/>
+                <xs:minLength value="1"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test Name: doubleNLterminator
+       Schema: NLSchema
+      Purpose: This tests demontrates that a CRLF should not be detected as two separate newline characters
+  -->
+
+  <tdml:parserTestCase name="doubleNLterminator" root="seq" model="NLSchema"
+    description=""
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="byte">74 65 78 74 0d 0a 0d 0a</tdml:documentPart>
+      <tdml:documentPart type="byte">74 65 78 74 0d 0a 0d 0a</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq>
+          <term>text</term>
+          <term>text</term>
+        </seq>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test Name: doubleNLseparator
+       Schema: NLSchema
+      Purpose: This test demonstrates that a CRLF should not be detected as two separate
+               newline characters
+  -->
+
+  <tdml:parserTestCase name="doubleNLseparator" root="seq2" model="NLSchema"
+    description=""
+    roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="byte">74 65 78 74 0d 0a 0d 0a</tdml:documentPart>
+      <tdml:documentPart type="byte">74 65 78 74</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq2>
+          <sep>text</sep>
+          <sep>text</sep>
+        </seq2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test Name: dataDumpEncoding
+       Schema: utf16schema.dfdl.xsd
+      Purpose: This test demonstrates that characters should be used in the debug data dump to represent newlines
+      and other traditionally non-text characters
+  -->
+
+  <tdml:parserTestCase name="dataDumpEncoding" root="e1" model="utf16schema.dfdl.xsd"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="byte">00 74 24 0A 00 65 24 0A 00 78 24 0A 00 74 00 78 00 74</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>␊</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test Name: errorEncoding
+       Schema: utf16schema.dfdl.xsd
+      Purpose: This test demonstrates that characters should be used in the error messages to represent newlines
+      and other traditionally non-text characters
+  -->
+
+  <tdml:parserTestCase name="errorEncoding" root="e2" model="utf16schema.dfdl.xsd"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="byte">00 41 00 0A 00 0A 00 42 00 0A 00 0A</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>%NL;%NL;</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="EntitiesMix">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" encoding="utf-8"
+      byteOrder="bigEndian" representation="text" lengthUnits="characters"
+      textNumberRep="standard" lengthKind="delimited" initiator=""
+      ignoreCase="no" initiatedContent="no" />
+
+    <xs:element name="seq_01" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:terminator=";%SP;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:terminator=":%SP;" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:terminator=":%NL;;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="seq_02" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="%%SP" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int" dfdl:initiator="%SP;;" />
+          <xs:element name="e2" type="xs:int" dfdl:initiator="%SP;SP" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:element name="seq_03" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="|" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:initiator="%SP;;%SP;" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:initiator="%SP;SP" />
+          <xs:element name="e3" type="xs:int"
+            dfdl:initiator="%%%SP;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="seq_04" dfdl:terminator="">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=";%NL;;" dfdl:terminator="">
+          <xs:element name="e1" type="xs:int"
+            dfdl:initiator="%SP;SP" />
+          <xs:element name="e2" type="xs:int"
+            dfdl:initiator="%SP;;%SP;" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test Name: entityAndNonMix_01
+       Schema: EntitiesMix
+      Purpose: This test demonstrates the ability to combine characters entities with non-entities in delimiters.
+  -->
+
+  <tdml:parserTestCase name="entityAndNonMix_01" root="seq_01" model="EntitiesMix"
+    description="">
+    <tdml:document>
+      <tdml:documentPart replaceDFDLEntities="true" type="text"><![CDATA[1; 2: 3:%LF;;]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_01>
+          <e1>1</e1>
+          <e2>2</e2>
+          <e3>3</e3>
+        </seq_01>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test Name: entityAndNonMix_02
+       Schema: EntitiesMix
+      Purpose: This test demonstrates the ability to combine characters entities with non-entities in delimiters.
+  -->
+
+  <tdml:parserTestCase name="entityAndNonMix_02" root="seq_02" model="EntitiesMix"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[ ;1%SP SP2]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_02>
+          <e1>1</e1>
+          <e2>2</e2>
+        </seq_02>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test Name: entityAndNonMix_03
+       Schema: EntitiesMix
+      Purpose: This test demonstrates the ability to combine characters entities with non-entities in delimiters.
+  -->
+
+  <tdml:parserTestCase name="entityAndNonMix_03" root="seq_03" model="EntitiesMix"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[ ; 1| SP2|% 3]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_03>
+          <e1>1</e1>
+          <e2>2</e2>
+          <e3>3</e3>
+        </seq_03>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test Name: entityAndNonMix_04
+       Schema: EntitiesMix
+      Purpose: This test demonstrates the ability to combine characters entities with non-entities in delimiters.
+  -->
+
+  <tdml:parserTestCase name="entityAndNonMix_04" root="seq_04" model="EntitiesMix"
+    description="">
+    <tdml:document>
+      <tdml:documentPart replaceDFDLEntities="true" type="text"><![CDATA[ SP1;%LF;; ; 2]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <seq_04>
+          <e1>1</e1>
+          <e2>2</e2>
+        </seq_04>
+      </tdml:dfdlInfoset>
+
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="EmptyStringEntityInExpression">
+  
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text" encoding="US-ASCII" 
+      separator="" byteOrder="bigEndian" ignoreCase="no" textNumberRep="standard"
+      initiator="" initiatedContent="no" terminator="" />
+
+    <xs:element name="root" dfdl:lengthKind="implicit">
+      <xs:complexType>
+
+        <xs:group ref="ex:tString10" />
+
+      </xs:complexType>
+    </xs:element>
+    
+    <xs:group name="tString10">
+      <xs:sequence>
+        <xs:element name="value" type="xs:string" dfdl:lengthKind="pattern"
+          dfdl:lengthPattern="[^END]{0,9}(?=END)|.{10}" />
+          <xs:sequence
+          dfdl:terminator="{if (fn:string-length(./ex:value) eq 10) then '%ES;' else 'END'}" />
+          <!-- %DEL is there because %ES cannot be alone in list. -->
+      </xs:sequence>
+    </xs:group>
+
+  </tdml:defineSchema>
+  
+    <!--
+    Test Name: emptyStringEntityTermInExpression_01
+       Schema: EmptyStringEntityInExpression
+      Purpose: This test demonstrates the ability for the %ES; entity to be used in an expression.
+               In this case, the value is 10 characters long so %ES; is a terminator.
+  -->
+
+  <tdml:parserTestCase name="emptyStringEntityTermInExpression_01" root="root" model="EmptyStringEntityInExpression" description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[0123456789]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:value>0123456789</ex:value>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test Name: emptyStringEntityTermInExpression_02
+       Schema: EmptyStringEntityInExpression
+      Purpose: This test demonstrates the ability for the %ES; entity to be used in an expression.
+               In this case, the value is NOT 10 characters long so %ES; is NOT a terminator.
+  -->
+
+  <tdml:parserTestCase name="emptyStringEntityTermInExpression_02" root="root" model="EmptyStringEntityInExpression"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[01234END]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:value>01234</ex:value>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="EmptyStringEntityInExpressionDelimited">
+  
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text" encoding="US-ASCII" 
+      separator="" byteOrder="bigEndian" ignoreCase="no" textNumberRep="standard"
+      initiator="" initiatedContent="no" terminator="" />
+
+    <xs:element name="root" dfdl:lengthKind="implicit">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element name="key" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" />
+          <xs:element name="value" type="xs:string" dfdl:lengthKind="delimited"
+            dfdl:terminator="{ if (../ex:key eq '1') then '%ES;' else 'END' }" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test Name: emptyStringEntityTermInExpressionDelimited_01
+       Schema: EmptyStringEntityInExpressionDelimited
+      Purpose: This test demonstrates the that a terminator cannot contain %ES; if lengthKind is delimited.
+  -->
+
+  <tdml:parserTestCase name="emptyStringEntityTermInExpressionDelimited_01" root="root" model="EmptyStringEntityInExpressionDelimited"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1value]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>dfdl:terminator</tdml:error>
+      <tdml:error>ES entity cannot appear on its own</tdml:error>
+      <tdml:error>dfdl:lengthKind="delimited"</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="EmptyStringEntityTermInComplex">
+  
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text" encoding="US-ASCII" 
+      separator="" byteOrder="bigEndian" ignoreCase="no" textNumberRep="standard"
+      initiator="" initiatedContent="no" terminator="" />
+
+    <xs:element name="root" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:terminator="%ES; END">
+      <xs:complexType>
+        <xs:sequence dfdl:separator=",">
+          <xs:element name="value" type="xs:string" dfdl:lengthKind="delimited" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <!--
+    Test Name: emptyStringEntityTermInComplex_01
+       Schema: EmptyStringEntityInExpressionDelimited
+      Purpose: This test demonstrates that a fixed length complex with ES terminator works, even if children are delimited
+  -->
+
+  <tdml:parserTestCase name="emptyStringEntityTermInComplex_01" root="root" model="EmptyStringEntityTermInComplex"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1,3,5,7,10]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:value>1</ex:value>
+          <ex:value>3</ex:value>
+          <ex:value>5</ex:value>
+          <ex:value>7</ex:value>
+          <ex:value>10</ex:value>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test Name: emptyStringEntityTermInComplex_02
+       Schema: EmptyStringEntityInExpressionDelimited
+      Purpose: This test demonstrates that a fixed length complex with ES terminator works, even if children are delimited
+  -->
+
+  <tdml:parserTestCase name="emptyStringEntityTermInComplex_02" root="root" model="EmptyStringEntityTermInComplex"
+    description="" roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1,3,5,7,10END]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:value>1</ex:value>
+          <ex:value>3</ex:value>
+          <ex:value>5</ex:value>
+          <ex:value>7</ex:value>
+          <ex:value>10</ex:value>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="EmptyStringEntityInitiator">
+  
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" representation="text" encoding="US-ASCII" 
+      separator="" byteOrder="bigEndian" ignoreCase="no" textNumberRep="standard"
+      initiator="" initiatedContent="no" terminator="" />
+
+    <xs:element name="root" dfdl:terminator="END">
+      <xs:complexType>
+        <xs:sequence >
+          <xs:element name="value" type="xs:string" dfdl:initiator="%ES; DATA=" dfdl:lengthKind="delimited" minOccurs="0" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="emptyStringEntityInitiator_01" root="root" model="EmptyStringEntityInitiator"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[dataEND]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:value>data</ex:value>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="emptyStringEntityInitiator_02" root="root" model="EmptyStringEntityInitiator"
+    description="" roundTrip="twoPass">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[DATA=dataEND]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>
+          <ex:value>data</ex:value>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="emptyStringEntityInitiator_03" root="root" model="EmptyStringEntityInitiator"
+    description="">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[END]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root />
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="AllAsciiCodePointEntities">
+
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" encoding="ISO-8859-1" />
+
+    <xs:element name="hexEntities" type="xs:string" dfdl:initiator="%#x00;%#x01;%#x02;%#x03;%#x04;%#x05;%#x06;%#x07;%#x08;%#x09;%#x0A;%#x0B;%#x0C;%#x0D;%#x0E;%#x0F;%#x10;%#x11;%#x12;%#x13;%#x14;%#x15;%#x16;%#x17;%#x18;%#x19;%#x1A;%#x1B;%#x1C;%#x1D;%#x1E;%#x1F;%#x20;%#x21;%#x22;%#x23;%#x24;%#x25;%#x26;%#x27;%#x28;%#x29;%#x2A;%#x2B;%#x2C;%#x2D;%#x2E;%#x2F;%#x30;%#x31;%#x32;%#x33;%#x34;%#x35;%#x36;%#x37;%#x38;%#x39;%#x3A;%#x3B;%#x3C;%#x3D;%#x3E;%#x3F;%#x40;%#x41;%#x42;%#x43;%#x44;%#x45;%#x46;%#x47;%#x48;%#x49;%#x4A;%#x4B;%#x4C;%#x4D;%#x4E;%#x4F;%#x50;%#x51;%#x52;%#x53;%#x54;%#x55;%#x56;%#x57;%#x58;%#x59;%#x5A;%#x5B;%#x5C;%#x5D;%#x5E;%#x5F;%#x60;%#x61;%#x62;%#x63;%#x64;%#x65;%#x66;%#x67;%#x68;%#x69;%#x6A;%#x6B;%#x6C;%#x6D;%#x6E;%#x6F;%#x70;%#x71;%#x72;%#x73;%#x74;%#x75;%#x76;%#x77;%#x78;%#x79;%#x7A;%#x7B;%#x7C;%#x7D;%#x7E;%#x7F;%#x80;%#x81;%#x82;%#x83;%#x84;%#x85;%#x86;%#x87;%#x88;%#x89;%#x8A;%#x8B;%#x8C;%#x8D;%#x8E;%#x8F;%#x90;%#x91;%#x92;%#x93;%#x94;%#x95;%#x96;%#x97;%#x98;%#x99;%#x9A;%#x9B;%#x9C;%#x9D;%#x9E;%#x9F;%#xA0;%#xA1;%#xA2;%#xA3;%#xA4;%#xA5;%#xA6;%#xA7;%#xA8;%#xA9;%#xAA;%#xAB;%#xAC;%#xAD;%#xAE;%#xAF;%#xB0;%#xB1;%#xB2;%#xB3;%#xB4;%#xB5;%#xB6;%#xB7;%#xB8;%#xB9;%#xBA;%#xBB;%#xBC;%#xBD;%#xBE;%#xBF;%#xC0;%#xC1;%#xC2;%#xC3;%#xC4;%#xC5;%#xC6;%#xC7;%#xC8;%#xC9;%#xCA;%#xCB;%#xCC;%#xCD;%#xCE;%#xCF;%#xD0;%#xD1;%#xD2;%#xD3;%#xD4;%#xD5;%#xD6;%#xD7;%#xD8;%#xD9;%#xDA;%#xDB;%#xDC;%#xDD;%#xDE;%#xDF;%#xE0;%#xE1;%#xE2;%#xE3;%#xE4;%#xE5;%#xE6;%#xE7;%#xE8;%#xE9;%#xEA;%#xEB;%#xEC;%#xED;%#xEE;%#xEF;%#xF0;%#xF1;%#xF2;%#xF3;%#xF4;%#xF5;%#xF6;%#xF7;%#xF8;%#xF9;%#xFA;%#xFB;%#xFC;%#xFD;%#xFE;%#xFF;" />
+    <xs:element name="decEntities" type="xs:string" dfdl:initiator="%#0;%#1;%#2;%#3;%#4;%#5;%#6;%#7;%#8;%#9;%#10;%#11;%#12;%#13;%#14;%#15;%#16;%#17;%#18;%#19;%#20;%#21;%#22;%#23;%#24;%#25;%#26;%#27;%#28;%#29;%#30;%#31;%#32;%#33;%#34;%#35;%#36;%#37;%#38;%#39;%#40;%#41;%#42;%#43;%#44;%#45;%#46;%#47;%#48;%#49;%#50;%#51;%#52;%#53;%#54;%#55;%#56;%#57;%#58;%#59;%#60;%#61;%#62;%#63;%#64;%#65;%#66;%#67;%#68;%#69;%#70;%#71;%#72;%#73;%#74;%#75;%#76;%#77;%#78;%#79;%#80;%#81;%#82;%#83;%#84;%#85;%#86;%#87;%#88;%#89;%#90;%#91;%#92;%#93;%#94;%#95;%#96;%#97;%#98;%#99;%#100;%#101;%#102;%#103;%#104;%#105;%#106;%#107;%#108;%#109;%#110;%#111;%#112;%#113;%#114;%#115;%#116;%#117;%#118;%#119;%#120;%#121;%#122;%#123;%#124;%#125;%#126;%#127;%#128;%#129;%#130;%#131;%#132;%#133;%#134;%#135;%#136;%#137;%#138;%#139;%#140;%#141;%#142;%#143;%#144;%#145;%#146;%#147;%#148;%#149;%#150;%#151;%#152;%#153;%#154;%#155;%#156;%#157;%#158;%#159;%#160;%#161;%#162;%#163;%#164;%#165;%#166;%#167;%#168;%#169;%#170;%#171;%#172;%#173;%#174;%#175;%#176;%#177;%#178;%#179;%#180;%#181;%#182;%#183;%#184;%#185;%#186;%#187;%#188;%#189;%#190;%#191;%#192;%#193;%#194;%#195;%#196;%#197;%#198;%#199;%#200;%#201;%#202;%#203;%#204;%#205;%#206;%#207;%#208;%#209;%#210;%#211;%#212;%#213;%#214;%#215;%#216;%#217;%#218;%#219;%#220;%#221;%#222;%#223;%#224;%#225;%#226;%#227;%#228;%#229;%#230;%#231;%#232;%#233;%#234;%#235;%#236;%#237;%#238;%#239;%#240;%#241;%#242;%#243;%#244;%#245;%#246;%#247;%#248;%#249;%#250;%#251;%#252;%#253;%#254;%#255;" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="allAsciiHexEntities" root="hexEntities" model="AllAsciiCodePointEntities">
+    <tdml:document>
+      <tdml:documentPart type="byte">00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</tdml:documentPart>
+      <tdml:documentPart type="byte">10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F</tdml:documentPart>
+      <tdml:documentPart type="byte">20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F</tdml:documentPart>
+      <tdml:documentPart type="byte">30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F</tdml:documentPart>
+      <tdml:documentPart type="byte">40 41 42 43 44 45 46 47 48 49 4A 4B 4C 4D 4E 4F</tdml:documentPart>
+      <tdml:documentPart type="byte">50 51 52 53 54 55 56 57 58 59 5A 5B 5C 5D 5E 5F</tdml:documentPart>
+      <tdml:documentPart type="byte">60 61 62 63 64 65 66 67 68 69 6A 6B 6C 6D 6E 6F</tdml:documentPart>
+      <tdml:documentPart type="byte">70 71 72 73 74 75 76 77 78 79 7A 7B 7C 7D 7E 7F</tdml:documentPart>
+      <tdml:documentPart type="byte">80 81 82 83 84 85 86 87 88 89 8A 8B 8C 8D 8E 8F</tdml:documentPart>
+      <tdml:documentPart type="byte">90 91 92 93 94 95 96 97 98 99 9A 9B 9C 9D 9E 9F</tdml:documentPart>
+      <tdml:documentPart type="byte">A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 AA AB AC AD AE AF</tdml:documentPart>
+      <tdml:documentPart type="byte">B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 BA BB BC BD BE BF</tdml:documentPart>
+      <tdml:documentPart type="byte">C0 C1 C2 C3 C4 C5 C6 C7 C8 C9 CA CB CC CD CE CF</tdml:documentPart>
+      <tdml:documentPart type="byte">D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 DA DB DC DD DE DF</tdml:documentPart>
+      <tdml:documentPart type="byte">E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 EA EB EC ED EE EF</tdml:documentPart>
+      <tdml:documentPart type="byte">F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 FA FB FC FD FE FF</tdml:documentPart>
+      <tdml:documentPart type="text">string</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:hexEntities>string</ex:hexEntities>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="allAsciiDecEntities" root="decEntities" model="AllAsciiCodePointEntities">
+    <tdml:document>
+      <tdml:documentPart type="byte">00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F</tdml:documentPart>
+      <tdml:documentPart type="byte">10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F</tdml:documentPart>
+      <tdml:documentPart type="byte">20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F</tdml:documentPart>
+      <tdml:documentPart type="byte">30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F</tdml:documentPart>
+      <tdml:documentPart type="byte">40 41 42 43 44 45 46 47 48 49 4A 4B 4C 4D 4E 4F</tdml:documentPart>
+      <tdml:documentPart type="byte">50 51 52 53 54 55 56 57 58 59 5A 5B 5C 5D 5E 5F</tdml:documentPart>
+      <tdml:documentPart type="byte">60 61 62 63 64 65 66 67 68 69 6A 6B 6C 6D 6E 6F</tdml:documentPart>
+      <tdml:documentPart type="byte">70 71 72 73 74 75 76 77 78 79 7A 7B 7C 7D 7E 7F</tdml:documentPart>
+      <tdml:documentPart type="byte">80 81 82 83 84 85 86 87 88 89 8A 8B 8C 8D 8E 8F</tdml:documentPart>
+      <tdml:documentPart type="byte">90 91 92 93 94 95 96 97 98 99 9A 9B 9C 9D 9E 9F</tdml:documentPart>
+      <tdml:documentPart type="byte">A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 AA AB AC AD AE AF</tdml:documentPart>
+      <tdml:documentPart type="byte">B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 BA BB BC BD BE BF</tdml:documentPart>
+      <tdml:documentPart type="byte">C0 C1 C2 C3 C4 C5 C6 C7 C8 C9 CA CB CC CD CE CF</tdml:documentPart>
+      <tdml:documentPart type="byte">D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 DA DB DC DD DE DF</tdml:documentPart>
+      <tdml:documentPart type="byte">E0 E1 E2 E3 E4 E5 E6 E7 E8 E9 EA EB EC ED EE EF</tdml:documentPart>
+      <tdml:documentPart type="byte">F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 FA FB FC FD FE FF</tdml:documentPart>
+      <tdml:documentPart type="text">string</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:decEntities>string</ex:decEntities>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

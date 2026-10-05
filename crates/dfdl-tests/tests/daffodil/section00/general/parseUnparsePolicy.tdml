@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="General" description="Section 00 - General tests"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:ex="http://example.com" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+
+  <!-- This file is for general purpose tests that are not related 
+       to any specific requirements. /!-->
+
+  <tdml:defineSchema name="parseUnparsePolicy">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" representation="text"
+        lengthUnits="bytes" encoding="US-ASCII" initiator="" terminator=""
+        separator="" ignoreCase="no" textNumberRep="standard" leadingSkip="0" />
+
+    <xs:element name="parseOnly" type="xs:int" dfdlx:parseUnparsePolicy="parseOnly" />
+    <xs:element name="unparseOnly" type="xs:int" dfdlx:parseUnparsePolicy="unparseOnly" />
+    <xs:element name="both" type="xs:int" dfdlx:parseUnparsePolicy="both" />
+
+
+    <xs:element name="pb" dfdlx:parseUnparsePolicy="parseOnly">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="both" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="pp" dfdlx:parseUnparsePolicy="parseOnly">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="parseOnly" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="pu" dfdlx:parseUnparsePolicy="parseOnly">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="unparseOnly" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+    <xs:element name="ub" dfdlx:parseUnparsePolicy="unparseOnly">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="both" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="up" dfdlx:parseUnparsePolicy="unparseOnly">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="parseOnly" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="uu" dfdlx:parseUnparsePolicy="unparseOnly">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="unparseOnly" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+
+    <xs:element name="bb" dfdlx:parseUnparsePolicy="both">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="both" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="bp" dfdlx:parseUnparsePolicy="both">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="parseOnly" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+    <xs:element name="bu" dfdlx:parseUnparsePolicy="both">
+      <xs:complexType>
+        <xs:sequence>
+          <xs:element ref="unparseOnly" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+ <!--
+    Test name: pb_parse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not unparsable
+  --> 
+  <tdml:parserTestCase name="pb_parse" root="pb" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:pb>
+          <ex:both>1</ex:both>
+        </ex:pb>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: pb_unparse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not unparsable
+  --> 
+  <tdml:unparserTestCase name="pb_unparse" root="pb" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:pb>
+          <ex:both>1</ex:both>
+        </ex:pb>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>without unparse support</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+ <!--
+    Test name: pp_parse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not unparsable
+  --> 
+  <tdml:parserTestCase name="pp_parse" root="pp" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:pp>
+          <ex:parseOnly>1</ex:parseOnly>
+        </ex:pp>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: pp_unparse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not unparsable
+  --> 
+  <tdml:unparserTestCase name="pp_unparse" root="pp" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:pp>
+          <ex:parseOnly>1</ex:parseOnly>
+        </ex:pp>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>without unparse support</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+ <!--
+    Test name: pu
+    Schema: parseUnparsePolicy
+    Purpose: Incompatible parseUnparsePolicies. Note that we don't need separate _parse and _unparse tests, since this schema won't compile due to incompatible policies.
+  --> 
+  <tdml:parserTestCase name="pu" root="pu" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>parseOnly</tdml:error>
+      <tdml:error>unparseOnly</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: ub_parse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not parsable
+  --> 
+  <tdml:parserTestCase name="ub_parse" root="ub" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>without parse support</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: ub_unparse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not parsable
+  --> 
+  <tdml:unparserTestCase name="ub_unparse" root="ub" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:ub>
+          <ex:both>1</ex:both>
+        </ex:ub>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+ <!--
+    Test name: up
+    Schema: parseUnparsePolicy
+    Purpose: Incompatible parseUnparsePolicies. Note that we don't need separate _parse and _unparse tests, since this schema won't compile due to incompatible policies.
+  --> 
+  <tdml:parserTestCase name="up" root="up" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>parseOnly</tdml:error>
+      <tdml:error>unparseOnly</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: uu_parse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not parsable
+  --> 
+  <tdml:parserTestCase name="uu_parse" root="uu" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>without parse support</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: uu_unparse
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, but not parsable
+  --> 
+  <tdml:unparserTestCase name="uu_unparse" root="uu" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:uu>
+          <ex:unparseOnly>1</ex:unparseOnly>
+        </ex:uu>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+
+ <!--
+    Test name: bb
+    Schema: parseUnparsePolicy
+    Purpose: Compatible parseUnparsePolicies, parseable and unparsable
+  --> 
+  <tdml:parserTestCase name="bb" root="bb" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="true">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:bb>
+          <ex:both>1</ex:both>
+        </ex:bb>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: bp
+    Schema: parseUnparsePolicy
+    Purpose: Incompatible parseUnparsePolicies. Note that we don't need separate _parse and _unparse tests, since this schema won't compile due to incompatible policies.
+  --> 
+  <tdml:parserTestCase name="bp" root="bp" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>both</tdml:error>
+      <tdml:error>parseOnly</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+ <!--
+    Test name: bu
+    Schema: parseUnparsePolicy
+    Purpose: Incompatible parseUnparsePolicies. Note that we don't need separate _parse and _unparse tests, since this schema won't compile due to incompatible policies.
+  --> 
+  <tdml:parserTestCase name="bu" root="bu" model="parseUnparsePolicy" description="parseUnparsePolicy" roundTrip="false">
+    <tdml:document>
+      <tdml:documentPart type="text">1</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>both</tdml:error>
+      <tdml:error>unparseOnly</tdml:error>
+      <tdml:error>parseUnparsePolicy</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

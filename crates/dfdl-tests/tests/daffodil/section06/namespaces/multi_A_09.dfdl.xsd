@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+   targetNamespace="http://a09.com" xmlns:a09="http://a09.com">
+      
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format separator="." initiator="" terminator="" leadingSkip='0' textTrimKind="none" initiatedContent="no"
+        separatorPosition="infix" ignoreCase="no" separatorSuppressionPolicy="anyEmpty" representation="text" textNumberRep="standard" lengthKind="delimited" utf16Width="fixed" encoding="US-ASCII"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:element name="aElem" type="xs:string" dfdl:initiator="A:" dfdl:terminator=":A"/>   
+
+  <!-- Note that explicit length is exclusive of initiator and terminator. It's the content length. -->
+  <xs:element name="aElem2" type="xs:string" dfdl:lengthUnits="characters" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="UTF-16BE" dfdl:initiator="A:" dfdl:terminator=":A"/>
+  <xs:element name="aElem3" type="xs:string" dfdl:lengthUnits="characters" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:encoding="UTF-16BE"/>
+ 
+</xs:schema>

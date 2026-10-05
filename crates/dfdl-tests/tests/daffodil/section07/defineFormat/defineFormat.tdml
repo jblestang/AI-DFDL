@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="DelimitedTests"
+  description="Section 12 - lengthKind=delimited" xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ct="http://w3.ibm.com/xmlns/dfdl/ctInfoset"
+  xmlns:tns="http://example.com"
+  defaultRoundTrip="true">
+
+
+  <tdml:defineSchema name="s1">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="def2">
+      <dfdl:format ref="tns:def3" lengthKind="explicit"
+        lengthUnits="characters" length="4" representation="text"
+        textNumberRep="standard" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="def3">
+      <dfdl:format ref="tns:GeneralFormat" representation="binary" />
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="tns:def1" initiator="" terminator=""
+      encoding="utf-8" />
+
+    <dfdl:defineFormat name="def1">
+      <dfdl:format ref="tns:def2" />
+    </dfdl:defineFormat>
+
+    <xs:element name="easy" type="xs:int" dfdl:textNumberPattern="####" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="defineFormat_01" root="easy"
+    model="s1" description="Section 7 - Multiple defineFormat elements - DFDL-7-028R">
+
+    <tdml:document>1009</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <easy>1009</easy>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="Lesson3_defineFormat" root="address"
+    model="defineFormat.dfdl.xsd" description="defineFormat - DFDL-7-035R">
+    <tdml:document><![CDATA[118*Ridgewood Circle*Rochester*NY]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <address> 
+          <houseNumber>118</houseNumber>
+          <street>Ridgewood Circle</street>
+          <city>Rochester</city>
+          <state>NY</state>
+          </address>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="Lesson3_inherit_defineFormat" root="address1"
+    model="defineFormat.dfdl.xsd" description="inherit defineFormat - DFDL-7-036R">
+    <tdml:document><![CDATA[118*Ridgewood Circle*Rochester*NY]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <address1> 
+          <houseNumber>118</houseNumber>
+          <street>Ridgewood Circle</street>
+          <city>Rochester</city>
+          <state>NY</state>
+          </address1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="errs">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="tns:GeneralFormat" lengthKind="explicit"
+        lengthUnits="characters" length="4" leadingSkip="0" representation="text"
+        textNumberRep="standard" />
+    </dfdl:defineFormat>
+
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="tns:GeneralFormat" leadingSkip="0" representation="binary" />
+    </dfdl:defineFormat>
+
+    <dfdl:format ref="tns:def" />
+
+    <xs:element name="easy" type="xs:int" />
+
+  </tdml:defineSchema>
+  
+  <tdml:parserTestCase name="nameCollision" root="easy"
+    model="errs" description="Section 7 - defineFormat - unique name attribute - DFDL-7-034R">
+    <tdml:document><![CDATA[3456]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <tdml:defineSchema name="defineNotUsed">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="tns:GeneralFormat" lengthKind="explicit"
+        lengthUnits="characters" length="4" representation="text"
+        textNumberRep="standard" textNumberPattern="####" />
+    </dfdl:defineFormat>
+    
+    <dfdl:format ref="tns:def" />
+
+    <dfdl:defineFormat name="def2">
+      <dfdl:format ref="tns:GeneralFormat" length="1" />
+    </dfdl:defineFormat>
+
+    <xs:element name="root" dfdl:lengthKind="implicit"> <!-- Why did I have to add lengthKind="implicit" here and not receive an error when it wasn't there?!!! -->
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="easy" type="xs:int" minOccurs="2" maxOccurs="unbounded" />
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <tdml:parserTestCase name="formatOnlyDefine" root="root"
+    model="defineNotUsed" description="Section 7 - defineFormat - only supplies named def - DFDL-7-035R">
+    <tdml:document><![CDATA[34567890]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <root>
+          <easy>3456</easy>
+          <easy>7890</easy>
+        </root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="circularRef">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd"/>
+    <dfdl:defineFormat name="def">
+      <dfdl:format ref="tns:def2" lengthKind="explicit"
+        lengthUnits="characters" length="4" representation="text"
+        textNumberRep="standard" />
+    </dfdl:defineFormat>
+    
+    <dfdl:format ref="tns:def" />
+
+    <dfdl:defineFormat name="def2">
+      <dfdl:format ref="tns:def" length="1" />
+    </dfdl:defineFormat>
+
+    <xs:element name="root">
+      <xs:complexType>
+        <xs:sequence dfdl:separator="">
+          <xs:element name="easy" type="xs:int" minOccurs="2" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:complexType>
+    </xs:element>
+
+  </tdml:defineSchema>
+  
+  <tdml:parserTestCase name="circularRef" root="root"
+    model="circularRef" description="Section 7 - defineFormat - circular paths SDE - DFDL-7-037.1R">
+    <tdml:document><![CDATA[34567890]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>cycle</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <tdml:parserTestCase name="noNameFormat" root="root"
+    model="noNameFormat.dfdl.xsd" description="Section 7 - defineFormat - required name attribute - DFDL-7-031R">
+    <tdml:document><![CDATA[34567890]]></tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Attribute 'name' must appear on element 'dfdl:defineFormat'</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+<!--
+     Test Name: format_with_comment
+        Schema: defineFormat_withComment.dfdl.xsd
+       Purpose: This test demonstrates that an XML-style comment should not interfere with a format definition
+-->
+
+  <tdml:parserTestCase name="format_with_comment" root="address1"
+    model="defineFormat_withComment.dfdl.xsd" description="Section 7 - defineFormat">
+    <tdml:document><![CDATA[118*Ridgewood Circle*Rochester*NY]]></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <address1> 
+          <houseNumber>118</houseNumber>
+          <street>Ridgewood Circle</street>
+          <city>Rochester</city>
+          <state>NY</state>
+          </address1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

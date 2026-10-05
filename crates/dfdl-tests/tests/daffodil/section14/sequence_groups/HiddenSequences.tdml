@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com"
+  xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions" defaultRoundTrip="none">
+
+  <tdml:parserTestCase name="parseHiddenGroupRef" root="e1"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[2,3]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e1>
+          <g>3</g>
+        </e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="parseRegularGroupRef" root="e2"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[2,3]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e2>
+          <f>2</f>
+          <g>3</g>
+        </e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="parseSeqOfHiddenAndRegularRef" root="e3"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[2,3]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e3>
+          <g>
+            <f>3</f>
+          </g>
+        </e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="parseNestedHiddenAndRegularRef" root="e4"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[6~9]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e4>
+          <f>
+            <h>
+              <f>9</f>
+            </h>
+          </f>
+        </e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="parseNestedRegularAndHiddenRef" root="e5"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[6~9]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e5>
+          <f>
+            <h>
+              <f>6</f>
+            </h>
+          </f>
+        </e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="parseNestedHiddenGroupRefs" root="e6"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[6~9]]></tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <e6>
+          <q>
+            <h />
+          </q>
+        </e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase name="unparseHiddenGroupRef" root="e1"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e1>
+          <g>7</g>
+        </ex:e1>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1,7]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparseRegularGroupRef" root="e2"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e2>
+          <f>17</f>
+          <g>12</g>
+        </ex:e2>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1,12]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparseSeqOfHiddenAndRegularRef" root="e3"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e3>
+          <g>
+            <f>3</f>
+          </g>
+        </ex:e3>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1,1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparseNestedHiddenAndRegularRef" root="e4"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e4>
+          <f>
+            <h>
+              <f>9</f>
+            </h>
+          </f>
+        </ex:e4>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1~1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparseNestedRegularAndHiddenRef" root="e5"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e5>
+          <f>
+            <h>
+              <f>9</f>
+            </h>
+          </f>
+        </ex:e5>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1~1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="unparseNestedHiddenGroupRefs" root="e6"
+    model="SequencesWithHiddenRefs.dfdl.xsd"
+    description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e6>
+          <q>
+            <h />
+          </q>
+        </ex:e6>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document>
+      <tdml:documentPart type="text"><![CDATA[1~1]]></tdml:documentPart>
+    </tdml:document>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="noOVCinHiddenContext" root="e7"
+    model="SequencesWithHiddenRefs.dfdl.xsd" description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e7 />
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>hidden group</tdml:error>
+      <tdml:error>defaultable</tdml:error>
+      <tdml:error>dfdl:outputValueCalc</tdml:error>
+      <tdml:error>optional</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="nestedNoOVCinHiddenContext" root="e8"
+    model="SequencesWithHiddenRefs.dfdl.xsd" description="hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e8>
+          <g>7</g>
+        </ex:e8>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>hidden group</tdml:error>
+      <tdml:error>defaultable</tdml:error>
+      <tdml:error>dfdl:outputValueCalc</tdml:error>
+      <tdml:error>optional</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:unparserTestCase name="invalidGroupDefWithHiddenSequenceModelGroup" root="e9"
+    model="SequencesWithHiddenRefsInvalid.dfdl.xsd"
+    description="a group definition is used where the model group is a hidden group ref">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:e9>
+          <g>7</g>
+        </ex:e9>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>model group</tdml:error>
+      <tdml:error>group definition</tdml:error>
+      <tdml:error>sequence</tdml:error>
+      <tdml:error>dfdl:hiddenGroupRef</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="ComplexTypeWithHiddenGroupRefSequence">
+    <xs:include
+        schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:group name="s4">
+      <xs:sequence>
+        <xs:element name="f" type="xs:int" dfdl:outputValueCalc="{6}"/>
+      </xs:sequence>
+    </xs:group>
+    <xs:element name="e1">
+      <xs:complexType>
+        <xs:sequence dfdl:hiddenGroupRef="ex:s4"/>
+      </xs:complexType>
+    </xs:element>
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase name="ComplexTypeWithHiddenGroupRefSequence1" root="e1"
+      model="ComplexTypeWithHiddenGroupRefSequence">
+    <tdml:document>7</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>complex type cannot have</tdml:error>
+      <tdml:error>sequence with a hiddenGroupRef</tdml:error>
+      <tdml:error>model group</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+</tdml:testSuite>
+

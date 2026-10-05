@@ -1,0 +1,19 @@
+[package]
+name = "dfdl-schema"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "XSD and DFDL schema compiler foundation"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", default-features = false }
+dfdl-xml = { path = "../dfdl-xml", default-features = false }
+regex = { version = "1.10", default-features = false, features = ["unicode-perl", "unicode-case"] }
+
+[lints]
+workspace = true

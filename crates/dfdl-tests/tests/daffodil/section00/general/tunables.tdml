@@ -1,0 +1,907 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<tdml:testSuite suiteName="Tunables" description="Section 00 - Tunables tests"
+	xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+	xmlns:ex="http://example.com" xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+	defaultConfig="tunables.xml">
+
+	<tdml:defineConfig name="cfg_noNamespace">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:unqualifiedPathStepPolicy>noNamespace</daf:unqualifiedPathStepPolicy>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_defaultNamespace">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:unqualifiedPathStepPolicy>defaultNamespace</daf:unqualifiedPathStepPolicy>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_preferDefaultNamespace">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:unqualifiedPathStepPolicy>preferDefaultNamespace</daf:unqualifiedPathStepPolicy>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_smallMaxOccursBounds">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:maxOccursBounds>3</daf:maxOccursBounds>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_requireTextBidiPropertyTrue">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:requireTextBidiProperty>true</daf:requireTextBidiProperty>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_requireTextBidiPropertyFalse">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:requireTextBidiProperty>false</daf:requireTextBidiProperty>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_requireFloatingPropertyTrue">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:requireFloatingProperty>true</daf:requireFloatingProperty>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_requireFloatingPropertyFalse">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:requireFloatingProperty>false</daf:requireFloatingProperty>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_requireEncodingErrorPolicyPropertyTrue">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:requireEncodingErrorPolicyProperty>true</daf:requireEncodingErrorPolicyProperty>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_requireEncodingErrorPolicyPropertyFalse">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:requireEncodingErrorPolicyProperty>false</daf:requireEncodingErrorPolicyProperty>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_smallMaxHexBinary">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:maxHexBinaryLengthInBytes>10</daf:maxHexBinaryLengthInBytes>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_invalidRestrictionPolicyError">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:invalidRestrictionPolicy>error</daf:invalidRestrictionPolicy>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_invalidRestrictionPolicyValidate">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:invalidRestrictionPolicy>validate</daf:invalidRestrictionPolicy>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineConfig name="cfg_invalidRestrictionPolicyIgnore">
+		<daf:tunables xmlns="http://www.w3.org/2001/XMLSchema"
+			xmlns:xs="http://www.w3.org/2001/XMLSchema">
+			<daf:invalidRestrictionPolicy>ignore</daf:invalidRestrictionPolicy>
+		</daf:tunables>
+	</tdml:defineConfig>
+
+	<tdml:defineSchema name="unqualifiedPathStep" elementFormDefault="unqualified">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format ref="ex:GeneralFormat" />
+
+		<xs:element name="b" type="xs:string" dfdl:length="1"
+			dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" />
+
+		<!-- 'a' is global, so this is in the ex namespce -->
+		<xs:element name="a">
+			<xs:complexType>
+				<xs:sequence>
+					<!-- references a global, so 'b' is in the ex namespace -->
+					<xs:element ref="ex:b" />
+					<!-- elementFormDefault="unqualified" and 'c' is local, so it is in 
+						NoNamespace -->
+					<xs:element name="c" type="xs:string" dfdl:length="1"
+						dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+
+		<!-- this should always work, regardless of unqualifiedPathStepPolicy -->
+		<xs:element name="test_01">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element ref="ex:a" />
+					<xs:element name="s" type="xs:string"
+						dfdl:inputValueCalc="{ ../ex:a/ex:b }" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+
+		<!-- this should only work with defaultNamespace and preferDefaultNamespace -->
+		<xs:element name="test_02">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element ref="ex:a" />
+					<xs:element name="s" type="xs:string"
+						dfdl:inputValueCalc="{ ../ex:a/b }" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+
+		<!-- this should always fail, regardless of unqualifiedPathStepPolicy -->
+		<xs:element name="test_03">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element ref="ex:a" />
+					<xs:element name="s" type="xs:string"
+						dfdl:inputValueCalc="{ ../ex:a/ex:c }" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+
+		<!-- this should only work with noNamespace and preferDefaultNamespace -->
+		<xs:element name="test_04">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element ref="ex:a" />
+					<xs:element name="s" type="xs:string"
+						dfdl:inputValueCalc="{ ../ex:a/c }" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+
+	</tdml:defineSchema>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_01_defaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_01_defaultNamespace" root="test_01"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_defaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_01 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">1</s>
+        </ex:test_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_01_preferDefaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_01_preferDefaultNamespace" root="test_01"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_preferDefaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_01 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">1</s>
+        </ex:test_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_01_noNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_01_noNamespace" root="test_01"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_noNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_01 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">1</s>
+        </ex:test_01>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_02_defaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_02_defaultNamespace" root="test_02"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_defaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_02 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">1</s>
+        </ex:test_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_02_preferDefaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_02_preferDefaultNamespace" root="test_02"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_preferDefaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_02 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">1</s>
+        </ex:test_02>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_02_noNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_02_noNamespace" root="test_02"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_noNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_03_defaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_03_defaultNamespace" root="test_03"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_defaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_03_preferDefaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_03_preferDefaultNamespace" root="test_03"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_preferDefaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_03_noNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_03_noNamespace" root="test_03"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_noNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_04_defaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_04_defaultNamespace" root="test_04"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_defaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_04_preferDefaultNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_04_preferDefaultNamespace" root="test_04"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_preferDefaultNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_04 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">2</s>
+        </ex:test_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!--
+    Test name: unqualifiedPathStepPolicy_test_04_noNamespace
+    Schema: unqualifiedPathStepPolicy
+    Purpose: Verifiy that unqualifiedPathStepPolicy works as expected
+  -->
+  <tdml:parserTestCase
+    name="unqualifiedPathStepPolicy_test_04_noNamespace" root="test_04"
+    model="unqualifiedPathStep" description="Tunables - Unqualified Path Step Policy"
+    config="cfg_noNamespace">
+    <tdml:document>
+      <tdml:documentPart type="text">12</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:test_04 xmlns:ex="http://example.com">
+          <ex:a>
+            <ex:b>1</ex:b>
+            <c xmlns="">2</c>
+          </ex:a>
+          <s xmlns="">2</s>
+        </ex:test_04>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+
+	<tdml:defineSchema name="exceedMaxOccursBounds">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format ref="ex:GeneralFormat" />
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+	</tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="maxOccursBoundsExceeded" root="root"
+		model="exceedMaxOccursBounds" description="Tunables - maxOccursBounds"
+		config="cfg_smallMaxOccursBounds">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+		<tdml:errors>
+			<tdml:error>Tunable Limit Exceeded</tdml:error>
+			<tdml:error>maxOccursBounds</tdml:error>
+			<tdml:error>3</tdml:error>
+			<tdml:error>char</tdml:error>
+		</tdml:errors>
+
+  </tdml:parserTestCase>
+
+	<tdml:defineSchema name="missingTextBidi">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format lengthKind="implicit" leadingSkip="0" sequenceKind="ordered" representation="text"
+      trailingSkip="0" encoding="US-ASCII" alignment="1" alignmentUnits="bytes" initiator=""
+      terminator="" separator="" ignoreCase="no" occursCountKind="implicit" lengthUnits="bytes"
+      initiatedContent="no" textPadKind="none" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef="" encodingErrorPolicy="replace" fillByte="%NUL;" floating="no" />
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+  </tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="requireTextBidiTrue" root="root"
+		model="missingTextBidi" description="Tunables - maxOccursBounds"
+		config="cfg_requireTextBidiPropertyTrue">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Property</tdml:error>
+      <tdml:error>textBidi</tdml:error>
+      <tdml:error>is not defined</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+	<tdml:parserTestCase
+		name="requireTextBidiFalse" root="root"
+		model="missingTextBidi" description="Tunables - maxOccursBounds"
+		config="cfg_requireTextBidiPropertyFalse">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:warnings>
+      <tdml:warning>dfdl:textBidi</tdml:warning>
+      <tdml:warning>required but not defined</tdml:warning>
+    </tdml:warnings>
+
+		<tdml:infoset>
+			<tdml:dfdlInfoset>
+        <ex:root>
+          <ex:char>1</ex:char>
+          <ex:char>2</ex:char>
+          <ex:char>3</ex:char>
+          <ex:char>4</ex:char>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+	<tdml:defineSchema name="textBidiYes">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format lengthKind="implicit" leadingSkip="0" sequenceKind="ordered" representation="text"
+      trailingSkip="0" encoding="US-ASCII" alignment="1" alignmentUnits="bytes" initiator=""
+      terminator="" separator="" ignoreCase="no" occursCountKind="implicit" lengthUnits="bytes"
+      initiatedContent="no" textPadKind="none" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef="" encodingErrorPolicy="replace" textBidi="yes" floating="no"/>
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+  </tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="textBidiYes" root="root"
+		model="textBidiYes" description="Tunables - maxOccursBounds"
+		config="cfg_requireTextBidiPropertyFalse">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:errors>
+      <tdml:error>textBidi='yes'</tdml:error>
+      <tdml:error>is not supported</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+	<tdml:defineSchema name="missingFloating">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format lengthKind="implicit" leadingSkip="0" sequenceKind="ordered" representation="text"
+      trailingSkip="0" encoding="US-ASCII" alignment="1" alignmentUnits="bytes" initiator=""
+      terminator="" separator="" ignoreCase="no" occursCountKind="implicit" lengthUnits="bytes"
+      initiatedContent="no" textPadKind="none" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef="" encodingErrorPolicy="replace" textBidi="no" fillByte="%NUL;" />
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+  </tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="requireFloatingTrue" root="root"
+		model="missingFloating" description="Tunables - maxOccursBounds"
+		config="cfg_requireFloatingPropertyTrue">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Property</tdml:error>
+      <tdml:error>floating</tdml:error>
+      <tdml:error>is not defined</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+	<tdml:parserTestCase
+		name="requireFloatingFalse" root="root"
+		model="missingFloating" description="Tunables - maxOccursBounds"
+		config="cfg_requireFloatingPropertyFalse">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:warnings>
+      <tdml:warning>dfdl:floating</tdml:warning>
+      <tdml:warning>required but not defined</tdml:warning>
+    </tdml:warnings>
+
+		<tdml:infoset>
+			<tdml:dfdlInfoset>
+        <ex:root>
+          <ex:char>1</ex:char>
+          <ex:char>2</ex:char>
+          <ex:char>3</ex:char>
+          <ex:char>4</ex:char>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+	<tdml:defineSchema name="floatingYes">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format lengthKind="implicit" leadingSkip="0" sequenceKind="ordered" representation="text"
+      trailingSkip="0" encoding="US-ASCII" alignment="1" alignmentUnits="bytes" initiator=""
+      terminator="" separator="" ignoreCase="no" occursCountKind="implicit" lengthUnits="bytes"
+      initiatedContent="no" textPadKind="none" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef="" encodingErrorPolicy="replace" textBidi="no" floating="yes"/>
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+  </tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="floatingYes" root="root"
+		model="floatingYes" description="Tunables - maxOccursBounds"
+		config="cfg_requireFloatingPropertyFalse">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:errors>
+      <tdml:error>floating='yes'</tdml:error>
+      <tdml:error>is not supported</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+	<tdml:defineSchema name="encodingErrorPolicyError">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format lengthKind="implicit" leadingSkip="0" sequenceKind="ordered" representation="text"
+      trailingSkip="0" encoding="US-ASCII" alignment="1" alignmentUnits="bytes" initiator=""
+      terminator="" separator="" ignoreCase="no" occursCountKind="implicit" lengthUnits="bytes"
+      initiatedContent="no" textPadKind="none" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef="" encodingErrorPolicy="error" textBidi="no" fillByte="%NUL;" />
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+  </tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="encodingErrorPolicyError" root="root"
+		model="encodingErrorPolicyError" description="Tunables - maxOccursBounds"
+		config="cfg_requireEncodingErrorPolicyPropertyFalse">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+			<tdml:documentPart type="byte">80</tdml:documentPart> <!-- invalid in US-ASCII -->
+		</tdml:document>
+
+    <tdml:warnings>
+      <tdml:warning>dfdl:encodingErrorPolicy="error"</tdml:warning>
+      <tdml:warning>is not yet implemented</tdml:warning>
+      <tdml:warning>'replace' value will be used</tdml:warning>
+    </tdml:warnings>
+
+		<tdml:infoset>
+			<tdml:dfdlInfoset>
+        <ex:root>
+          <ex:char>1</ex:char>
+          <ex:char>2</ex:char>
+          <ex:char>3</ex:char>
+          <ex:char>4</ex:char>
+          <ex:char>&#xFFFD;</ex:char> <!-- unicode replacement character -->
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+	<tdml:defineSchema name="missingEncodingErrorPolicy">
+		<xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format lengthKind="implicit" leadingSkip="0" sequenceKind="ordered" representation="text"
+      trailingSkip="0" encoding="US-ASCII" alignment="1" alignmentUnits="bytes" initiator=""
+      terminator="" separator="" ignoreCase="no" occursCountKind="implicit" lengthUnits="bytes"
+      initiatedContent="no" textPadKind="none" truncateSpecifiedLengthString="no" textTrimKind="none"
+      escapeSchemeRef="" textBidi="no" fillByte="%NUL;" floating="no" />
+
+		<xs:element name="root">
+			<xs:complexType>
+				<xs:sequence>
+					<xs:element name="char" type="xs:string" maxOccurs="unbounded" dfdl:lengthKind="explicit" dfdl:length="1" />
+				</xs:sequence>
+			</xs:complexType>
+		</xs:element>
+  </tdml:defineSchema>
+
+	<tdml:parserTestCase
+		name="requireEncodingErrorPolicyTrue" root="root"
+		model="missingEncodingErrorPolicy" description="Tunables - maxOccursBounds"
+		config="cfg_requireEncodingErrorPolicyPropertyTrue">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:errors>
+      <tdml:error>encodingErrorPolicy</tdml:error>
+      <tdml:error>is not defined</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+	<tdml:parserTestCase
+		name="requireEncodingErrorPolicyFalse" root="root"
+		model="missingEncodingErrorPolicy" description="Tunables - maxOccursBounds"
+		config="cfg_requireEncodingErrorPolicyPropertyFalse">
+
+		<tdml:document>
+			<tdml:documentPart type="text">1234</tdml:documentPart>
+		</tdml:document>
+
+    <tdml:warnings>
+      <tdml:warning>dfdl:encodingErrorPolicy</tdml:warning>
+      <tdml:warning>required but not defined</tdml:warning>
+    </tdml:warnings>
+
+		<tdml:infoset>
+			<tdml:dfdlInfoset>
+        <ex:root>
+          <ex:char>1</ex:char>
+          <ex:char>2</ex:char>
+          <ex:char>3</ex:char>
+          <ex:char>4</ex:char>
+        </ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+  </tdml:parserTestCase>
+
+  <tdml:defineSchema name="smallMaxHexBinary">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format ref="ex:GeneralFormat" />
+
+    <xs:element name="root" type="xs:hexBinary" dfdl:lengthKind="explicit" dfdl:length="11" />
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase
+    name="maxHexBinaryError" root="root"
+    model="smallMaxHexBinary"
+    config="cfg_smallMaxHexBinary">
+
+    <tdml:document>
+      <tdml:documentPart type="text"></tdml:documentPart>
+    </tdml:document>
+
+    <tdml:errors>
+      <tdml:error>Parse Error</tdml:error>
+      <tdml:error>xs:hexBinary</tdml:error>
+      <tdml:error>maximum</tdml:error>
+      <tdml:error>10</tdml:error>
+      <tdml:error>11</tdml:error>
+    </tdml:errors>
+
+  </tdml:parserTestCase>
+
+  <tdml:unparserTestCase
+    name="maxHexBinaryUnparseError" root="root"
+    model="smallMaxHexBinary"
+    config="cfg_smallMaxHexBinary">
+
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:root>00112233445566778899AA</ex:root>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+
+    <tdml:errors>
+      <tdml:error>Unparse Error</tdml:error>
+      <tdml:error>xs:hexBinary</tdml:error>
+      <tdml:error>maximum</tdml:error>
+      <tdml:error>10</tdml:error>
+      <tdml:error>11</tdml:error>
+    </tdml:errors>
+
+  </tdml:unparserTestCase>
+
+  <tdml:defineSchema name="intPatternRestriction">
+    <xs:include schemaLocation="/org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+    <dfdl:format ref="ex:GeneralFormat" lengthKind="delimited" />
+
+    <xs:element name="int">
+      <xs:simpleType>
+        <xs:restriction base="xs:int">
+          <xs:pattern value=".*[05]" /> <!-- must be a multiple of 5 -->
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:element>
+
+  </tdml:defineSchema>
+
+  <tdml:parserTestCase
+    name="invalidRestrictionPolicyError_01" root="int"
+    model="intPatternRestriction"
+    config="cfg_invalidRestrictionPolicyError"
+    validation="limited">
+    <tdml:document>201</tdml:document>
+    <tdml:errors>
+      <tdml:error>Schema Definition Error</tdml:error>
+      <tdml:error>Pattern restriction</tdml:error>
+      <tdml:error>string</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase
+    name="invalidRestrictionPolicyIgnore_01" root="int"
+    model="intPatternRestriction"
+    config="cfg_invalidRestrictionPolicyIgnore"
+    validation="limited">
+    <tdml:document>201</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:int>201</ex:int>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase
+    name="invalidRestrictionPolicyValidate_01" root="int"
+    model="intPatternRestriction"
+    config="cfg_invalidRestrictionPolicyValidate"
+    validation="limited">
+    <tdml:document>201</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:int>201</ex:int>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:validationErrors>
+      <tdml:error>failed facet checks</tdml:error>
+      <tdml:error>pattern</tdml:error>
+      <tdml:error>.*[05]</tdml:error>
+    </tdml:validationErrors>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase
+    name="invalidRestrictionPolicyValidate_02" root="int"
+    model="intPatternRestriction"
+    config="cfg_invalidRestrictionPolicyValidate"
+    validation="limited">
+    <tdml:document>200</tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <ex:int>200</ex:int>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

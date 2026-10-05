@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+   targetNamespace="http://b03.com" xmlns:b03="http://b03.com" xmlns:c03="http://c03.com">
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format textNumberCheckPolicy="lax" textNumberRounding="explicit" textNumberRoundingMode="roundUnnecessary" textNumberRoundingIncrement="0" textStandardDecimalSeparator="." textStandardGroupingSeparator="," textStandardExponentRep="E" textStandardZeroRep="0" textStandardInfinityRep="Inf" textStandardNaNRep="NaN" textNumberPattern="#,##0.###;-#,##0.###" separator="" ignoreCase="no" separatorPosition="infix" separatorSuppressionPolicy="anyEmpty" leadingSkip='0' initiator="" terminator="B" occursCountKind="parsed" initiatedContent="no" representation="text" textNumberRep="standard" encoding="ASCII" textTrimKind="none" 
+        escapeSchemeRef=""/>
+    </xs:appinfo>
+  </xs:annotation>
+  
+  <xs:import namespace="http://c03.com" schemaLocation="/org/apache/daffodil/section06/namespaces/multi_C_03.dfdl.xsd"/>
+
+  <xs:element name="nest" type="c03:nestType" dfdl:textNumberJustification="center"/>
+  
+  <xs:element name="nest2" type="c03:nestType" dfdl:textNumberPadCharacter="," dfdl:textNumberJustification="center"/>
+  
+  <xs:element name="nest3" type="c03:nestType2"/>
+  <xs:element name="nest4" type="c03:nestType3"/>
+  <xs:element name="nest5" type="c03:nestType4"/>
+  <xs:element name="nest5b" type="c03:nestType4b"/>
+  
+  <xs:element name="nestUnbounded" type="c03:nestType4"/>
+
+</xs:schema>
