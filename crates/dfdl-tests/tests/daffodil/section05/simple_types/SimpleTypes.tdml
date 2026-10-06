@@ -5079,7 +5079,7 @@
     <xs:element name="date01" type="xs:date" dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="'Today is the 'dd'th day of 'MMMM', year 'yyyy"
                 dfdl:lengthKind="explicit" dfdl:length="43" />
     <xs:element name="date01b" type="xs:date" dfdl:calendarPatternKind="explicit" dfdl:calendarPattern="'Today is the 'dd'th day of 'MMM', year 'Y"
-                dfdl:lengthKind="explicit" dfdl:length="38" />
+                dfdl:lengthKind="explicit" dfdl:length="39" />
     <xs:element name="date02" type="xs:date" dfdl:calendarCheckPolicy="lax" dfdl:calendarPatternKind="implicit" dfdl:lengthKind="explicit" dfdl:length="10" />
     <xs:element name="date03" type="xs:date" dfdl:calendarCheckPolicy="lax" dfdl:calendarPatternKind="implicit" dfdl:lengthKind="explicit" dfdl:length="11"
     			dfdl:textTrimKind="padChar" dfdl:textPadKind="padChar" />

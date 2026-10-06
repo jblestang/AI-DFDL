@@ -740,6 +740,8 @@
         s_props.length_units = crate::schema::ir::LengthUnits::Bits;
         s_props.length = Some(7);
         s_props.bit_order = BitOrder::LeastSignificantBitFirst;
+        s_props.alignment_units = crate::schema::ir::AlignmentUnits::Bits;
+        s_props.alignment = 1;
 
         let s_elem = CompiledElement {
             name: crate::types::QName::local("s"),

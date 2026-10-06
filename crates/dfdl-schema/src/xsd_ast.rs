@@ -233,7 +233,12 @@ impl XsdSchema {
                 self.named_complex_types.push((ctname, ct));
             }
         }
-        for (stname, st, props) in other.named_simple_types {
+        for (stname, st, mut props) in other.named_simple_types {
+            for binding in other.global_format.bindings() {
+                if props.get_property(&binding.key).is_none() {
+                    let _ = props.set_property(&binding.key, &binding.value);
+                }
+            }
             let effective_props = props;
             if let Some(existing) = self.named_simple_types.iter().find(|(n, _, _)| n == &stname) {
                 if existing.1 != st || existing.2 != effective_props {

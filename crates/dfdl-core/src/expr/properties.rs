@@ -534,6 +534,19 @@ impl PropertyStore {
         }
     }
 
+    /// Adds or updates namespace bindings in the in-scope namespaces of this property store.
+    ///
+    /// If a prefix is already bound, its URI is updated to reflect inner XML shadowing.
+    pub fn update_namespaces(&mut self, ns: &[(String, String)]) {
+        for (prefix, uri) in ns {
+            if let Some(existing) = self.in_scope_namespaces.iter_mut().find(|(p, _)| p == prefix) {
+                existing.1 = uri.clone();
+            } else {
+                let _ = try_push(&mut self.in_scope_namespaces, (prefix.clone(), uri.clone()));
+            }
+        }
+    }
+
     /// Returns `true` if the property store contains no bindings, asserts, set_variables, or assert_errors.
     #[inline]
     #[must_use]
@@ -759,6 +772,7 @@ impl PropertyStore {
                 || binding.key == "layerLengthUnits"
                 || binding.key == "layerBoundaryMark"
                 || binding.key == "repType"
+                || binding.key == "ignoreCase"
                 //|| binding.key == "dfdlx:repType"
                 || binding.key == "repValues"
                 //|| binding.key == "dfdlx:repValues"
@@ -2001,10 +2015,10 @@ impl PropertyStore {
                         crate::schema::ir::BinaryBooleanRep::NotSpecified
                     }
                 }),
-            document_final_terminator_can_be_missing: self
+            document_final_terminator_can_be_missing: !self
                 .get_property("documentFinalTerminatorCanBeMissing")
                 .or_else(|| parent.and_then(|p| p.get_property("documentFinalTerminatorCanBeMissing")))
-                .is_some_and(|v| v.eq_ignore_ascii_case("yes") || v.eq_ignore_ascii_case("true")),
+                .is_some_and(|v| v.eq_ignore_ascii_case("no") || v.eq_ignore_ascii_case("false")),
             decimal_signed: !self
                 .get_property("decimalSigned")
                 .or_else(|| parent.and_then(|p| p.get_property("decimalSigned")))
@@ -2150,6 +2164,16 @@ impl PropertyStore {
                 })
                 .map(|p| p.contains("stringAsXml=true"))
                 .unwrap_or(false),
+            empty_value_delimiter_policy: self
+                .get_property("emptyValueDelimiterPolicy")
+                .or_else(|| parent.and_then(|p| p.get_property("emptyValueDelimiterPolicy")))
+                .map(|s| match s.trim().to_ascii_lowercase().as_str() {
+                    "none" => crate::schema::ir::EmptyValueDelimiterPolicy::None,
+                    "initiator" => crate::schema::ir::EmptyValueDelimiterPolicy::Initiator,
+                    "terminator" => crate::schema::ir::EmptyValueDelimiterPolicy::Terminator,
+                    _ => crate::schema::ir::EmptyValueDelimiterPolicy::Both,
+                })
+                .unwrap_or(crate::schema::ir::EmptyValueDelimiterPolicy::Both),
         })
     }
 }
@@ -2481,6 +2505,51 @@ mod tests {
 
         store.remove_property("dfdl:lengthKind");
         assert_eq!(store.get_property("lengthKind"), None);
+    }
+
+    #[test]
+    fn test_property_store_update_namespaces_and_inheritance() {
+        let mut store = PropertyStore::new();
+        store.add_namespaces(&[
+            (String::new(), alloc::string::String::from("urn:default")),
+            (alloc::string::String::from("ex1"), alloc::string::String::from("urn:old")),
+        ]);
+
+        // Update namespaces simulates an inner element shadowing a prefix
+        store.update_namespaces(&[
+            (alloc::string::String::from("ex1"), alloc::string::String::from("http://example.com/new")),
+            (alloc::string::String::from("ex2"), alloc::string::String::from("http://example.com/2")),
+        ]);
+
+        let ns = store.in_scope_namespaces();
+        assert_eq!(
+            ns.iter().find(|(p, _)| p == "ex1").map(|(_, u)| u.as_str()),
+            Some("http://example.com/new")
+        );
+        assert_eq!(
+            ns.iter().find(|(p, _)| p == "ex2").map(|(_, u)| u.as_str()),
+            Some("http://example.com/2")
+        );
+        assert_eq!(
+            ns.iter().find(|(p, _)| p.is_empty()).map(|(_, u)| u.as_str()),
+            Some("urn:default")
+        );
+
+        // Test extending another store preserves target's existing prefix
+        let mut child_store = PropertyStore::new();
+        child_store.add_namespaces(&[
+            (alloc::string::String::from("ex1"), alloc::string::String::from("http://example.com/child")),
+        ]);
+        child_store.extend(&store);
+        let child_ns = child_store.in_scope_namespaces();
+        assert_eq!(
+            child_ns.iter().find(|(p, _)| p == "ex1").map(|(_, u)| u.as_str()),
+            Some("http://example.com/child")
+        );
+        assert_eq!(
+            child_ns.iter().find(|(p, _)| p == "ex2").map(|(_, u)| u.as_str()),
+            Some("http://example.com/2")
+        );
     }
 }
 

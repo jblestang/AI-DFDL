@@ -226,6 +226,31 @@ pub enum GenerateEscapeBlock {
     Always,
 }
 
+/// DFDL emptyValueDelimiterPolicy property (§12.3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum EmptyValueDelimiterPolicy {
+    /// Neither initiator nor terminator is present when empty.
+    None,
+    /// Initiator is present; terminator is not present when empty.
+    Initiator,
+    /// Terminator is present; initiator is not present when empty.
+    Terminator,
+    /// Both initiator and terminator are present when empty.
+    #[default]
+    Both,
+}
+
+/// An in-scope delimiter paired with its case sensitivity and encoding.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct InScopeDelimiter {
+    /// Literal delimiter text or expression pattern.
+    pub text: String,
+    /// Case sensitivity (`dfdl:ignoreCase`).
+    pub ignore_case: bool,
+    /// Encoding under which delimiter characters are encoded.
+    pub encoding: String,
+}
+
 /// Compiled DFDL escapeScheme definition (§13.2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct CompiledEscapeScheme {
@@ -776,6 +801,8 @@ pub struct ResolvedProperties {
     pub in_scope_namespaces: Vec<(String, String)>,
     /// Whether this string element represents XML content (`dfdlx:runtimeProperties="stringAsXml=true"`).
     pub string_as_xml: bool,
+    /// DFDL emptyValueDelimiterPolicy property (`dfdl:emptyValueDelimiterPolicy`), default `both` (§12.3.4).
+    pub empty_value_delimiter_policy: EmptyValueDelimiterPolicy,
 }
 
 impl ResolvedProperties {
@@ -854,13 +881,28 @@ impl SimpleTypeFacets {
 
     /// Checks whether `val` satisfies all defined facets and returns a detailed `DFDLError` if invalid.
     pub fn validate_value_detailed(&self, val: &DfdlValue) -> DFDLResult<()> {
-        let str_rep = alloc::format!("{}", val);
+        let pua_str;
+        let str_rep = match val {
+            DfdlValue::String(s) => {
+                pua_str = crate::util::remap_raw_chars_to_pua(s);
+                &pua_str
+            }
+            _ => {
+                pua_str = alloc::format!("{}", val);
+                &pua_str
+            }
+        };
 
         if let Some(ref pattern) = self.pattern {
             let anchored_pattern = alloc::format!("^(?:{})$", pattern);
-            match regex::Regex::new(&anchored_pattern) {
+            // W3C XML Schema 1.0 Part 2 §4.3.4 (Pattern Facet):
+            // The pattern facet uses the XML Schema regular expression language, which
+            // matches the entire literal representation and does not support lookarounds.
+            let re_res = regex::Regex::new(&anchored_pattern)
+                .or_else(|_| regex::Regex::new(pattern));
+            match re_res {
                 Ok(re) => {
-                    if !re.is_match(&str_rep) {
+                    if !re.is_match(str_rep) {
                         let msg = alloc::format!(
                             "Validation Error: failed facet checks due to: facet pattern match failed for {}",
                             pattern
@@ -1012,7 +1054,7 @@ impl SimpleTypeFacets {
                         num.partial_cmp(&bound),
                         Some(core::cmp::Ordering::Greater | core::cmp::Ordering::Equal)
                     ) {
-                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet minInclusive ({}) - Value '{}' is not facet-valid", min_inc, num);
+                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet minInclusive ({}) - Value '{}' is not facet-valid with respect to minInclusive '{}'", min_inc, num, min_inc);
                         return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
                     }
                 }
@@ -1023,7 +1065,7 @@ impl SimpleTypeFacets {
                         num.partial_cmp(&bound),
                         Some(core::cmp::Ordering::Less | core::cmp::Ordering::Equal)
                     ) {
-                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet maxInclusive ({}) - Value '{}' is not facet-valid", max_inc, num);
+                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet maxInclusive ({}) - Value '{}' is not facet-valid with respect to maxInclusive '{}'", max_inc, num, max_inc);
                         return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
                     }
                 }
@@ -1031,7 +1073,7 @@ impl SimpleTypeFacets {
             if let Some(ref min_exc) = self.min_exclusive {
                 if let Some(bound) = parse_bound(min_exc) {
                     if !matches!(num.partial_cmp(&bound), Some(core::cmp::Ordering::Greater)) {
-                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet minExclusive ({}) - Value '{}' is not facet-valid", min_exc, num);
+                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet minExclusive ({}) - Value '{}' is not facet-valid with respect to minExclusive '{}'", min_exc, num, min_exc);
                         return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
                     }
                 }
@@ -1039,7 +1081,7 @@ impl SimpleTypeFacets {
             if let Some(ref max_exc) = self.max_exclusive {
                 if let Some(bound) = parse_bound(max_exc) {
                     if !matches!(num.partial_cmp(&bound), Some(core::cmp::Ordering::Less)) {
-                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet maxExclusive ({}) - Value '{}' is not facet-valid", max_exc, num);
+                        let msg = alloc::format!("Validation Error: failed facet checks due to: facet maxExclusive ({}) - Value '{}' is not facet-valid with respect to maxExclusive '{}'", max_exc, num, max_exc);
                         return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
                     }
                 }
@@ -1185,7 +1227,7 @@ impl Default for ResolvedProperties {
             text_boolean_pad_character: None,
             binary_boolean_true_rep: BinaryBooleanRep::NotSpecified,
             binary_boolean_false_rep: BinaryBooleanRep::NotSpecified,
-            document_final_terminator_can_be_missing: false,
+            document_final_terminator_can_be_missing: true,
             decimal_signed: true,
             text_number_rep: TextNumberRep::default(),
             text_zoned_sign_style: TextZonedSignStyle::default(),
@@ -1199,6 +1241,7 @@ impl Default for ResolvedProperties {
             layer: None,
             in_scope_namespaces: Vec::new(),
             string_as_xml: false,
+            empty_value_delimiter_policy: EmptyValueDelimiterPolicy::default(),
         }
     }
 }

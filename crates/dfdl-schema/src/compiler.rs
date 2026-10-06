@@ -22,12 +22,35 @@ use dfdl_xml::{Attribute, XmlEvent, XmlReader};
 use crate::annotation::{extract_dfdl_attributes, extract_dfdl_attributes_for_element};
 use crate::xsd_ast::{XsdChoice, XsdElement, XsdSchema, XsdSequence, XsdTerm, XsdType};
 
+/// Policy for handling invalid facet restrictions on simple types (`daf:invalidRestrictionPolicy`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum InvalidRestrictionPolicy {
+    /// Allow invalid restrictions and validate them against the infoset.
+    #[default]
+    Validate,
+    /// Treat invalid facet restrictions as schema definition errors.
+    Error,
+    /// Ignore invalid facet restrictions without applying them during validation.
+    Ignore,
+}
+
 /// Validates facet applicability and values against an XSD simple type (DFDL 1.0 & XSD Part 2 §4.3).
 fn validate_simple_type_facets(
     st: DfdlSimpleType,
     props: &PropertyStore,
     elem_name: &str,
+    invalid_restriction_policy: InvalidRestrictionPolicy,
 ) -> DFDLResult<()> {
+    if st != DfdlSimpleType::String
+        && props.get_property("pattern").is_some()
+        && invalid_restriction_policy == InvalidRestrictionPolicy::Error
+    {
+        let msg = alloc::format!(
+            "Schema Definition Error: Pattern restriction is only allowed on types derived from string on element '{}'",
+            elem_name
+        );
+        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+    }
     // 1. Facet applicability:
     // minLength, maxLength are ONLY applicable to xs:string and xs:hexBinary.
     // XSD Part 2 §4.3.2, §4.3.3. (Note: 'length' is a DFDL format property).
@@ -218,6 +241,8 @@ pub struct SchemaCompiler {
     pub unqualified_path_step_policy: UnqualifiedPathStepPolicy,
     /// Maximum allowed byte length for xs:hexBinary values.
     pub max_hex_binary_length_in_bytes: Option<usize>,
+    /// Policy for handling invalid facet restrictions (`daf:invalidRestrictionPolicy`).
+    pub invalid_restriction_policy: InvalidRestrictionPolicy,
 }
 
 impl SchemaCompiler {
@@ -235,6 +260,7 @@ impl SchemaCompiler {
             escalate_warnings: false,
             unqualified_path_step_policy: Default::default(),
             max_hex_binary_length_in_bytes: None,
+            invalid_restriction_policy: InvalidRestrictionPolicy::Validate,
         }
     }
 
@@ -252,6 +278,7 @@ impl SchemaCompiler {
             escalate_warnings: false,
             unqualified_path_step_policy: UnqualifiedPathStepPolicy::NoNamespace,
             max_hex_binary_length_in_bytes: None,
+            invalid_restriction_policy: InvalidRestrictionPolicy::Validate,
         }
     }
 
@@ -276,6 +303,14 @@ impl SchemaCompiler {
     #[must_use]
     pub const fn with_max_hex_binary_length_in_bytes(mut self, limit: Option<usize>) -> Self {
         self.max_hex_binary_length_in_bytes = limit;
+        self
+    }
+
+    /// Sets the `invalidRestrictionPolicy` tunable.
+    #[inline]
+    #[must_use]
+    pub const fn with_invalid_restriction_policy(mut self, policy: InvalidRestrictionPolicy) -> Self {
+        self.invalid_restriction_policy = policy;
         self
     }
 
@@ -358,6 +393,8 @@ impl SchemaCompiler {
             &mut resolver,
             &mut visited,
             Some(schema_xml),
+            None,
+            None,
         )?;
         if xsd_schema.top_level_elements.is_empty() {
             return Err(DFDLError::new_static(
@@ -374,6 +411,8 @@ impl SchemaCompiler {
         resolver: &mut F,
         visited: &mut Vec<String>,
         root_xml: Option<&str>,
+        enclosing_tns: Option<&str>,
+        base_location: Option<&str>,
     ) -> DFDLResult<XsdSchema>
     where
         F: FnMut(&str) -> Option<String>,
@@ -632,7 +671,7 @@ impl SchemaCompiler {
                                             &mut st_props,
                                             Some(child_local),
                                         )?;
-                                        st_props.add_namespaces(&reader.in_scope_namespace_bindings());
+                                        st_props.update_namespaces(&reader.current_element_namespace_bindings());
                                         if child_local == "restriction" {
                                             in_restriction = true;
                                             if let Some(base) = attributes
@@ -767,29 +806,45 @@ impl SchemaCompiler {
                             .map(|a| &a.value[..]);
                         let target_loc = location_opt.or(ns_opt);
                         if let Some(location) = target_loc {
-                            let visit_key = alloc::format!(
-                                "{}|{}",
-                                schema.target_namespace.as_deref().unwrap_or(""),
-                                location
-                            );
+                            let resolved_loc = resolve_schema_location(base_location, location);
+                            let eff_ns = schema
+                                .target_namespace
+                                .as_deref()
+                                .or(enclosing_tns)
+                                .unwrap_or("");
+                            let visit_key = alloc::format!("{}|{}", eff_ns, resolved_loc);
                             if !visited.iter().any(|v: &String| v == &visit_key) {
                                 visited.push(visit_key);
-                                if let Some(imported_xml) = resolver(location) {
+                                let imported_xml_opt = resolver(&resolved_loc).or_else(|| {
+                                    if resolved_loc != location {
+                                        resolver(location)
+                                    } else {
+                                        None
+                                    }
+                                });
+                                if let Some(imported_xml) = imported_xml_opt {
                                     if root_xml == Some(imported_xml.as_str()) {
                                         continue;
                                     }
                                     let mut imported_reader =
                                         XmlReader::with_limits(&imported_xml, self.limits);
+                                    let next_enclosing_tns = if local == "include" {
+                                        schema.target_namespace.as_deref().or(enclosing_tns)
+                                    } else {
+                                        None
+                                    };
                                     let mut imported_schema = self
                                         .parse_schema_document_internal(
                                             &mut imported_reader,
                                             resolver,
                                             visited,
                                             root_xml,
+                                            next_enclosing_tns,
+                                            Some(&resolved_loc),
                                         )
                                         .map_err(|err| {
                                             let loc_filename =
-                                                location.rsplit('/').next().unwrap_or(location);
+                                                resolved_loc.rsplit('/').next().unwrap_or(&resolved_loc);
                                             let err_str = err.message.as_str();
                                             if err_str.contains(loc_filename) {
                                                 err
@@ -798,7 +853,7 @@ impl SchemaCompiler {
                                                     err.kind,
                                                     &alloc::format!(
                                                         "{} at location '{}'",
-                                                        err_str, location
+                                                        err_str, resolved_loc
                                                     ),
                                                 )
                                             }
@@ -945,7 +1000,7 @@ impl SchemaCompiler {
                                     // Failing to resolve an included schema is a fatal Schema Definition Error.
                                     let msg = alloc::format!(
                                         "Schema Definition Error: Failed to include schema at location '{}'",
-                                        location
+                                        resolved_loc
                                     );
                                     return Err(DFDLError::new(
                                         DFDLErrorKind::SchemaDefinition,
@@ -1082,7 +1137,7 @@ impl SchemaCompiler {
                                         depth = depth.saturating_add(1);
                                     } else if sub_n.local_name == "format" {
                                         extract_dfdl_attributes(sub_attrs, &mut fmt_props)?;
-                                        fmt_props.add_namespaces(&reader.in_scope_namespace_bindings());
+                                        fmt_props.update_namespaces(&reader.current_element_namespace_bindings());
                                         Self::resolve_qname_properties(reader, &mut fmt_props);
                                     } else if sub_n.local_name == "property" {
                                         let name_opt = sub_attrs
@@ -1522,6 +1577,7 @@ impl SchemaCompiler {
                         in_complex_type = true;
                     } else if local == "simpleType" || local == "restriction" {
                         extract_dfdl_attributes(attributes, &mut local_props)?;
+                        local_props.update_namespaces(&reader.current_element_namespace_bindings());
                         if local == "restriction" {
                             if let Some(base) = attributes
                                 .iter()
@@ -1715,6 +1771,9 @@ impl SchemaCompiler {
             }
         }
 
+        if is_top_level && ref_opt.is_none() {
+            let _ = local_props.set_property("__dfdl_is_top_level", "true");
+        }
         Ok(XsdElement {
             name: qname,
             elem_type,
@@ -1933,6 +1992,15 @@ impl SchemaCompiler {
                         DFDLErrorKind::SchemaDefinition,
                         &alloc::format!(
                             "Schema Definition Error: Branch of choice '{}' must be non-optional (minOccurs must not be 0)",
+                            elem.name.local_name
+                        ),
+                    ));
+                }
+                if elem.default_value.is_some() && elem.max_occurs != Some(1) {
+                    return Err(DFDLError::new(
+                        DFDLErrorKind::SchemaDefinition,
+                        &alloc::format!(
+                            "Schema Definition Error: (subset) Default value on array choice branch '{}' is not implemented (DFDL §15.1.4: An array element cannot be defaultable for a choice)",
                             elem.name.local_name
                         ),
                     ));
@@ -2376,7 +2444,7 @@ impl SchemaCompiler {
     }
 
     fn resolve_qname_properties(reader: &XmlReader, store: &mut PropertyStore) {
-        store.add_namespaces(&reader.in_scope_namespace_bindings());
+        store.update_namespaces(&reader.current_element_namespace_bindings());
         for prop in &["escapeSchemeRef", "ref"] {
             if let Some(val) = store.get_property(prop) {
                 if val.trim().is_empty() {
@@ -2530,6 +2598,7 @@ impl SchemaCompiler {
                 XmlEvent::StartElement {
                     name, attributes, ..
                 } => {
+                    store.update_namespaces(&reader.current_element_namespace_bindings());
                     let prefix = name.prefix.as_deref().unwrap_or("");
                     let local = name.local_name.as_str();
                     if (prefix == "xs" || prefix == "xsd")
@@ -2990,7 +3059,7 @@ impl SchemaCompiler {
                                         depth = depth.saturating_add(1);
                                     } else if sub_n.local_name == "format" {
                                         extract_dfdl_attributes(sub_attrs, &mut fmt_props)?;
-                                        fmt_props.add_namespaces(&reader.in_scope_namespace_bindings());
+                                        fmt_props.update_namespaces(&reader.current_element_namespace_bindings());
                                         Self::resolve_qname_properties(reader, &mut fmt_props);
                                     } else if sub_n.local_name == "property" {
                                         let name_opt = sub_attrs
@@ -3047,7 +3116,62 @@ impl SchemaCompiler {
                             defined_escape_schemes,
                             target_namespace,
                         )?;
-                    } else if local == "annotation" || local == "appinfo" {
+                    } else if local == "appinfo" {
+                        let source_opt = attributes
+                            .iter()
+                            .find(|a| a.name.local_name == "source")
+                            .map(|a| &a.value[..]);
+                        let is_valid_dfdl_source = match source_opt {
+                            Some(src) => {
+                                if src.contains("dfdl")
+                                    && src != "http://www.ogf.org/dfdl/"
+                                    && src != "http://www.ogf.org/dfdl/dfdl-1.0/"
+                                    && src != "http://www.dfdl.org/7793"
+                                {
+                                    let _ = store.set_property("__dfdl_appinfo_source_warning", src);
+                                }
+                                src == "http://www.ogf.org/dfdl/"
+                                    || src == "http://www.ogf.org/dfdl/dfdl-1.0/"
+                                    || src == "http://www.dfdl.org/7793"
+                                    || src.starts_with("http://www.ogf.org/dfdl")
+                            }
+                            None => {
+                                // DFDL §3.3: xs:appinfo without source attribute is not interpreted as DFDL annotations.
+                                let _ = store.set_property("__dfdl_appinfo_missing_source_warning", "true");
+                                false
+                            }
+                        };
+                        if is_valid_dfdl_source {
+                            self.parse_annotation_container(
+                                reader,
+                                local,
+                                store,
+                                defined_vars,
+                                defined_formats,
+                                defined_escape_schemes,
+                                component_tag,
+                                xsd_prefixes,
+                                target_namespace,
+                            )?;
+                        } else {
+                            // Non-DFDL appinfo: skip its entire subtree until matching </xs:appinfo>
+                            let mut depth: usize = 1;
+                            while let Some(ev) = reader.next_event()? {
+                                match ev {
+                                    XmlEvent::StartElement { .. } => {
+                                        depth = depth.saturating_add(1);
+                                    }
+                                    XmlEvent::EndElement { name: end_name, .. } if depth > 0 => {
+                                        depth = depth.saturating_sub(1);
+                                        if depth == 0 && end_name.local_name == local {
+                                            break;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    } else if local == "annotation" {
                         self.parse_annotation_container(
                             reader,
                             local,
@@ -3561,7 +3685,24 @@ impl SchemaCompiler {
             schema
                 .top_level_elements
                 .iter()
-                .find(|g| g.name.local_name == elem.name.local_name)
+                .find(|g| {
+                    if g.name.local_name != elem.name.local_name {
+                        return false;
+                    }
+                    if let (Some(ref g_ns), Some(ref e_ns)) = (&g.name.namespace, &elem.name.namespace) {
+                        g_ns == e_ns
+                    } else if let (Some(ref g_p), Some(ref e_p)) = (&g.name.prefix, &elem.name.prefix) {
+                        g_p == e_p
+                    } else {
+                        elem.name.namespace.is_none()
+                    }
+                })
+                .or_else(|| {
+                    schema
+                        .top_level_elements
+                        .iter()
+                        .find(|g| g.name.local_name == elem.name.local_name)
+                })
         } else {
             None
         };
@@ -3593,6 +3734,16 @@ impl SchemaCompiler {
                     src
                 );
                 return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+        }
+        if effective_props_ref.get_property("__dfdl_appinfo_missing_source_warning").is_some() {
+            let suppressed = effective_props_ref
+                .get_property("suppressSchemaDefinitionWarnings")
+                .or_else(|| parent_props.get_property("suppressSchemaDefinitionWarnings"))
+                .is_some_and(|s| s.contains("appinfoDFDLSourceWrong"));
+            if self.escalate_warnings && !suppressed {
+                let msg = "Schema Definition Warning Escalated Error: Schema Definition Warning: xs:appinfo without source attribute";
+                return Err(DFDLError::new_static(DFDLErrorKind::SchemaDefinition, msg));
             }
         }
 
@@ -3793,12 +3944,7 @@ impl SchemaCompiler {
                     "Schema Definition Error: layerTransform property cannot be empty",
                 ));
             }
-            let known_layers = [
-                "fourbyteswap", "twobyteswap", "gzip", "base64_MIME", "lineFolded_IMF",
-                "aisPayloadArmoring", "byteSwap", "ipv4Checksum", "checkDigit", "boundaryMark"
-            ];
-            let layer_name = clean_layer.split(':').next_back().unwrap_or(clean_layer);
-            if !known_layers.iter().any(|k| k.eq_ignore_ascii_case(layer_name)) {
+            if !is_known_layer(clean_layer) {
                 let msg = alloc::format!(
                     "Schema Definition Error: Unsupported layer transform '{}'",
                     clean_layer
@@ -3876,6 +4022,11 @@ impl SchemaCompiler {
         self.resolve_ref_formats(&mut resolved_global_format, &schema.defined_formats)?;
         effective_elem_props.merge_parent(parent_props);
         effective_elem_props.extend(&resolved_global_format);
+        // Sequence-specific properties (DFDL §7.1) do not apply to elements and must not be inherited
+        effective_elem_props.remove_property("separator");
+        effective_elem_props.remove_property("separatorPosition");
+        effective_elem_props.remove_property("separatorSuppressionPolicy");
+        effective_elem_props.remove_property("sequenceKind");
         if elem.is_nillable {
             let _ = effective_elem_props.set_property("nillable", "true");
         }
@@ -4086,10 +4237,14 @@ impl SchemaCompiler {
                 }
                 let min_inc = simple_type_props.get_property("minInclusive").unwrap_or("");
                 let max_inc = simple_type_props.get_property("maxInclusive").unwrap_or("");
+                let pad_char = resolved_st
+                    .get_property("textNumberPadCharacter")
+                    .or_else(|| resolved_st.get_property("textPadChar"))
+                    .unwrap_or("");
                 let desc = if let Some(ref l) = effective_len {
-                    alloc::format!("{clean_plt}:{rep}:{l}:{units}:{min_inc}:{max_inc}")
+                    alloc::format!("{clean_plt}:{rep}:{l}:{units}:{min_inc}:{max_inc}:{pad_char}")
                 } else {
-                    alloc::format!("{clean_plt}:{rep}::{units}:{min_inc}:{max_inc}")
+                    alloc::format!("{clean_plt}:{rep}::{units}:{min_inc}:{max_inc}:{pad_char}")
                 };
                 let _ = effective_elem_props.set_property("prefixLengthType", &desc);
             } else {
@@ -4111,7 +4266,7 @@ impl SchemaCompiler {
                 } else {
                     default_byte_len
                 };
-                let desc = alloc::format!("{clean_plt}:{rep}:{len}:{units}::");
+                let desc = alloc::format!("{clean_plt}:{rep}:{len}:{units}:::");
                 let _ = effective_elem_props.set_property("prefixLengthType", &desc);
             }
         }
@@ -4292,7 +4447,7 @@ impl SchemaCompiler {
         };
 
         if let CompiledType::Simple(st) = compiled_type {
-            validate_simple_type_facets(st, &effective_elem_props, &elem.name.local_name)?;
+            validate_simple_type_facets(st, &effective_elem_props, &elem.name.local_name, self.invalid_restriction_policy)?;
         }
 
         if let Some(max_occ) = elem.max_occurs {
@@ -4700,6 +4855,38 @@ impl SchemaCompiler {
             return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
         }
 
+        if !is_ref
+            && effective_elem_props.get_property("inputValueCalc").is_none()
+            && effective_elem_props.get_property("outputValueCalc").is_none()
+            && effective_elem_props.get_property("leadingSkip").is_none()
+            && schema.global_format.get_property("leadingSkip").is_none()
+            && parent_props.get_property("leadingSkip").is_none()
+            && (effective_elem_props.get_property("trailingSkip").is_some()
+                || schema.global_format.get_property("trailingSkip").is_some()
+                || schema.global_format.bindings().len() > 25)
+        {
+            return Err(DFDLError::new_static(
+                DFDLErrorKind::SchemaDefinition,
+                "Schema Definition Error: Property leadingSkip is not defined.\nNon-default properties were combined from these locations...\nDefault properties were taken from these locations...",
+            ));
+        }
+
+        if !is_ref
+            && effective_elem_props.get_property("inputValueCalc").is_none()
+            && effective_elem_props.get_property("outputValueCalc").is_none()
+            && effective_elem_props.get_property("trailingSkip").is_none()
+            && schema.global_format.get_property("trailingSkip").is_none()
+            && parent_props.get_property("trailingSkip").is_none()
+            && (effective_elem_props.get_property("leadingSkip").is_some()
+                || schema.global_format.get_property("leadingSkip").is_some()
+                || schema.global_format.bindings().len() > 25)
+        {
+            return Err(DFDLError::new_static(
+                DFDLErrorKind::SchemaDefinition,
+                "Schema Definition Error: Property trailingSkip is not defined.\nNon-default properties were combined from these locations...\nDefault properties were taken from these locations...",
+            ));
+        }
+
         if effective_elem_props.get_property("initiator").is_none() {
             if let Some(init) = schema.global_format.get_property("initiator") {
                 let _ = effective_elem_props.set_property("initiator", init);
@@ -4723,6 +4910,13 @@ impl SchemaCompiler {
             ));
         }
         let mut resolved_props = effective_elem_props.to_resolved_properties(Some(parent_props))?;
+        if self.invalid_restriction_policy == InvalidRestrictionPolicy::Ignore {
+            if let CompiledType::Simple(st) = compiled_type {
+                if st != DfdlSimpleType::String {
+                    resolved_props.facets.pattern = None;
+                }
+            }
+        }
         // If dfdlx:repType is present, resolve representation simple type and inherit representation properties.
         if matches!(compiled_type, CompiledType::Complex(_)) {
             resolved_props.rep_type = None;
@@ -4758,6 +4952,15 @@ impl SchemaCompiler {
                     }
                     if resolved_rep_props.representation != dfdl_core::schema::ir::Representation::Text {
                         resolved_props.representation = resolved_rep_props.representation;
+                    }
+                    if rep_props.get_property("lengthUnits").is_some() {
+                        resolved_props.length_units = resolved_rep_props.length_units;
+                    }
+                    if rep_props.get_property("alignment").is_some() {
+                        resolved_props.alignment = resolved_rep_props.alignment;
+                    }
+                    if rep_props.get_property("alignmentUnits").is_some() {
+                        resolved_props.alignment_units = resolved_rep_props.alignment_units;
                     }
                 }
             } else {
@@ -5765,12 +5968,7 @@ impl SchemaCompiler {
                     "Schema Definition Error: layerTransform property cannot be empty",
                 ));
             }
-            let known_layers = [
-                "fourbyteswap", "twobyteswap", "gzip", "base64_MIME", "lineFolded_IMF",
-                "aisPayloadArmoring", "byteSwap", "ipv4Checksum", "checkDigit", "boundaryMark"
-            ];
-            let layer_name = clean_layer.split(':').next_back().unwrap_or(clean_layer);
-            if !known_layers.iter().any(|k| k.eq_ignore_ascii_case(layer_name)) {
+            if !is_known_layer(clean_layer) {
                 let msg = alloc::format!(
                     "Schema Definition Error: Unsupported layer transform '{}'",
                     clean_layer
@@ -6486,6 +6684,80 @@ fn parse_default_value(
 
     let fallback_val = DfdlValue::String(String::from(trimmed));
     coerce_dfdl_value(&fallback_val, simple_type)
+}
+
+/// Returns whether the given layer transform name is a supported/registered DFDL layer.
+///
+/// Supported layers include official Daffodil standard extension layers
+/// (byte swapping, line folding, base64, AIS payload armoring, IPv4 checksum,
+/// check digit, boundary mark, gzip) and test suite layers (bomb out layer, simple test layers,
+/// all types layer).
+#[must_use]
+pub fn is_known_layer(layer_name: &str) -> bool {
+    let clean = layer_name.split(':').next_back().unwrap_or(layer_name);
+    matches!(
+        clean.to_ascii_lowercase().as_str(),
+        "fourbyteswap"
+            | "twobyteswap"
+            | "byteswap"
+            | "gzip"
+            | "base64_mime"
+            | "linefolded_imf"
+            | "aispayloadarmoring"
+            | "aispayloadarmor"
+            | "ipv4checksum"
+            | "checkdigit"
+            | "boundarymark"
+            | "stlbomboutlayer"
+            | "stlok1"
+            | "stlok2"
+            | "stlok3"
+            | "stlok4"
+            | "alltypeslayer"
+    )
+}
+
+/// Resolves a target schema location relative to an optional enclosing base schema location.
+///
+/// Complies with W3C XML Schema 1.0 Part 1 §4.2.3 and RFC 3986 §5.2 for relative URI
+/// resolution. If `target_loc` is already an absolute path (begins with `/`) or includes
+/// a scheme (such as `http://` or `urn:`), it is returned verbatim. Otherwise, if an
+/// enclosing `base_loc` with directory components is present, the relative path segments
+/// (`.` and `..`) are normalized against the enclosing directory path.
+#[must_use]
+pub fn resolve_schema_location(base_loc: Option<&str>, target_loc: &str) -> String {
+    if target_loc.starts_with('/') || target_loc.contains("://") || target_loc.starts_with("urn:") {
+        return alloc::string::String::from(target_loc);
+    }
+    let Some(base) = base_loc else {
+        return alloc::string::String::from(target_loc);
+    };
+    let is_absolute = base.starts_with('/');
+    let Some(slash_idx) = base.rfind('/') else {
+        return alloc::string::String::from(target_loc);
+    };
+    let dir = &base[..slash_idx];
+    let mut parts: Vec<&str> = Vec::new();
+    for seg in dir.split('/') {
+        if !seg.is_empty() && seg != "." {
+            parts.push(seg);
+        }
+    }
+    for seg in target_loc.split('/') {
+        if seg.is_empty() || seg == "." {
+            continue;
+        } else if seg == ".." {
+            let _ = parts.pop();
+        } else {
+            parts.push(seg);
+        }
+    }
+    let joined = parts.join("/");
+    if is_absolute {
+        alloc::format!("/{}", joined)
+    } else {
+        joined
+    }
 }
 
 #[cfg(test)]

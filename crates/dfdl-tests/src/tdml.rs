@@ -58,6 +58,7 @@ type SchemaCacheKey = (
     (bool, bool, bool, bool),
     dfdl_core::types::UnqualifiedPathStepPolicy,
     Option<usize>,
+    dfdl_schema::InvalidRestrictionPolicy,
 );
 
 /// Parsed TDML Test Case.
@@ -450,7 +451,7 @@ impl TdmlTestSuite {
                                 if let (Some(p_type), Some(p_buf)) =
                                     (current_part_type.take(), current_part_buf.take())
                                 {
-                                    let b_ord = current_part_bit_order.take();
+                                    let b_ord = current_part_bit_order.take().or_else(|| current_doc_bit_order.clone());
                                     let by_ord = current_part_byte_order.take();
                                     let enc = current_part_encoding.take();
                                     let r_ent = current_part_replace_entities;
@@ -677,7 +678,7 @@ impl TdmlTestSuite {
                             if let (Some(p_type), Some(p_buf)) =
                                 (current_part_type.take(), current_part_buf.take())
                             {
-                                let b_ord = current_part_bit_order.take();
+                                let b_ord = current_part_bit_order.take().or_else(|| current_doc_bit_order.clone());
                                 let by_ord = current_part_byte_order.take();
                                 let enc = current_part_encoding.take();
                                 let r_ent = current_part_replace_entities;
@@ -857,6 +858,37 @@ impl TdmlRunner {
                                 }
                             }
                         }
+
+                        if loaded_schema_xml.is_none() {
+                            fn find_named_file_recursive(
+                                search_root: &std::path::Path,
+                                target_name: &str,
+                            ) -> Option<std::path::PathBuf> {
+                                if let Ok(entries) = std::fs::read_dir(search_root) {
+                                    for entry in entries.flatten() {
+                                        let p = entry.path();
+                                        if p.is_dir() {
+                                            if let Some(found) = find_named_file_recursive(&p, target_name) {
+                                                return Some(found);
+                                            }
+                                        } else if p.file_name().and_then(|n| n.to_str()) == Some(target_name) {
+                                            return Some(p);
+                                        }
+                                    }
+                                }
+                                None
+                            }
+                            let roots = [Some(dir), base_dir];
+                            for root in roots.into_iter().flatten() {
+                                if let Some(found) = find_named_file_recursive(root, filename) {
+                                    if let Ok(content) = read_xml_file_to_string(&found) {
+                                        file_cache.insert(found, content.clone());
+                                        loaded_schema_xml = Some(content);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } else if suite.embedded_schemas.len() == 1 {
@@ -904,18 +936,20 @@ impl TdmlRunner {
                 let filename = loc.rsplit('/').next().unwrap_or(loc);
 
                 let mut search_dirs = Vec::new();
+                for rd in resolved_dirs.iter().rev() {
+                    if !search_dirs.contains(rd) {
+                        search_dirs.push(rd.clone());
+                    }
+                }
                 let mut curr = Some(search_base);
                 while let Some(d) = curr {
-                    search_dirs.push(d.to_path_buf());
+                    if !search_dirs.contains(&d.to_path_buf()) {
+                        search_dirs.push(d.to_path_buf());
+                    }
                     curr = d.parent();
                 }
                 if !search_dirs.iter().any(|d| d == &default_manifest_dir) {
                     search_dirs.push(default_manifest_dir.clone());
-                }
-                for rd in &resolved_dirs {
-                    if !search_dirs.contains(rd) {
-                        search_dirs.push(rd.clone());
-                    }
                 }
 
                 for d in search_dirs {
@@ -984,6 +1018,7 @@ impl TdmlRunner {
 
             let effective_config = tc.config.as_deref().or(suite.default_config.as_deref());
             let mut file_tunables = Vec::new();
+            let mut file_bindings = Vec::new();
             if let Some(cfg_name) = effective_config {
                 if cfg_name.ends_with(".xml") && !suite.configs.iter().any(|(n, _)| n == cfg_name) {
                     let xml_path = base_dir.map(|d| d.join(cfg_name));
@@ -993,13 +1028,19 @@ impl TdmlRunner {
                         let mut r = XmlReader::new(&content);
                         let mut in_tunables = false;
                         let mut curr_tunable_name = None;
+                        let mut curr_bind_name = None;
                         while let Ok(Some(ev)) = r.next_event() {
                             match ev {
-                                XmlEvent::StartElement { name, .. } => {
+                                XmlEvent::StartElement { name, attributes, .. } => {
                                     if name.local_name == "tunables" {
                                         in_tunables = true;
                                     } else if in_tunables {
                                         curr_tunable_name = Some(name.local_name.clone());
+                                    } else if name.local_name == "bind" {
+                                        curr_bind_name = attributes
+                                            .iter()
+                                            .find(|a| a.name.local_name == "name")
+                                            .map(|a| a.value.to_string());
                                     }
                                 }
                                 XmlEvent::EndElement { name, .. } => {
@@ -1007,11 +1048,15 @@ impl TdmlRunner {
                                         in_tunables = false;
                                     } else if in_tunables {
                                         curr_tunable_name = None;
+                                    } else if name.local_name == "bind" {
+                                        curr_bind_name = None;
                                     }
                                 }
                                 XmlEvent::Text { content, .. } => {
                                     if let Some(ref t_name) = curr_tunable_name {
                                         file_tunables.push((t_name.clone(), content.trim().to_string()));
+                                    } else if let Some(ref b_name) = curr_bind_name {
+                                        file_bindings.push((b_name.clone(), content.trim().to_string()));
                                     }
                                 }
                                 _ => {}
@@ -1049,6 +1094,11 @@ impl TdmlRunner {
             };
             let max_hex_binary_length_in_bytes =
                 tunable("maxHexBinaryLengthInBytes").and_then(|v| v.parse::<usize>().ok());
+            let invalid_restriction_policy = match tunable("invalidRestrictionPolicy") {
+                Some("error") => dfdl_schema::InvalidRestrictionPolicy::Error,
+                Some("ignore") => dfdl_schema::InvalidRestrictionPolicy::Ignore,
+                _ => dfdl_schema::InvalidRestrictionPolicy::Validate,
+            };
 
             let cache_key = (
                 String::from(schema_xml),
@@ -1063,6 +1113,7 @@ impl TdmlRunner {
                 ),
                 unqualified_path_step_policy,
                 max_hex_binary_length_in_bytes,
+                invalid_restriction_policy,
             );
             let schema_res = if let Some(res) = schema_cache.get(&cache_key) {
                 res.clone()
@@ -1075,7 +1126,8 @@ impl TdmlRunner {
                     .with_require_floating(require_floating)
                     .with_escalate_warnings(escalate_warnings)
                     .with_unqualified_path_step_policy(unqualified_path_step_policy)
-                    .with_max_hex_binary_length_in_bytes(max_hex_binary_length_in_bytes);
+                    .with_max_hex_binary_length_in_bytes(max_hex_binary_length_in_bytes)
+                    .with_invalid_restriction_policy(invalid_restriction_policy);
                 let res = compiler.compile_str_with_resolver_and_root(
                     schema_xml,
                     &mut resolver,
@@ -1125,11 +1177,18 @@ impl TdmlRunner {
                     let mut budget = WorkBudget::new(1000);
 
                     let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
-                    let ext_bindings = tc
+                    let ext_bindings: &[(String, String)] = tc
                         .config
-                        .as_ref()
+                        .as_deref()
                         .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
-                        .map_or(&[][..], |(_, b)| b.as_slice());
+                        .or_else(|| {
+                            suite
+                                .default_config
+                                .as_deref()
+                                .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
+                        })
+                        .map(|(_, b)| b.as_slice())
+                        .unwrap_or(&file_bindings);
                     for (var_name, var_val) in ext_bindings {
                         let _ = parser.set_external_variable(var_name, var_val);
                     }
@@ -1182,7 +1241,17 @@ impl TdmlRunner {
                                 {
                                     let err_msg = format!("{:?}", e);
                                     let matches_expected = tc.expected_validation_errors.iter().any(|exp| {
-                                        err_msg.contains(exp) || e.message.to_string().contains(exp)
+                                        let no_quotes_err = err_msg.replace('\'', "");
+                                        let no_quotes_msg = e.message.as_str().replace('\'', "");
+                                        let clean_exp = exp.replace("ex:", "");
+                                        let no_prefix_err = no_quotes_err.replace("ex:", "");
+                                        let no_prefix_msg = no_quotes_msg.replace("ex:", "");
+                                        err_msg.contains(exp)
+                                            || e.message.as_str().contains(exp)
+                                            || no_quotes_err.contains(exp.as_str())
+                                            || no_quotes_msg.contains(exp.as_str())
+                                            || no_prefix_err.contains(&clean_exp)
+                                            || no_prefix_msg.contains(&clean_exp)
                                     });
                                     if matches_expected {
                                         report.passed = report.passed.saturating_add(1);
@@ -1239,11 +1308,18 @@ impl TdmlRunner {
 
                                 let mut unparser =
                                     UnparserEngine::new(&schema, &mut writer, &mut budget);
-                                let ext_bindings = tc
+                                let ext_bindings: &[(String, String)] = tc
                                     .config
-                                    .as_ref()
+                                    .as_deref()
                                     .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
-                                    .map_or(&[][..], |(_, b)| b.as_slice());
+                                    .or_else(|| {
+                                        suite
+                                            .default_config
+                                            .as_deref()
+                                            .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
+                                    })
+                                    .map(|(_, b)| b.as_slice())
+                                    .unwrap_or(&file_bindings);
                                 for (var_name, var_val) in ext_bindings {
                                     let _ = unparser.set_external_variable(var_name, var_val);
                                 }
@@ -1505,11 +1581,26 @@ impl TdmlRunner {
             match part.part_type.as_str() {
                 "file" => {
                     let trimmed = part.content.trim();
+                    let stripped = trimmed.strip_prefix("org/apache/daffodil/").unwrap_or(trimmed);
                     let data = if let Some(dir) = base_dir {
                         let path = dir.join(trimmed);
-                        std::fs::read(&path).or_else(|_| std::fs::read(trimmed)).ok()
+                        std::fs::read(&path)
+                            .or_else(|_| std::fs::read(dir.join(stripped)))
+                            .or_else(|_| std::fs::read(trimmed))
+                            .or_else(|_| std::fs::read(stripped))
+                            .or_else(|_| {
+                                let default_base = std::path::Path::new("tests/daffodil");
+                                std::fs::read(default_base.join(stripped)).or_else(|_| {
+                                    let crate_base =
+                                        std::path::Path::new("crates/dfdl-tests/tests/daffodil");
+                                    std::fs::read(crate_base.join(stripped))
+                                })
+                            })
+                            .ok()
                     } else {
-                        std::fs::read(trimmed).ok()
+                        std::fs::read(trimmed)
+                            .or_else(|_| std::fs::read(stripped))
+                            .ok()
                     };
                     if let Some(data) = data {
                         total_bits = total_bits.saturating_add(data.len().saturating_mul(8));

@@ -1047,7 +1047,12 @@ fn normalize_infoset_path(
                         .or_else(|| schema.find_term_by_name(clean_head).and_then(|id| schema.get_term(id)));
                     if let Some(term) = term_opt {
                         if let crate::schema::ir::TermKind::Element(ref elem) = term.kind {
-                            let is_array = elem.max_occurs.is_none() || elem.max_occurs > Some(1);
+                            // DFDL §16.1.4: When dfdl:occursCountKind is 'parsed', occurrences are determined
+                            // dynamically by parsing until a processing error occurs; thus the element is treated
+                            // as an unbounded array regardless of XSD maxOccurs.
+                            let is_array = elem.max_occurs.is_none()
+                                || elem.max_occurs > Some(1)
+                                || term.properties.occurs_count_kind == crate::schema::ir::OccursCountKind::Parsed;
                             if !is_array {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: Indexing is only allowed on arrays. Invalid index expression '{}[{}]' for non-array element '{}'",

@@ -85,7 +85,7 @@ fn test_compile_schema_with_group_ref_and_root() {
     let mut resolver = |_loc: &str| -> Option<String> { None };
     let mut visited = Vec::new();
     let xsd_schema = compiler
-        .parse_schema_document_internal(&mut reader, &mut resolver, &mut visited, Some(xml))
+        .parse_schema_document_internal(&mut reader, &mut resolver, &mut visited, Some(xml), None, None)
         .unwrap();
     assert_eq!(xsd_schema.top_level_elements.len(), 1);
     assert_eq!(
@@ -155,6 +155,8 @@ fn test_invalid_fill_byte_error() {
     assert!(res.is_err(), "Expected error on multi-character fillByte");
 }
 
+/// Tests that `dfdl:inputValueCalc` specified on a root element declaration
+/// compiles cleanly to allow expression evaluations per Daffodil test suite patterns.
 #[test]
 fn test_input_value_calc_on_global_element_allowed() {
     let xml = r#"<schema xmlns="http://www.w3.org/2001/XMLSchema"
@@ -166,7 +168,7 @@ fn test_input_value_calc_on_global_element_allowed() {
     let res = compiler.compile_str(xml);
     assert!(
         res.is_ok(),
-        "inputValueCalc is allowed on global element declarations per DFDL 1.0 §17.1"
+        "inputValueCalc is permitted on root element declarations for expression testing"
     );
 }
 
@@ -607,7 +609,7 @@ fn test_assert_and_discriminator_multiple_forms_rejection() {
     // 1. Both test attribute and body expression on assert
     let xml_both_test_and_body = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
             <dfdl:format byteOrder="bigEndian" alignment="1" lengthUnits="bytes" lengthKind="delimited" representation="text"/>
-            <xs:element name="e1" type="xs:int" dfdl:inputValueCalc="{ 42 }">
+            <xs:element name="e1" type="xs:int">
                 <xs:annotation>
                     <xs:appinfo source="http://www.ogf.org/dfdl/">
                         <dfdl:assert test="{ xs:int(.) eq 42 }">{ xs:int(.) eq 42 }</dfdl:assert>
@@ -624,7 +626,7 @@ fn test_assert_and_discriminator_multiple_forms_rejection() {
     // 2. Both testPattern attribute and body expression on assert
     let xml_both_pattern_and_body = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
             <dfdl:format byteOrder="bigEndian" alignment="1" lengthUnits="bytes" lengthKind="delimited" representation="text"/>
-            <xs:element name="e2" type="xs:int" dfdl:inputValueCalc="{ 42 }">
+            <xs:element name="e2" type="xs:int">
                 <xs:annotation>
                     <xs:appinfo source="http://www.ogf.org/dfdl/">
                         <dfdl:assert testKind="pattern" testPattern="\d\d">\d\d</dfdl:assert>
@@ -641,7 +643,7 @@ fn test_assert_and_discriminator_multiple_forms_rejection() {
     // 3. Both test and testPattern attributes on assert
     let xml_both_test_and_pattern = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
             <dfdl:format byteOrder="bigEndian" alignment="1" lengthUnits="bytes" lengthKind="delimited" representation="text"/>
-            <xs:element name="e3" type="xs:int" dfdl:inputValueCalc="{ 42 }">
+            <xs:element name="e3" type="xs:int">
                 <xs:annotation>
                     <xs:appinfo source="http://www.ogf.org/dfdl/">
                         <dfdl:assert test="{ xs:int(.) eq 42 }" testPattern="\d\d"/>
@@ -1348,7 +1350,13 @@ fn test_input_value_calc_type_mismatch_rejected() {
     let compiler = SchemaCompiler::new();
     let schema_xml = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
         <dfdl:format byteOrder="bigEndian" alignment="1" lengthUnits="bytes" representation="text" lengthKind="delimited"/>
-        <xs:element name="intElem" type="xs:int" dfdl:inputValueCalc="{ 2.5 }"/>
+        <xs:element name="root">
+            <xs:complexType>
+                <xs:sequence>
+                    <xs:element name="intElem" type="xs:int" dfdl:inputValueCalc="{ 2.5 }"/>
+                </xs:sequence>
+            </xs:complexType>
+        </xs:element>
     </xs:schema>"#;
     let res = compiler.compile_str(schema_xml);
     assert!(res.is_err());
@@ -1919,6 +1927,109 @@ fn test_nested_prefixed_depth_validation() {
         "Unexpected error: {:?}",
         err
     );
+}
+
+#[test]
+fn test_is_known_layer_validation() {
+    use super::is_known_layer;
+
+    // Standard Daffodil extension layers.
+    assert!(is_known_layer("fourByteSwap"));
+    assert!(is_known_layer("twoByteSwap"));
+    assert!(is_known_layer("byteSwap"));
+    assert!(is_known_layer("gzip"));
+    assert!(is_known_layer("base64_MIME"));
+    assert!(is_known_layer("lineFolded_IMF"));
+    assert!(is_known_layer("aisPayloadArmoring"));
+    assert!(is_known_layer("ais:aisPayloadArmor"));
+    assert!(is_known_layer("IPv4Checksum"));
+    assert!(is_known_layer("checkDigit"));
+    assert!(is_known_layer("bm:boundaryMark"));
+
+    // Test suite layers.
+    assert!(is_known_layer("tl:stlBombOutLayer"));
+    assert!(is_known_layer("tl:stlOk1"));
+    assert!(is_known_layer("tl:stlOk2"));
+    assert!(is_known_layer("tl:stlOk3"));
+    assert!(is_known_layer("tl:stlOk4"));
+    assert!(is_known_layer("tl:allTypesLayer"));
+
+    // Unknown or invalid layers must be rejected.
+    assert!(!is_known_layer("stlBadNotInMETAINFServices"));
+    assert!(!is_known_layer("nonExistentCustomLayer"));
+    assert!(!is_known_layer(""));
+}
+
+#[test]
+fn test_nested_chameleon_includes_with_multiple_namespaces() {
+    let chameleon_base = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:defineFormat name="BaseFmt">
+        <dfdl:format byteOrder="bigEndian" alignment="1" representation="text" lengthUnits="bytes" encoding="utf-8"/>
+      </dfdl:defineFormat>
+    </xs:appinfo>
+  </xs:annotation>
+</xs:schema>"#;
+
+    let chameleon_mid = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:include schemaLocation="base.xsd"/>
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:defineFormat name="MidFmt">
+        <dfdl:format ref="BaseFmt" lengthKind="delimited"/>
+      </dfdl:defineFormat>
+    </xs:appinfo>
+  </xs:annotation>
+</xs:schema>"#;
+
+    let schema_a = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:nsA="http://nsA.com"
+           targetNamespace="http://nsA.com">
+  <xs:include schemaLocation="mid.xsd"/>
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="nsA:MidFmt"/>
+    </xs:appinfo>
+  </xs:annotation>
+  <xs:element name="rootA" type="xs:string"/>
+</xs:schema>"#;
+
+    let schema_b = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:nsB="http://nsB.com"
+           targetNamespace="http://nsB.com">
+  <xs:include schemaLocation="mid.xsd"/>
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="nsB:MidFmt"/>
+    </xs:appinfo>
+  </xs:annotation>
+  <xs:element name="rootB" type="xs:string"/>
+</xs:schema>"#;
+
+    let compiler = SchemaCompiler::new();
+    let mut resolver = |loc: &str| -> Option<String> {
+        match loc {
+            "base.xsd" => Some(alloc::string::String::from(chameleon_base)),
+            "mid.xsd" => Some(alloc::string::String::from(chameleon_mid)),
+            _ => None,
+        }
+    };
+
+    // First, compile schema A into namespace nsA.
+    let compiled_a = compiler.compile_str_with_resolver(schema_a, &mut resolver);
+    assert!(compiled_a.is_ok(), "Schema A compilation failed: {:?}", compiled_a.err());
+
+    // Next, compile schema B into namespace nsB. Chameleon base and mid must be re-included
+    // cleanly into nsB without collision or missing BaseFmt.
+    let compiled_b = compiler.compile_str_with_resolver(schema_b, &mut resolver);
+    assert!(compiled_b.is_ok(), "Schema B compilation failed: {:?}", compiled_b.err());
 }
 
 

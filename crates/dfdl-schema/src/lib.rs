@@ -12,7 +12,7 @@ pub mod annotation;
 pub mod compiler;
 pub mod xsd_ast;
 
-pub use compiler::SchemaCompiler;
+pub use compiler::{InvalidRestrictionPolicy, SchemaCompiler};
 pub use xsd_ast::{XsdElement, XsdSchema, XsdSequence, XsdTerm, XsdType};
 
 #[cfg(test)]

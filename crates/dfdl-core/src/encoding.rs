@@ -303,6 +303,100 @@ pub fn utf8_lossy_with_offsets(bytes: &[u8]) -> (String, Vec<usize>) {
     (text, offsets)
 }
 
+/// Decodes UTF-32 while tracking character byte offsets.
+fn decode_utf32_with_offsets(bytes: &[u8], is_big_endian: bool) -> (String, Vec<usize>) {
+    let mut out = String::new();
+    let mut offsets = Vec::new();
+    let mut i = 0usize;
+    while i.saturating_add(3) < bytes.len() {
+        let b0 = *bytes.get(i).unwrap_or(&0) as u32;
+        let b1 = *bytes.get(i.saturating_add(1)).unwrap_or(&0) as u32;
+        let b2 = *bytes.get(i.saturating_add(2)).unwrap_or(&0) as u32;
+        let b3 = *bytes.get(i.saturating_add(3)).unwrap_or(&0) as u32;
+        let code_point = if is_big_endian {
+            (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+        } else {
+            (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
+        };
+        let ch = char::from_u32(code_point).unwrap_or('?');
+        let _ = try_push(&mut offsets, i);
+        out.push(ch);
+        i = i.saturating_add(4);
+    }
+    let _ = try_push(&mut offsets, bytes.len());
+    (out, offsets)
+}
+
+/// Decodes UTF-16 while tracking character byte offsets across single code units and surrogate pairs.
+fn decode_utf16_with_offsets(bytes: &[u8], is_big_endian: bool) -> (String, Vec<usize>) {
+    let mut u16_units = Vec::new();
+    let mut unit_offsets = Vec::new();
+    let mut i = 0usize;
+    while i.saturating_add(1) < bytes.len() {
+        let b1 = *bytes.get(i).unwrap_or(&0) as u16;
+        let b2 = *bytes.get(i.saturating_add(1)).unwrap_or(&0) as u16;
+        let unit = if is_big_endian {
+            (b1 << 8) | b2
+        } else {
+            (b2 << 8) | b1
+        };
+        if try_push(&mut u16_units, unit).is_err() || try_push(&mut unit_offsets, i).is_err() {
+            break;
+        }
+        i = i.saturating_add(2);
+    }
+    let mut out = String::new();
+    let mut offsets = Vec::new();
+    let mut u16_idx = 0usize;
+    for res in char::decode_utf16(u16_units.iter().copied()) {
+        if let Some(&off) = unit_offsets.get(u16_idx) {
+            let _ = try_push(&mut offsets, off);
+        }
+        let ch = res.unwrap_or('?');
+        out.push(ch);
+        u16_idx = u16_idx.saturating_add(if ch.len_utf16() == 2 { 2 } else { 1 });
+    }
+    let _ = try_push(&mut offsets, bytes.len());
+    (out, offsets)
+}
+
+/// Decodes text bytes into a Unicode string while tracking source byte offsets.
+///
+/// Returns a tuple containing:
+/// 1. The decoded [`String`] text.
+/// 2. A vector of source byte offsets `offsets`, where `offsets[i]` is the exact byte index in
+///    `bytes` where the `i`-th character begins, with a final element `offsets[n]` equal to `bytes.len()`.
+///
+/// This provides exact byte mapping from decoded character index to source byte count across
+/// all character encodings (UTF-8, UTF-16, UTF-32, and single-byte encodings like ISO-8859-*, ASCII, EBCDIC).
+/// Used by DFDL pattern-based length evaluation (DFDL v1.0 §12.3.4) to convert regular expression matches
+/// to precise source byte or bit counts.
+#[must_use]
+pub fn decode_text_bytes_with_offsets(bytes: &[u8], encoding_name: &str) -> (String, Vec<usize>) {
+    let enc_clean = encoding_name.trim().to_ascii_uppercase();
+    match enc_clean.as_str() {
+        "UTF-8" | "UTF8" => utf8_lossy_with_offsets(bytes),
+        "UTF-16" | "UTF-16BE" | "UTF16BE" => decode_utf16_with_offsets(bytes, true),
+        "UTF-16LE" | "UTF16LE" => decode_utf16_with_offsets(bytes, false),
+        "UTF-32" | "UTF-32BE" | "UTF32BE" => decode_utf32_with_offsets(bytes, true),
+        "UTF-32LE" | "UTF32LE" => decode_utf32_with_offsets(bytes, false),
+        _ => {
+            // For single-byte 8-bit encodings (ASCII, ISO-8859-*, EBCDIC, CP1252, etc.),
+            // each decoded character maps 1-to-1 to a single source byte.
+            if let Ok(text) = decode_text_bytes(bytes, encoding_name) {
+                let mut offsets = Vec::with_capacity(bytes.len().saturating_add(1));
+                for i in 0..=bytes.len() {
+                    let _ = try_push(&mut offsets, i);
+                }
+                (text, offsets)
+            } else {
+                utf8_lossy_with_offsets(bytes)
+            }
+        }
+    }
+}
+
+
 /// Returns `true` when `bytes` are not valid for `encoding_name`. Only UTF-8 is checked: the
 /// Daffodil TDML suite expects US-ASCII input above 0x7F to keep the `replace` behaviour even with
 /// `encodingErrorPolicy="error"`. Used for `encodingErrorPolicy="error"` on parse.
@@ -375,6 +469,8 @@ pub fn encoding_char_bits(encoding: &str) -> Option<usize> {
         Some(6)
     } else if enc_upper.contains("7-BIT") || enc_upper.contains("ASCII-7-BIT-PACKED") {
         Some(7)
+    } else if enc_upper.contains("8-BIT-PACKED") || enc_upper.contains("ISO-88591-8-BIT-PACKED") {
+        Some(8)
     } else {
         None
     }
@@ -383,17 +479,54 @@ pub fn encoding_char_bits(encoding: &str) -> Option<usize> {
 /// Returns the mandatory character alignment / unit width in bits for the given encoding.
 ///
 /// Per DFDL §12.1.2: If representation is 'text', alignment must be a multiple of the
-/// character width (in bits) of the encoding.
+/// character width (in bits) of the encoding, except for packed and sub-byte encodings
+/// whose mandatory text alignment is 1 bit.
 #[must_use]
 pub fn encoding_unit_bits(encoding: &str) -> usize {
-    if let Some(cb) = encoding_char_bits(encoding) {
-        return cb;
-    }
     let upper = encoding.trim().to_ascii_uppercase();
-    if upper.contains("UTF-32") || upper.contains("UCS-4") {
+    if upper.contains("PACKED")
+        || upper.contains("BITS")
+        || upper.contains("BASE4")
+        || upper.contains("OCTAL")
+        || upper.contains("HEX")
+        || upper.contains("1-BIT")
+        || upper.contains("2-BIT")
+        || upper.contains("3-BIT")
+        || upper.contains("4-BIT")
+        || upper.contains("5-BIT")
+        || upper.contains("6-BIT")
+        || upper.contains("7-BIT")
+    {
+        1
+    } else if upper.contains("UTF-32") || upper.contains("UCS-4") {
         32
     } else if upper.contains("UTF-16") || upper.contains("UCS-2") {
         16
+    } else {
+        8
+    }
+}
+
+/// Returns the mandatory text alignment in bits for a given character set encoding.
+///
+/// Per DFDL v1.0 §12.1 (Aligned Data) and Daffodil specification:
+/// - All standard character set encodings required by DFDL (including UTF-8, UTF-16,
+///   UTF-16BE/LE, UTF-32, UTF-32BE/LE, ASCII, and ISO-8859 variants) have an 8-bit
+///   (1-byte) mandatory alignment requirement.
+/// - Sub-byte, packed, and bit-level encodings (such as 5-bit packed, 7-bit ASCII,
+///   octal, base4, or custom bit encodings) have a 1-bit mandatory alignment requirement.
+#[must_use]
+pub fn encoding_mandatory_alignment_bits(encoding: &str) -> usize {
+    let upper = encoding.trim().to_ascii_uppercase();
+    if upper.starts_with("X-DFDL-")
+        || upper.contains("-BIT")
+        || upper.contains("BIT-PACKED")
+        || upper.contains("PACKED")
+        || upper.contains("BASE4")
+        || upper.contains("OCTAL")
+        || upper.contains("HEX")
+    {
+        1
     } else {
         8
     }

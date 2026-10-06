@@ -183,6 +183,25 @@ impl<'a> XmlReader<'a> {
         res
     }
 
+    /// Returns prefix-to-URI bindings declared explicitly on the current element.
+    ///
+    /// This reflects only the XML namespace attributes (`xmlns` and `xmlns:prefix`)
+    /// defined directly on the topmost element of the current reader scope, without
+    /// outer ancestor namespaces.
+    #[must_use]
+    pub fn current_element_namespace_bindings(&self) -> Vec<(String, String)> {
+        let mut res = Vec::new();
+        if let Some(frame) = self.ns_stack.last() {
+            if let Some(ref def_uri) = frame.default_ns {
+                let _ = try_push(&mut res, (String::new(), def_uri.clone()));
+            }
+            for (p, u) in &frame.bindings {
+                let _ = try_push(&mut res, (p.clone(), u.clone()));
+            }
+        }
+        res
+    }
+
     /// Decodes XML entities in character or attribute content.
     fn decode_entities(&self, text: &'a str) -> DFDLResult<Cow<'a, str>> {
         if !text.contains('&') {
@@ -683,5 +702,37 @@ mod tests {
         let child_bindings = reader.in_scope_namespace_bindings();
         assert!(child_bindings.iter().any(|(p, u)| p == "ns1" && u == "http://ns1.com"));
         assert!(child_bindings.iter().any(|(p, u)| p == "ns2" && u == "http://ns2.com"));
+    }
+
+    #[test]
+    fn test_xml_reader_current_element_namespace_bindings() {
+        let xml = "<root xmlns=\"http://default.com\" xmlns:ns1=\"http://ns1.com\"><child xmlns:ns2=\"http://ns2.com\"><grandchild>val</grandchild></child></root>";
+        let mut reader = XmlReader::new(xml);
+
+        // Read <root>
+        let ev1 = reader.next_event().unwrap().unwrap();
+        assert!(matches!(ev1, XmlEvent::StartElement { .. }));
+        let root_local = reader.current_element_namespace_bindings();
+        assert!(root_local.iter().any(|(p, u)| p.is_empty() && u == "http://default.com"));
+        assert!(root_local.iter().any(|(p, u)| p == "ns1" && u == "http://ns1.com"));
+        assert!(!root_local.iter().any(|(p, _)| p == "ns2"));
+
+        // Read <child>
+        let ev2 = reader.next_event().unwrap().unwrap();
+        assert!(matches!(ev2, XmlEvent::StartElement { .. }));
+        let child_local = reader.current_element_namespace_bindings();
+        assert!(child_local.iter().any(|(p, u)| p == "ns2" && u == "http://ns2.com"));
+        // Parent ns1 is in scope but NOT declared on child
+        assert!(!child_local.iter().any(|(p, _)| p == "ns1"));
+
+        // Read <grandchild>
+        let ev3 = reader.next_event().unwrap().unwrap();
+        assert!(matches!(ev3, XmlEvent::StartElement { .. }));
+        let grandchild_local = reader.current_element_namespace_bindings();
+        assert!(grandchild_local.is_empty());
+        // All ancestors are still in scope
+        let grandchild_in_scope = reader.in_scope_namespace_bindings();
+        assert!(grandchild_in_scope.iter().any(|(p, u)| p == "ns1" && u == "http://ns1.com"));
+        assert!(grandchild_in_scope.iter().any(|(p, u)| p == "ns2" && u == "http://ns2.com"));
     }
 }

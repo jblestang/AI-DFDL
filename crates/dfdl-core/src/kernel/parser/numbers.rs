@@ -21,7 +21,7 @@ pub(crate) fn sanitize_numeric_string(s: &str) -> String {
         || clean.starts_with('£')
     {
         clean.remove(0);
-        clean = clean.trim().to_string();
+        clean = clean.trim_start().to_string();
     }
     clean
 }
@@ -268,7 +268,7 @@ pub(crate) fn extract_pattern_affixes(
             if ch == '*' {
                 // Pad escape: skip the following pad character
                 chars.next();
-            } else if ch == '#' || ch == '0' || ch == '@' {
+            } else if ch == '#' || ch == '0' || ch == '@' || ch == 'P' || ch == 'p' || ch == 'V' || ch == 'v' {
                 if first_digit_idx.is_none() {
                     first_digit_idx = Some(idx);
                 }
@@ -462,6 +462,10 @@ pub(crate) fn normalize_text_number(
                 (true, stripped)
             } else if let Some(stripped) = clean.strip_prefix('+') {
                 (false, stripped)
+            } else if let Some(stripped) = clean.strip_suffix('-') {
+                (true, stripped)
+            } else if let Some(stripped) = clean.strip_suffix('+') {
+                (false, stripped)
             } else {
                 (false, clean)
             };
@@ -472,6 +476,10 @@ pub(crate) fn normalize_text_number(
         let (is_negative, rest) = if let Some(stripped) = clean.strip_prefix('-') {
             (true, stripped)
         } else if let Some(stripped) = clean.strip_prefix('+') {
+            (false, stripped)
+        } else if let Some(stripped) = clean.strip_suffix('-') {
+            (true, stripped)
+        } else if let Some(stripped) = clean.strip_suffix('+') {
             (false, stripped)
         } else {
             (false, clean)
@@ -489,22 +497,117 @@ pub(crate) fn normalize_text_number(
         return None;
     }
 
+    if let Some(pat) = pattern {
+        let has_vp = pat.contains(['V', 'v', 'P', 'p']);
+        if has_vp {
+            // DFDL §13.7.1: It is a parse error if the data contains an explicit decimal point
+            // character when 'V' or 'P' is specified in textNumberPattern.
+            if body.contains('.') || (!decimal_sep.is_empty() && body.contains(decimal_sep)) {
+                return None;
+            }
+        }
+    }
+
     let sanitized_grp = if !grouping_sep.is_empty() && body.contains(grouping_sep) {
         body.replace(grouping_sep, "")
     } else {
         body.to_string()
     };
 
-    if !decimal_sep.is_empty() && decimal_sep != "." && grouping_sep != "." && sanitized_grp.contains('.') {
-        return None;
-    }
-    let normalized_dec = if !decimal_sep.is_empty() && decimal_sep != "." && sanitized_grp.contains(decimal_sep) {
-        sanitized_grp.replace(decimal_sep, ".")
+    let sanitized_spaces = if let Some(pad) = pad_char {
+        if !pad.is_empty() && trim_kind == TextTrimKind::None {
+            sanitized_grp
+                .chars()
+                .filter(|c| !pad.contains(*c))
+                .collect::<String>()
+        } else {
+            sanitized_grp
+        }
     } else {
         sanitized_grp
     };
 
-    Some((is_neg, normalized_dec))
+    if !decimal_sep.is_empty() && decimal_sep != "." && grouping_sep != "." && sanitized_spaces.contains('.') {
+        return None;
+    }
+    let normalized_dec = if !decimal_sep.is_empty() && decimal_sep != "." && sanitized_spaces.contains(decimal_sep) {
+        sanitized_spaces.replace(decimal_sep, ".")
+    } else {
+        sanitized_spaces
+    };
+
+    let scaled_dec = if let Some(pat) = pattern {
+        if pat.contains(['V', 'v', 'P', 'p']) && !normalized_dec.contains('.') {
+            apply_virtual_decimal_and_scaling(&normalized_dec, pat)
+        } else {
+            normalized_dec
+        }
+    } else {
+        normalized_dec
+    };
+
+    Some((is_neg, scaled_dec))
+}
+
+/// Applies DFDL §13.7.1 virtual decimal point ('V' / 'v') and scaling factor ('P' / 'p')
+/// to an unsigned digits string.
+///
+/// - 'V' or 'v': Virtual decimal point. The number of digit positions following 'V' defines
+///   the scale factor (number of fraction digits).
+/// - 'P' or 'p' at the start (left): Implied leading zeros between decimal point and digits ("0." + "0"*p + digits).
+/// - 'P' or 'p' at the end (right): Implied trailing zeros between digits and decimal point (digits + "0"*p).
+pub(crate) fn apply_virtual_decimal_and_scaling(digits: &str, pattern: &str) -> String {
+    let first_part = pattern.split(';').next().unwrap_or(pattern);
+    let (pos_pre, pos_suf, _, _) = extract_pattern_affixes(first_part);
+    let body = first_part
+        .strip_prefix(pos_pre)
+        .unwrap_or(first_part)
+        .strip_suffix(pos_suf)
+        .unwrap_or(first_part);
+
+    if let Some(v_idx) = body.find(['V', 'v']) {
+        let after_v = body.get(v_idx.saturating_add(1)..).unwrap_or("");
+        let v_scale = after_v.chars().take_while(|c| *c == '0' || *c == '#').count();
+        if v_scale > 0 {
+            if digits.len() <= v_scale {
+                let mut s = alloc::string::String::from("0.");
+                for _ in 0..(v_scale.saturating_sub(digits.len())) {
+                    s.push('0');
+                }
+                s.push_str(digits);
+                s
+            } else {
+                let split_pos = digits.len().saturating_sub(v_scale);
+                let mut s = alloc::string::String::with_capacity(digits.len().saturating_add(1));
+                s.push_str(digits.get(..split_pos).unwrap_or(""));
+                s.push('.');
+                s.push_str(digits.get(split_pos..).unwrap_or(""));
+                s
+            }
+        } else {
+            alloc::string::ToString::to_string(digits)
+        }
+    } else {
+        let p_left = body.chars().take_while(|c| *c == 'P' || *c == 'p').count();
+        let p_right = body.chars().rev().take_while(|c| *c == 'P' || *c == 'p').count();
+        if p_left > 0 {
+            let mut s = alloc::string::String::from("0.");
+            for _ in 0..p_left {
+                s.push('0');
+            }
+            s.push_str(digits);
+            s
+        } else if p_right > 0 {
+            let mut s = alloc::string::String::with_capacity(digits.len().saturating_add(p_right));
+            s.push_str(digits);
+            for _ in 0..p_right {
+                s.push('0');
+            }
+            s
+        } else {
+            alloc::string::ToString::to_string(digits)
+        }
+    }
 }
 
 /// Extracts (primary, secondary) grouping sizes from a pattern body.
@@ -720,8 +823,9 @@ pub(crate) fn parse_strict_int_i64(
         (body_str, None)
     };
 
+    let pat_has_decimal = pattern.is_some_and(|p| p.contains(decimal_sep) || p.contains('.'));
     if let Some(dec) = dec_part {
-        if dec.chars().any(|c| c != '0') {
+        if !pat_has_decimal || dec.chars().any(|c| c != '0') {
             return None;
         }
     }
@@ -997,6 +1101,22 @@ pub(crate) fn convert_big_radix_to_dec(digits: &str, base: u32) -> DFDLResult<St
 ///
 /// Returns `Ok((digit, sign))` where `digit` is the decoded ASCII digit character `'0'..='9'`,
 /// and `sign` is `Some(true)` if negative, `Some(false)` if positive, or `None` if unsigned.
+fn decode_ebcdic_alternate_negative_digit(ch: char) -> Option<char> {
+    match ch {
+        '^' => Some('0'),
+        '£' => Some('1'),
+        '¥' => Some('2'),
+        '·' => Some('3'),
+        '©' => Some('4'),
+        '§' => Some('5'),
+        '¶' => Some('6'),
+        '¼' => Some('7'),
+        '½' => Some('8'),
+        '¾' => Some('9'),
+        _ => None,
+    }
+}
+
 pub(crate) fn decode_zoned_overpunch_digit(
     ch: char,
     style: crate::schema::ir::TextZonedSignStyle,
@@ -1004,37 +1124,47 @@ pub(crate) fn decode_zoned_overpunch_digit(
 ) -> DFDLResult<(char, Option<bool>)> {
     use crate::schema::ir::TextZonedSignStyle;
     match style {
-        TextZonedSignStyle::AsciiStandard => match ch {
-            '0'..='9' => Ok((ch, Some(false))),
-            '{' => Ok(('0', Some(false))),
-            'A'..='I' => {
-                let offset = (ch as u32).saturating_sub('A' as u32);
-                let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
-                Ok((d, Some(false)))
+        TextZonedSignStyle::AsciiStandard => {
+            if is_ebcdic {
+                if let Some(d) = decode_ebcdic_alternate_negative_digit(ch) {
+                    return Ok((d, Some(true)));
+                }
             }
-            'p'..='y' if is_ebcdic => Err(DFDLError::new(
-                DFDLErrorKind::Parse,
-                &alloc::format!("Parse Error: Invalid zoned digit: {}", ch),
-            )),
-            'p' => Ok(('0', Some(true))),
-            'q'..='y' => {
-                let offset = (ch as u32).saturating_sub('q' as u32);
-                let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
-                Ok((d, Some(true)))
+            match ch {
+                '0'..='9' => Ok((ch, Some(false))),
+                '{' => Ok(('0', Some(false))),
+                'A'..='I' => {
+                    let offset = (ch as u32).saturating_sub('A' as u32);
+                    let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
+                    Ok((d, Some(false)))
+                }
+                'p'..='y' if is_ebcdic => Err(DFDLError::new(
+                    DFDLErrorKind::Parse,
+                    &alloc::format!("Parse Error: Invalid zoned digit: {}", ch),
+                )),
+                'p' => Ok(('0', Some(true))),
+                'q'..='y' => {
+                    let offset = (ch as u32).saturating_sub('q' as u32);
+                    let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
+                    Ok((d, Some(true)))
+                }
+                '}' => Ok(('0', Some(true))),
+                'J'..='R' => {
+                    let offset = (ch as u32).saturating_sub('J' as u32);
+                    let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
+                    Ok((d, Some(true)))
+                }
+                _ => Err(DFDLError::new(
+                    DFDLErrorKind::Parse,
+                    &alloc::format!("Parse Error: Invalid zoned digit: {}", ch),
+                )),
             }
-            '}' => Ok(('0', Some(true))),
-            'J'..='R' => {
-                let offset = (ch as u32).saturating_sub('J' as u32);
-                let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
-                Ok((d, Some(true)))
-            }
-            _ => Err(DFDLError::new(
-                DFDLErrorKind::Parse,
-                &alloc::format!("Parse Error: Invalid zoned digit: {}", ch),
-            )),
-        },
+        }
         TextZonedSignStyle::AsciiTranslatedEbcdic => {
             if is_ebcdic {
+                if let Some(d) = decode_ebcdic_alternate_negative_digit(ch) {
+                    return Ok((d, Some(true)));
+                }
                 match ch {
                     '0'..='9' => Ok((ch, Some(false))),
                     '{' => Ok(('0', Some(false))),
@@ -1046,12 +1176,6 @@ pub(crate) fn decode_zoned_overpunch_digit(
                     '}' => Ok(('0', Some(true))),
                     'J'..='R' => {
                         let offset = (ch as u32).saturating_sub('J' as u32);
-                        let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
-                        Ok((d, Some(true)))
-                    }
-                    '\u{b0}' => Ok(('0', Some(true))),
-                    '\u{b1}'..='\u{b9}' => {
-                        let offset = (ch as u32).saturating_sub(0xb1);
                         let d = core::char::from_u32(('1' as u32).saturating_add(offset)).unwrap_or('1');
                         Ok((d, Some(true)))
                     }
@@ -1161,11 +1285,6 @@ pub(crate) fn parse_zoned_number(
         pat_before_v.ends_with('+')
     };
 
-    let v_scale = if let Some(after_v) = pat_after_v {
-        after_v.chars().filter(|c| *c == '0' || *c == '#').count()
-    } else {
-        0
-    };
 
     let clean = input.trim();
     if clean.is_empty() {
@@ -1214,22 +1333,8 @@ pub(crate) fn parse_zoned_number(
         ));
     }
 
-    let num_str = if v_scale > 0 {
-        if digits.len() <= v_scale {
-            let mut padded = String::from("0.");
-            for _ in 0..(v_scale.saturating_sub(digits.len())) {
-                padded.push('0');
-            }
-            padded.push_str(&digits);
-            padded
-        } else {
-            let split_pos = digits.len().saturating_sub(v_scale);
-            let mut s = String::with_capacity(digits.len().saturating_add(1));
-            s.push_str(&digits[..split_pos]);
-            s.push('.');
-            s.push_str(&digits[split_pos..]);
-            s
-        }
+    let num_str = if pat.contains(['V', 'v', 'P', 'p']) {
+        apply_virtual_decimal_and_scaling(&digits, pat)
     } else {
         digits
     };
@@ -1604,6 +1709,40 @@ mod grouping_tests {
             parse_flexible_f64_with_props("5:00", ":", ",", None, None, None, false),
             Some(5.0)
         );
+    }
+
+    #[test]
+    fn test_apply_virtual_decimal_and_scaling() {
+        // V virtual decimal
+        assert_eq!(apply_virtual_decimal_and_scaling("123", "##0V00;-##0V00"), "1.23");
+        assert_eq!(apply_virtual_decimal_and_scaling("5", "##0V00"), "0.05");
+        assert_eq!(apply_virtual_decimal_and_scaling("999999999", "######0V00"), "9999999.99");
+
+        // P on left: implied zeros after decimal point
+        assert_eq!(apply_virtual_decimal_and_scaling("123", "PP000;-PP000"), "0.00123");
+
+        // P on right: implied trailing zeros
+        assert_eq!(apply_virtual_decimal_and_scaling("123", "##0PP+;##0PP-"), "12300");
+
+        // Affixes with P on right
+        let (pos_pre, pos_suf, _, _) = extract_pattern_affixes("##0PP+");
+        assert_eq!(pos_pre, "");
+        assert_eq!(pos_suf, "+");
+
+        let (neg_pre, neg_suf, _, _) = extract_pattern_affixes("##0PP-");
+        assert_eq!(neg_pre, "");
+        assert_eq!(neg_suf, "-");
+
+        // Normalization of 123- with ##0PP+;##0PP-
+        let t = TextTrimKind::None;
+        assert_eq!(
+            normalize_text_number("123-", Some("##0PP+;##0PP-"), ".", ",", None, t),
+            Some((true, alloc::string::String::from("12300")))
+        );
+
+        // Explicit decimal point with V/P must be rejected
+        assert!(normalize_text_number("1.23", Some("##0V00"), ".", ",", None, t).is_none());
+        assert!(normalize_text_number("1.23", Some("PP000"), ".", ",", None, t).is_none());
     }
 }
 

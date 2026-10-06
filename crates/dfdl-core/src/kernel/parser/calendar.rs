@@ -206,6 +206,7 @@ pub(crate) fn parse_calendar_with_pattern(
     let mut year: Option<i32> = None;
     let mut month: Option<u32> = None;
     let mut day: Option<u32> = None;
+    let mut day_of_year: Option<u32> = None;
     let mut target_dow: Option<u32> = None;
     let mut hour: Option<u32> = None;
     let mut minute: Option<u32> = None;
@@ -244,7 +245,7 @@ pub(crate) fn parse_calendar_with_pattern(
                 p_idx = p_idx.saturating_add(1);
             }
             text = text.strip_prefix(&lit)?;
-        } else if ch == 'w' || ch == 'W' || ch == 'u' || ch == 'F' || ch == 'g' {
+        } else if ch == 'w' || ch == 'W' || ch == 'F' || ch == 'g' {
             let p_ch = ch;
             let mut count = 0usize;
             while pat_chars.get(p_idx).copied() == Some(p_ch) {
@@ -300,15 +301,16 @@ pub(crate) fn parse_calendar_with_pattern(
                     text = rest;
                 }
             }
-        } else if ch == 'y' {
+        } else if matches!(ch, 'y' | 'Y' | 'u' | 'r') {
+            let y_char = ch;
             let mut count = 0usize;
-            while pat_chars.get(p_idx).copied() == Some('y') {
+            while pat_chars.get(p_idx).copied() == Some(y_char) {
                 count = count.saturating_add(1);
                 p_idx = p_idx.saturating_add(1);
             }
             let next_digit = pat_chars
                 .get(p_idx)
-                .is_some_and(|&c| "yMdHhKkmsSuwWFe".contains(c));
+                .is_some_and(|&c| "yYurMdDHhKkmsSuwWFe".contains(c));
             let num_len = if count == 2 {
                 2
             } else if next_digit {
@@ -327,6 +329,28 @@ pub(crate) fn parse_calendar_with_pattern(
             } else {
                 year = Some(y_val);
             }
+        } else if ch == 'D' {
+            let mut count = 0usize;
+            while pat_chars.get(p_idx).copied() == Some('D') {
+                count = count.saturating_add(1);
+                p_idx = p_idx.saturating_add(1);
+            }
+            let next_digit = pat_chars
+                .get(p_idx)
+                .is_some_and(|&c| "yYurMdDHhKkmsSuwWFe".contains(c));
+            let max_digits = if next_digit { count } else { count.max(3) };
+            let num_len = text
+                .chars()
+                .take(max_digits)
+                .take_while(|c| c.is_ascii_digit())
+                .count();
+            if num_len == 0 {
+                return None;
+            }
+            let (part, rest) = text.split_at_checked(num_len)?;
+            let doy: u32 = part.parse().ok()?;
+            day_of_year = Some(doy);
+            text = rest;
         } else if ch == 'M' {
             let mut count = 0usize;
             while pat_chars.get(p_idx).copied() == Some('M') {
@@ -542,7 +566,27 @@ pub(crate) fn parse_calendar_with_pattern(
     }
 
     if day.is_none() {
-        if let Some(tdow) = target_dow {
+        if let Some(doy) = day_of_year {
+            let y_val = year.unwrap_or(1970);
+            let is_leap = (y_val % 4 == 0 && y_val % 100 != 0) || (y_val % 400 == 0);
+            let days_in_months: [u32; 12] = if is_leap {
+                [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            } else {
+                [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            };
+            let mut rem = doy;
+            let mut m_calc = 1u32;
+            for (m_idx, &dim) in days_in_months.iter().enumerate() {
+                if rem <= dim {
+                    m_calc = (m_idx as u32).saturating_add(1);
+                    break;
+                }
+                rem = rem.saturating_sub(dim);
+                m_calc = (m_idx as u32).saturating_add(2);
+            }
+            month = Some(m_calc.min(12));
+            day = Some(rem.max(1));
+        } else if let Some(tdow) = target_dow {
             let m_val = month.unwrap_or(1);
             let y_val = year.unwrap_or(1970);
             for d_cand in 1..=7 {
@@ -621,7 +665,7 @@ pub(crate) fn parse_calendar_with_pattern(
     }
 }
 
-fn normalize_timezone_suffix(tz: &str) -> Option<String> {
+fn normalize_timezone_suffix(tz: &str, check_policy: crate::schema::ir::CalendarCheckPolicy) -> Option<String> {
     let t = tz.trim();
     if t.is_empty() {
         return Some(String::new());
@@ -630,7 +674,21 @@ fn normalize_timezone_suffix(tz: &str) -> Option<String> {
         return Some(String::from("Z"));
     }
     if t == "-00:00" || t == "-0000" || t == "-00" {
-        return None;
+        if check_policy == crate::schema::ir::CalendarCheckPolicy::Lax {
+            return Some(String::from("+00:00"));
+        } else {
+            return None;
+        }
+    }
+    if check_policy == crate::schema::ir::CalendarCheckPolicy::Lax {
+        if t.eq_ignore_ascii_case("GMT") || t.eq_ignore_ascii_case("UTC") {
+            return Some(String::from("+00:00"));
+        }
+        if let Some(r) = t.strip_prefix("GMT").or_else(|| t.strip_prefix("UTC")) {
+            if r.starts_with('+') || r.starts_with('-') {
+                return normalize_timezone_suffix(r, check_policy);
+            }
+        }
     }
     let (sign, rest) = if let Some(r) = t.strip_prefix('+') {
         ('+', r)
@@ -667,8 +725,8 @@ fn normalize_timezone_suffix(tz: &str) -> Option<String> {
     None
 }
 
-fn is_valid_timezone_suffix(tz: &str) -> bool {
-    normalize_timezone_suffix(tz).is_some()
+fn is_valid_timezone_suffix(tz: &str, check_policy: crate::schema::ir::CalendarCheckPolicy) -> bool {
+    normalize_timezone_suffix(tz, check_policy).is_some()
 }
 
 pub(crate) fn parse_calendar_from_text(
@@ -791,7 +849,7 @@ pub(crate) fn parse_calendar_from_text(
                 }
             }
             let tz_part = clean.get(year_str.len().saturating_add(1).saturating_add(parts.get(1).map_or(0, |p| p.len())).saturating_add(1).saturating_add(day_str.len())..).unwrap_or("");
-            if !is_valid_timezone_suffix(tz_part) {
+            if !is_valid_timezone_suffix(tz_part, check_policy) {
                 return Err(DFDLError::new(
                     DFDLErrorKind::Parse,
                     &alloc::format!("Parse Error: Unable to parse xs:date from text: '{}'", s),
@@ -800,10 +858,15 @@ pub(crate) fn parse_calendar_from_text(
             Ok(clean.to_string())
         }
         DfdlSimpleType::DateTime => {
-            if clean.ends_with("-00:00") || clean.ends_with("-0000") || clean.ends_with("-00") {
+            if clean.ends_with("-00:00")
+                || clean.ends_with("-0000")
+                || clean.ends_with("-00")
+                || clean.ends_with("GMT")
+                || clean.ends_with("UTC")
+            {
                 return Err(DFDLError::new(
                     DFDLErrorKind::Parse,
-                    &alloc::format!("Parse Error: Timezone '-00:00' is prohibited by XML Schema: '{}'", s),
+                    &alloc::format!("Parse Error: Unable to parse xs:dateTime from text: '{}'", s),
                 ));
             }
             let (date_str, time_str) = clean.split_once('T').or_else(|| clean.split_once(' ')).ok_or_else(|| {
@@ -829,10 +892,12 @@ pub(crate) fn parse_calendar_from_text(
             Ok(alloc::format!("{}T{}", date_parsed, time_parsed))
         }
         DfdlSimpleType::Time => {
-            if clean.ends_with("-00:00") || clean.ends_with("-0000") || clean.ends_with("-00") {
+            if (clean.ends_with("-00:00") || clean.ends_with("-0000") || clean.ends_with("-00"))
+                && check_policy != crate::schema::ir::CalendarCheckPolicy::Lax
+            {
                 return Err(DFDLError::new(
                     DFDLErrorKind::Parse,
-                    &alloc::format!("Parse Error: Timezone '-00:00' is prohibited by XML Schema: '{}'", s),
+                    &alloc::format!("Parse Error: Unable to parse xs:time from text: '{}'", s),
                 ));
             }
             if !clean.contains(':') {
@@ -848,7 +913,7 @@ pub(crate) fn parse_calendar_from_text(
                 .unwrap_or(clean.len());
             let time_no_tz = &clean[..split_pos];
             let tz_suffix = &clean[split_pos..];
-            let norm_tz = normalize_timezone_suffix(tz_suffix).ok_or_else(|| {
+            let norm_tz = normalize_timezone_suffix(tz_suffix, check_policy).ok_or_else(|| {
                 DFDLError::new(
                     DFDLErrorKind::Parse,
                     &alloc::format!("Parse Error: Unable to parse xs:time from text: '{}'", s),
@@ -1421,7 +1486,7 @@ pub(crate) fn format_calendar_with_pattern(
                 i = i.saturating_add(1);
             }
             match ch {
-                'y' => {
+                'y' | 'Y' | 'u' | 'r' => {
                     if count == 2 {
                         let y2 = (y.rem_euclid(100)) as u32;
                         use core::fmt::Write;
@@ -1430,6 +1495,18 @@ pub(crate) fn format_calendar_with_pattern(
                         use core::fmt::Write;
                         let _ = write!(result, "{:0width$}", y, width = count);
                     }
+                }
+                'D' => {
+                    let is_leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+                    let days_in_months: [u32; 12] = if is_leap {
+                        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+                    } else {
+                        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+                    };
+                    let prior_days: u32 = days_in_months.iter().take(m.saturating_sub(1)).sum();
+                    let doy = prior_days.saturating_add(d.max(1) as u32);
+                    use core::fmt::Write;
+                    let _ = write!(result, "{:0width$}", doy, width = count);
                 }
                 'M' => {
                     if count == 1 {

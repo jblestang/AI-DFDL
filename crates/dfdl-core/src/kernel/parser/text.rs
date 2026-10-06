@@ -62,15 +62,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
     }
 
     pub(crate) fn check_mandatory_alignment(&self, encoding: &str) -> DFDLResult<()> {
-        let enc = encoding.to_ascii_uppercase();
-        let align = if enc.starts_with("X-DFDL-")
-            || enc.contains("-BIT")
-            || enc.contains("BIT-PACKED")
-        {
-            1
-        } else {
-            8
-        };
+        let align = crate::encoding::encoding_mandatory_alignment_bits(encoding);
 
         if align > 1 {
             let bit_pos = self.reader.position().0;
@@ -161,17 +153,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             break;
                         }
                     }
-                    let mut matched_in_scope = false;
-                    for i in (0..self.in_scope_delimiters.len()).rev() {
-                        if let Ok(delim) = crate::util::get_checked(&self.in_scope_delimiters, i) {
-                            let delim_clone = delim.clone();
-                            if !delim_clone.is_empty() && self.peek_literal_delimiter(&delim_clone) {
-                                matched_in_scope = true;
-                                break;
-                            }
-                        }
-                    }
-                    if matched_in_scope {
+                    if self.peek_any_in_scope_delimiter() {
                         break;
                     }
 
@@ -315,17 +297,17 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 let mut all_delimiters: Vec<String> = Vec::new();
                 if let Some(t) = term_str {
                     if !t.is_empty() {
-                        let _ = try_push(&mut all_delimiters, t.to_string());
+                        let _ = try_push(&mut all_delimiters, String::from(t));
                     }
                 }
                 if let Some(s) = sep_str {
                     if !s.is_empty() {
-                        let _ = try_push(&mut all_delimiters, s.to_string());
+                        let _ = try_push(&mut all_delimiters, String::from(s));
                     }
                 }
                 for d in &self.in_scope_delimiters {
-                    if !d.is_empty() && !all_delimiters.iter().any(|existing| existing == d) {
-                        let _ = try_push(&mut all_delimiters, d.clone());
+                    if !d.text.is_empty() && !all_delimiters.iter().any(|existing| existing == &d.text) {
+                        let _ = try_push(&mut all_delimiters, d.text.clone());
                     }
                 }
 
@@ -393,17 +375,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     break;
                                 }
                             }
-                            let mut matched_in_scope = false;
-                            for i in (0..self.in_scope_delimiters.len()).rev() {
-                                if let Ok(delim) = crate::util::get_checked(&self.in_scope_delimiters, i) {
-                                    let delim_clone = delim.clone();
-                                    if !delim_clone.is_empty() && self.peek_literal_delimiter(&delim_clone) {
-                                        matched_in_scope = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if matched_in_scope {
+                            if self.peek_any_in_scope_delimiter() {
                                 break;
                             }
 
@@ -519,17 +491,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     break;
                                 }
                             }
-                            let mut matched_in_scope = false;
-                            for i in (0..self.in_scope_delimiters.len()).rev() {
-                                if let Ok(delim) = crate::util::get_checked(&self.in_scope_delimiters, i) {
-                                    let delim_clone = delim.clone();
-                                    if !delim_clone.is_empty() && self.peek_literal_delimiter(&delim_clone) {
-                                        matched_in_scope = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if matched_in_scope {
+                            if self.peek_any_in_scope_delimiter() {
                                 break;
                             }
 
@@ -551,17 +513,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             break;
                         }
                     }
-                    let mut matched_in_scope = false;
-                    for i in (0..self.in_scope_delimiters.len()).rev() {
-                        if let Ok(delim) = crate::util::get_checked(&self.in_scope_delimiters, i) {
-                            let delim_clone = delim.clone();
-                            if !delim_clone.is_empty() && self.peek_literal_delimiter(&delim_clone) {
-                                matched_in_scope = true;
-                                break;
-                            }
-                        }
-                    }
-                    if matched_in_scope {
+                    if self.peek_any_in_scope_delimiter() {
                         break;
                     }
 
@@ -686,10 +638,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         };
         let exp_rep = eval_exp_rep.as_deref().or(exp_rep_prop);
         let ignore_case = props.ignore_case;
-        let num_pad_char_str = props
-            .text_number_pad_character
-            .as_deref()
-            .unwrap_or(&props.text_pad_char);
+        let num_pad_char_str = if props.text_pad_kind == crate::schema::ir::TextPadKind::PadChar {
+            props
+                .text_number_pad_character
+                .as_deref()
+                .or(Some(&props.text_pad_char))
+        } else {
+            None
+        };
 
         let parse_int = |s: &str| -> Option<i64> {
             if base != 10 {
@@ -699,14 +655,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 i64::from_str_radix(clean, base).ok()
             } else if check_policy == TextNumberCheckPolicy::Strict {
-                parse_strict_int_i64(s, pattern_opt, dec_sep, grp_sep, Some(num_pad_char_str), props.text_trim_kind)
+                parse_strict_int_i64(s, pattern_opt, dec_sep, grp_sep, num_pad_char_str, props.text_trim_kind)
             } else {
                 if let Some((is_neg, norm_str)) = normalize_text_number(
                     s,
                     pattern_opt,
                     dec_sep,
                     grp_sep,
-                    Some(num_pad_char_str),
+                    num_pad_char_str,
                     props.text_trim_kind,
                 ) {
                     if let Ok(v) = norm_str.parse::<i64>() {
@@ -732,14 +688,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 u64::from_str_radix(clean, base).ok()
             } else if check_policy == TextNumberCheckPolicy::Strict {
-                parse_strict_uint_u64(s, pattern_opt, dec_sep, grp_sep, Some(num_pad_char_str), props.text_trim_kind)
+                parse_strict_uint_u64(s, pattern_opt, dec_sep, grp_sep, num_pad_char_str, props.text_trim_kind)
             } else {
                 if let Some((is_neg, norm_str)) = normalize_text_number(
                     s,
                     pattern_opt,
                     dec_sep,
                     grp_sep,
-                    Some(num_pad_char_str),
+                    num_pad_char_str,
                     props.text_trim_kind,
                 ) {
                     if !is_neg {
@@ -769,7 +725,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     inf_rep,
                     exp_rep,
                     ignore_case,
-                    Some(num_pad_char_str),
+                    num_pad_char_str,
                     props.text_trim_kind,
                 )
             } else {
@@ -778,7 +734,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     pattern_opt,
                     dec_sep,
                     grp_sep,
-                    Some(num_pad_char_str),
+                    num_pad_char_str,
                     props.text_trim_kind,
                 ) {
                     if let Some(mut v) = parse_flexible_f64_with_props(
@@ -814,7 +770,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 pattern_opt,
                 dec_sep,
                 grp_sep,
-                Some(num_pad_char_str),
+                num_pad_char_str,
                 props.text_trim_kind,
             )
             .map(|(is_neg, body)| {
@@ -849,50 +805,28 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             if let Some(ref zero_reps) = props.text_standard_zero_rep {
                 let zero_candidate = match props.text_trim_kind {
                     crate::schema::ir::TextTrimKind::Head => {
-                        val_str.trim_start_matches(|c: char| num_pad_char_str.contains(c))
+                        val_str.trim_start_matches(|c: char| num_pad_char_str.is_some_and(|p| p.contains(c)))
                     }
                     crate::schema::ir::TextTrimKind::Tail => {
-                        val_str.trim_end_matches(|c: char| num_pad_char_str.contains(c))
+                        val_str.trim_end_matches(|c: char| num_pad_char_str.is_some_and(|p| p.contains(c)))
                     }
                     crate::schema::ir::TextTrimKind::Both => {
-                        val_str.trim_matches(|c: char| num_pad_char_str.contains(c))
+                        val_str.trim_matches(|c: char| num_pad_char_str.is_some_and(|p| p.contains(c)))
                     }
                     crate::schema::ir::TextTrimKind::None => val_str,
                 };
 
-                let matches_target = |s: &str, target: &str| -> bool {
-                    if props.ignore_case {
-                        s.eq_ignore_ascii_case(target)
-                    } else {
-                        s == target
-                    }
-                };
-
-                let check_zrep_match = |zrep: &str| -> bool {
-                    match zrep {
-                        "%WSP;" => zero_candidate == " " || zero_candidate == "\t",
-                        "%WSP+;" => {
-                            !zero_candidate.is_empty()
-                                && zero_candidate.chars().all(|c| c == ' ' || c == '\t')
-                        }
-                        "%WSP*;" => zero_candidate.chars().all(|c| c == ' ' || c == '\t'),
-                        "%ES;" | "" => zero_candidate.is_empty(),
-                        _ => {
-                            let unescaped =
-                                crate::expr::properties::decode_dfdl_character_entities(zrep);
-                            matches_target(zero_candidate, zrep)
-                                || matches_target(zero_candidate, &unescaped)
-                                || (unescaped.trim().is_empty() && zero_candidate.is_empty())
-                        }
-                    }
-                };
-
                 // An empty zero-rep list defines no zero representation (DFDL §13.6).
-                let is_zero = if zero_reps.trim().is_empty() {
-                    false
-                } else {
-                    zero_reps.split_whitespace().any(check_zrep_match)
-                };
+                let is_zero = !zero_reps.trim().is_empty()
+                    && (crate::kernel::parser::delimiters::match_dfdl_string_literal_list(
+                        zero_reps,
+                        zero_candidate,
+                        props.ignore_case,
+                    ) || crate::kernel::parser::delimiters::match_dfdl_string_literal_list(
+                        zero_reps,
+                        raw_val_str,
+                        props.ignore_case,
+                    ));
 
                 if is_zero {
                     let zero_val = match simple_type {
@@ -1276,22 +1210,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             DfdlSimpleType::DateTime | DfdlSimpleType::Date | DfdlSimpleType::Time => {
                 if let Some(ref raw_lang) = props.calendar_language {
                     let trimmed = raw_lang.trim();
-                    let eval_lang = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-                        let ast = crate::expr::parse_expr(trimmed)?;
-                        let current_path = builder.current_path();
-                        let active_doc = builder.active_doc();
-                        let mut ctx = crate::expr::ExprContext::with_variable_map(
-                            Some(&active_doc),
-                            &current_path,
-                            &[],
-                            Some(&self.variable_map),
-                            self.budget,
-                        )
-                        .with_occurs_index(self.current_occurs_index)
-                        .with_schema(self.schema)
-                        .with_enclosing_lengths(&self.enclosing_complex_elements);
-                        let v = crate::expr::eval_expr(&ast, &mut ctx)?;
-                        alloc::format!("{}", v)
+                    let eval_lang = if trimmed.starts_with('{') && !trimmed.starts_with("{{") && trimmed.ends_with('}') {
+                        self.evaluate_property_str_at_with_namespaces(
+                            trimmed,
+                            builder,
+                            elem_name,
+                            Some(&props.in_scope_namespaces),
+                        )?
                     } else if let Some(stripped) = trimmed.strip_prefix("{{") {
                         alloc::format!("{{{stripped}")
                     } else {
@@ -1321,8 +1246,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
             DfdlSimpleType::Decimal => {
                 let raw = val_str.trim();
-                let has_v = pattern_opt.is_some_and(|p| p.contains('V') || p.contains('v'));
-                if has_v && (raw.contains('.') || (!dec_sep.is_empty() && raw.contains(dec_sep))) {
+                let has_vp = pattern_opt.is_some_and(|p| p.contains(['V', 'v', 'P', 'p']));
+                if has_vp && (raw.contains('.') || (!dec_sep.is_empty() && raw.contains(dec_sep))) {
                     let msg = alloc::format!(
                         "Parse Error: Unable to parse xs:decimal from text: '{}': explicit decimal separator not permitted with virtual decimal point pattern",
                         raw
@@ -1362,37 +1287,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     (norm, is_neg)
                 };
 
-                let norm = if has_v && !norm.contains('.') {
+                let norm = if base != 10 && has_vp && !norm.contains('.') {
                     let pat = pattern_opt.unwrap_or("");
-                    let v_idx = pat.find(['V', 'v']).unwrap_or(0);
-                    let after_v = &pat[v_idx.saturating_add(1)..];
-                    let v_scale = after_v.chars().take_while(|c| *c == '0' || *c == '#').count();
-                    if v_scale > 0 {
-                        let digits = norm.trim_start_matches('-');
-                        let is_negative = norm.starts_with('-');
-                        let scaled = if digits.len() <= v_scale {
-                            let mut s = alloc::string::String::from("0.");
-                            for _ in 0..(v_scale.saturating_sub(digits.len())) {
-                                s.push('0');
-                            }
-                            s.push_str(digits);
-                            s
-                        } else {
-                            let split_pos = digits.len().saturating_sub(v_scale);
-                            let mut s = alloc::string::String::with_capacity(digits.len().saturating_add(1));
-                            s.push_str(&digits[..split_pos]);
-                            s.push('.');
-                            s.push_str(&digits[split_pos..]);
-                            s
-                        };
-                        if is_negative {
-                            alloc::format!("-{}", scaled)
-                        } else {
-                            scaled
-                        }
-                    } else {
-                        norm
-                    }
+                    crate::kernel::parser::numbers::apply_virtual_decimal_and_scaling(&norm, pat)
                 } else {
                     norm
                 };

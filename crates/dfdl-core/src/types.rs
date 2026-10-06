@@ -86,6 +86,17 @@ impl QName {
             None => alloc::format!("{{}}{}", self.local_name),
         }
     }
+
+    /// Formats this QName with its prefix if present: `prefix:local_name` or `local_name`.
+    #[inline]
+    #[must_use]
+    pub fn prefixed_name(&self) -> String {
+        if let Some(ref p) = self.prefix {
+            alloc::format!("{}:{}", p, self.local_name)
+        } else {
+            self.local_name.clone()
+        }
+    }
 }
 
 impl fmt::Display for QName {

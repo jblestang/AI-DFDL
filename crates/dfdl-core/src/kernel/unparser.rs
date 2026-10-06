@@ -106,13 +106,13 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         }
     }
 
-    /// Sets an external variable value on the unparser's active variable map.
+    /// Sets an external variable value on the unparser's active variable map (§7.7).
+    ///
+    /// Per DFDL v1.0 §7.7, an external variable binding overrides the `defaultValue`
+    /// of the variable defined by `dfdl:defineVariable`, maintaining its `Defined` state
+    /// for subsequent runtime modifications or scoped instantiations.
     pub fn set_external_variable(&mut self, name: &str, value: &str) -> DFDLResult<()> {
-        self.variable_map.set_variable_validated(
-            &crate::types::QName::local(name),
-            crate::infoset::value::DfdlValue::String(alloc::string::ToString::to_string(value)),
-            false,
-        )
+        self.variable_map.set_external_variable(name, value)
     }
 
     /// Sets whether to escalate warnings to errors (daf:escalateWarningsToErrors).
@@ -172,21 +172,6 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             )
         })?;
 
-        // Enforce bitOrder change only on byte boundary (§11.2)
-        if term.properties.bit_order != self.writer.bit_order() {
-            let current_pos = self.writer.position().0;
-            let rem = current_pos % 8;
-            if rem != 0 {
-                let bit_in_byte_1based = rem.saturating_add(1);
-                let msg = alloc::format!(
-                    "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
-                    bit_in_byte_1based
-                );
-                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-            }
-            self.writer.set_bit_order(term.properties.bit_order);
-        }
-
         let is_element = matches!(term.kind, TermKind::Element(_));
 
         let has_nvi = !term.properties.new_variable_instances.is_empty();
@@ -196,7 +181,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
 
         if !is_element {
             self.execute_set_variables(term)?;
-            // Left framing: leadingSkip
+            // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
             if term.properties.leading_skip > 0 {
                 let skip_bits = match term.properties.alignment_units {
                     crate::schema::ir::AlignmentUnits::Bytes => {
@@ -208,7 +193,6 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 write_fill_padding(self.writer, fill, skip_bits)?;
             }
 
-            // Align bitstream if required
             let align_bits = match term.properties.alignment_units {
                 crate::schema::ir::AlignmentUnits::Bytes => {
                     term.properties.alignment.saturating_mul(8)
@@ -225,6 +209,22 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     let fill = fill_byte_value(&term.properties)?;
                     write_fill_padding(self.writer, fill, pad)?;
                 }
+            }
+
+            // Enforce bitOrder change only on byte boundary (§11.2)
+            // Left framing (leadingSkip / alignment) precedes bitOrder change per DFDL §11.2.
+            if term.properties.bit_order != self.writer.bit_order() {
+                let current_pos = self.writer.position().0;
+                let rem = current_pos % 8;
+                if rem != 0 {
+                    let bit_in_byte_1based = rem.saturating_add(1);
+                    let msg = alloc::format!(
+                        "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
+                        bit_in_byte_1based
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                }
+                self.writer.set_bit_order(term.properties.bit_order);
             }
 
             if let Some(ref init) = term.properties.initiator {
@@ -1107,7 +1107,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 if el.min_occurs == 0 {
                     return true;
                 }
-                if el.default_value.is_some()
+                if (el.default_value.is_some() && el.max_occurs == Some(1))
                     || term.properties.output_value_calc.is_some()
                     || el.is_nillable
                 {
@@ -1432,22 +1432,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 }
             }
 
-            // Enforce bitOrder change only on byte boundary (§11.2)
-            if props.bit_order != self.writer.bit_order() {
-                let current_pos = self.writer.position().0;
-                let rem = current_pos % 8;
-                if rem != 0 {
-                    let bit_in_byte_1based = rem.saturating_add(1);
-                    let msg = alloc::format!(
-                        "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
-                        bit_in_byte_1based
-                    );
-                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-                }
-                self.writer.set_bit_order(props.bit_order);
-            }
-
-            // Left framing: leadingSkip
+            // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
             if props.leading_skip > 0 {
                 let skip_bits = match props.alignment_units {
                     crate::schema::ir::AlignmentUnits::Bytes => {
@@ -1459,7 +1444,6 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 write_fill_padding(self.writer, fill, skip_bits)?;
             }
 
-            // Left framing: alignment
             let align_bits = match props.alignment_units {
                 crate::schema::ir::AlignmentUnits::Bytes => {
                     props.alignment.saturating_mul(8)
@@ -1476,6 +1460,22 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     let fill = fill_byte_value(props)?;
                     write_fill_padding(self.writer, fill, pad)?;
                 }
+            }
+
+            // Enforce bitOrder change only on byte boundary (§11.2)
+            // Left framing (leadingSkip / alignment) precedes bitOrder change per DFDL §11.2.
+            if props.bit_order != self.writer.bit_order() {
+                let current_pos = self.writer.position().0;
+                let rem = current_pos % 8;
+                if rem != 0 {
+                    let bit_in_byte_1based = rem.saturating_add(1);
+                    let msg = alloc::format!(
+                        "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
+                        bit_in_byte_1based
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                }
+                self.writer.set_bit_order(props.bit_order);
             }
 
             if let Some(ref init) = props.initiator {
@@ -2302,10 +2302,11 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
         match val {
             DfdlValue::Int(v) => {
                 let bits = requested_bits_opt.unwrap_or(32);
-                let val_u64 = if needs_byte_swap && bits == 32 {
-                    (*v as u32).swap_bytes() as u64
+                let raw_u64 = (*v as u32) as u64;
+                let val_u64 = if needs_byte_swap {
+                    crate::util::order_integer_bytes(raw_u64, bits, ByteOrder::LittleEndian)
                 } else {
-                    (*v as u32) as u64
+                    raw_u64
                 };
                 self.writer.write_bits(val_u64, bits)
             }
@@ -2317,25 +2318,23 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
                         64
                     },
                 );
+                let raw_u64 = *v as u64;
                 let val_u64 = if needs_byte_swap {
-                    match bits {
-                        32 => (*v as u32).swap_bytes() as u64,
-                        64 => (*v as u64).swap_bytes(),
-                        _ => *v as u64,
-                    }
+                    crate::util::order_integer_bytes(raw_u64, bits, ByteOrder::LittleEndian)
                 } else if bits == 32 {
-                    (*v as u64) & 0xFFFF_FFFF
+                    raw_u64 & 0xFFFF_FFFF
                 } else {
-                    *v as u64
+                    raw_u64
                 };
                 self.writer.write_bits(val_u64, bits)
             }
             DfdlValue::Short(v) => {
                 let bits = requested_bits_opt.unwrap_or(16);
-                let val_u64 = if needs_byte_swap && bits == 16 {
-                    (*v as u16).swap_bytes() as u64
+                let raw_u64 = (*v as u16) as u64;
+                let val_u64 = if needs_byte_swap {
+                    crate::util::order_integer_bytes(raw_u64, bits, ByteOrder::LittleEndian)
                 } else {
-                    (*v as u16) as u64
+                    raw_u64
                 };
                 self.writer.write_bits(val_u64, bits)
             }
@@ -2345,32 +2344,31 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
             }
             DfdlValue::UnsignedInt(v) => {
                 let bits = requested_bits_opt.unwrap_or(32);
-                let val_u64 = if needs_byte_swap && bits == 32 {
-                    v.swap_bytes() as u64
+                let raw_u64 = *v as u64;
+                let val_u64 = if needs_byte_swap {
+                    crate::util::order_integer_bytes(raw_u64, bits, ByteOrder::LittleEndian)
                 } else {
-                    *v as u64
+                    raw_u64
                 };
                 self.writer.write_bits(val_u64, bits)
             }
             DfdlValue::UnsignedLong(v) => {
                 let bits = requested_bits_opt.unwrap_or(64);
+                let raw_u64 = *v;
                 let val_u64 = if needs_byte_swap {
-                    match bits {
-                        32 => (*v as u32).swap_bytes() as u64,
-                        64 => v.swap_bytes(),
-                        _ => *v,
-                    }
+                    crate::util::order_integer_bytes(raw_u64, bits, ByteOrder::LittleEndian)
                 } else {
-                    *v
+                    raw_u64
                 };
                 self.writer.write_bits(val_u64, bits)
             }
             DfdlValue::UnsignedShort(v) => {
                 let bits = requested_bits_opt.unwrap_or(16);
-                let val_u64 = if needs_byte_swap && bits == 16 {
-                    v.swap_bytes() as u64
+                let raw_u64 = *v as u64;
+                let val_u64 = if needs_byte_swap {
+                    crate::util::order_integer_bytes(raw_u64, bits, ByteOrder::LittleEndian)
                 } else {
-                    *v as u64
+                    raw_u64
                 };
                 self.writer.write_bits(val_u64, bits)
             }

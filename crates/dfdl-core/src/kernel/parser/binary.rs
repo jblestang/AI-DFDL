@@ -194,20 +194,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 matched_in_scope = true;
                             }
                         }
-                        if !matched_in_scope {
-                            for i in (0..self.in_scope_delimiters.len()).rev() {
-                                if let Ok(delim) =
-                                    crate::util::get_checked(&self.in_scope_delimiters, i)
-                                {
-                                    let delim_clone = delim.clone();
-                                    if !delim_clone.is_empty()
-                                        && self.peek_literal_delimiter(&delim_clone)
-                                    {
-                                        matched_in_scope = true;
-                                        break;
-                                    }
-                                }
-                            }
+                        if !matched_in_scope && self.peek_any_in_scope_delimiter() {
+                            matched_in_scope = true;
                         }
                         if matched_in_scope {
                             break;
@@ -321,20 +309,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     }
                 } else {
                     while !self.reader.is_eof() {
-                        let mut matched_in_scope = false;
-                        for i in (0..self.in_scope_delimiters.len()).rev() {
-                            if let Ok(delim) =
-                                crate::util::get_checked(&self.in_scope_delimiters, i)
-                            {
-                                let delim_clone = delim.clone();
-                                if !delim_clone.is_empty()
-                                    && self.peek_literal_delimiter(&delim_clone)
-                                {
-                                    matched_in_scope = true;
-                                    break;
-                                }
-                            }
-                        }
+                        let matched_in_scope = self.peek_any_in_scope_delimiter();
                         if matched_in_scope {
                             break;
                         }
@@ -435,33 +410,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             DfdlSimpleType::Int => {
                 let bits = calc_bits(32);
                 let val_u64 = self.read_binary_bits(bits)?;
-                let val_u32 = val_u64 as u32;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u32,
-                    ByteOrder::LittleEndian => val_u32.swap_bytes(),
-                };
-                let val_i32 = sign_extend(ordered as u64, bits) as i32;
+                let ordered = crate::util::order_integer_bytes(val_u64, bits, props.byte_order);
+                let val_i32 = sign_extend(ordered, bits) as i32;
                 Ok(DfdlValue::Int(val_i32))
             }
             DfdlSimpleType::Long => {
                 let bits = calc_bits(64);
                 let val_u64 = self.read_binary_bits(bits)?;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u64,
-                    ByteOrder::LittleEndian => val_u64.swap_bytes(),
-                };
+                let ordered = crate::util::order_integer_bytes(val_u64, bits, props.byte_order);
                 let val_i64 = sign_extend(ordered, bits);
                 Ok(DfdlValue::Long(val_i64))
             }
             DfdlSimpleType::Short => {
                 let bits = calc_bits(16);
                 let val_u64 = self.read_binary_bits(bits)?;
-                let val_u16 = val_u64 as u16;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u16,
-                    ByteOrder::LittleEndian => val_u16.swap_bytes(),
-                };
-                let val_i16 = sign_extend(ordered as u64, bits) as i16;
+                let ordered = crate::util::order_integer_bytes(val_u64, bits, props.byte_order);
+                let val_i16 = sign_extend(ordered, bits) as i16;
                 Ok(DfdlValue::Short(val_i16))
             }
             DfdlSimpleType::Byte => {
@@ -473,31 +437,20 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             DfdlSimpleType::UnsignedInt => {
                 let bits = calc_bits(32);
                 let val_u64 = self.read_binary_bits(bits)?;
-                let val_u32 = val_u64 as u32;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u32,
-                    ByteOrder::LittleEndian => val_u32.swap_bytes(),
-                };
-                Ok(DfdlValue::UnsignedInt(ordered))
+                let ordered = crate::util::order_integer_bytes(val_u64, bits, props.byte_order);
+                Ok(DfdlValue::UnsignedInt(ordered as u32))
             }
             DfdlSimpleType::UnsignedLong => {
                 let bits = calc_bits(64);
                 let val_u64 = self.read_binary_bits(bits)?;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u64,
-                    ByteOrder::LittleEndian => val_u64.swap_bytes(),
-                };
+                let ordered = crate::util::order_integer_bytes(val_u64, bits, props.byte_order);
                 Ok(DfdlValue::UnsignedLong(ordered))
             }
             DfdlSimpleType::UnsignedShort => {
                 let bits = calc_bits(16);
                 let val_u64 = self.read_binary_bits(bits)?;
-                let val_u16 = val_u64 as u16;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u16,
-                    ByteOrder::LittleEndian => val_u16.swap_bytes(),
-                };
-                Ok(DfdlValue::UnsignedShort(ordered))
+                let ordered = crate::util::order_integer_bytes(val_u64, bits, props.byte_order);
+                Ok(DfdlValue::UnsignedShort(ordered as u16))
             }
             DfdlSimpleType::UnsignedByte => {
                 let bits = calc_bits(8);
@@ -608,20 +561,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     }
                 } else {
                     while !self.reader.is_eof() {
-                        let mut matched_in_scope = false;
-                        for i in (0..self.in_scope_delimiters.len()).rev() {
-                            if let Ok(delim) =
-                                crate::util::get_checked(&self.in_scope_delimiters, i)
-                            {
-                                let delim_clone = delim.clone();
-                                if !delim_clone.is_empty()
-                                    && self.peek_literal_delimiter(&delim_clone)
-                                {
-                                    matched_in_scope = true;
-                                    break;
-                                }
-                            }
-                        }
+                        let matched_in_scope = self.peek_any_in_scope_delimiter();
                         if matched_in_scope {
                             break;
                         }
@@ -776,20 +716,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 matched_in_scope = true;
                             }
                         }
-                        if !matched_in_scope {
-                            for i in (0..self.in_scope_delimiters.len()).rev() {
-                                if let Ok(delim) =
-                                    crate::util::get_checked(&self.in_scope_delimiters, i)
-                                {
-                                    let delim_clone = delim.clone();
-                                    if !delim_clone.is_empty()
-                                        && self.peek_literal_delimiter(&delim_clone)
-                                    {
-                                        matched_in_scope = true;
-                                        break;
-                                    }
-                                }
-                            }
+                        if !matched_in_scope && self.peek_any_in_scope_delimiter() {
+                            matched_in_scope = true;
                         }
                         if matched_in_scope {
                             break;

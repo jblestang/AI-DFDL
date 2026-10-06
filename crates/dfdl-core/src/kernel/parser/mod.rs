@@ -40,6 +40,35 @@ pub enum ValidationMode {
     Full,
 }
 
+/// Represents the classification of a Point of Uncertainty (§9.2) during parsing.
+///
+/// Per DFDL v1.0 §9.2, a Point of Uncertainty is established by an `xs:choice` construct,
+/// an optional element occurrence (`minOccurs="0"` or array occurrence `count >= minOccurs`),
+/// or an initiated sequence/choice context under `dfdl:initiatedContent="yes"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PouKind {
+    /// Choice Point of Uncertainty with its `initiatedContent` property flag.
+    Choice {
+        /// Whether the choice declares `dfdl:initiatedContent="yes"`.
+        initiated_content: bool,
+    },
+    /// Occurrence Point of Uncertainty for an optional scalar or array occurrence.
+    Occurrence,
+}
+
+/// A Point of Uncertainty frame on the parser's backtracking stack.
+///
+/// Tracks whether a choice alternative or element occurrence has been resolved/discriminated
+/// by a matching initiator under `dfdl:initiatedContent="yes"` (§14.3.1) or an evaluated
+/// `<dfdl:discriminator>` assertion (§9.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PointOfUncertainty {
+    /// The specific category of Point of Uncertainty.
+    pub(crate) kind: PouKind,
+    /// Whether this Point of Uncertainty has been resolved and cannot backtrack.
+    pub(crate) is_discriminated: bool,
+}
+
 /// DFDL Runtime Streaming Parser Engine.
 pub struct ParserEngine<'a, S: ByteSource> {
     pub(crate) schema: &'a CompiledSchema,
@@ -47,15 +76,18 @@ pub struct ParserEngine<'a, S: ByteSource> {
     pub(crate) budget: &'a mut WorkBudget,
     pub(crate) variable_map: crate::expr::variables::VariableMap,
     pub(crate) current_occurs_index: usize,
-    pub(crate) in_scope_delimiters: Vec<String>,
-    pub(crate) in_scope_terminators: Vec<String>,
-    pub(crate) pou_stack: Vec<bool>,
+    pub(crate) in_scope_delimiters: Vec<crate::schema::ir::InScopeDelimiter>,
+    pub(crate) in_scope_terminators: Vec<crate::schema::ir::InScopeDelimiter>,
+    pub(crate) pou_stack: Vec<PointOfUncertainty>,
     pub(crate) validation_mode: ValidationMode,
     /// Encoding of the term being parsed, so delimiters are matched in its character width
     /// (sub-byte encodings such as 7-bit packed ASCII do not use 8-bit characters).
     pub(crate) delim_encoding: String,
+    /// Case sensitivity of the term being parsed (`dfdl:ignoreCase`).
+    pub(crate) delim_ignore_case: bool,
     pub(crate) allow_expression_result_coercion: bool,
     pub(crate) enclosing_complex_elements: Vec<(String, usize, LengthUnits, String)>,
+    pub(crate) validation_errors: Vec<DFDLError>,
 }
 
 impl<'a, S: ByteSource> ParserEngine<'a, S> {
@@ -77,18 +109,20 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             pou_stack: Vec::new(),
             validation_mode: ValidationMode::Off,
             delim_encoding: String::new(),
+            delim_ignore_case: false,
             allow_expression_result_coercion: true,
             enclosing_complex_elements: Vec::new(),
+            validation_errors: Vec::new(),
         }
     }
 
-    /// Sets an external variable value on the parser's active variable map.
+    /// Sets an external variable value on the parser's active variable map (§7.7).
+    ///
+    /// Per DFDL v1.0 §7.7, an external variable binding overrides the `defaultValue`
+    /// of the variable defined by `dfdl:defineVariable`, maintaining its `Defined` state
+    /// for subsequent runtime modifications or scoped instantiations.
     pub fn set_external_variable(&mut self, name: &str, value: &str) -> DFDLResult<()> {
-        self.variable_map.set_variable_validated(
-            &crate::types::QName::local(name),
-            crate::infoset::value::DfdlValue::String(alloc::string::ToString::to_string(value)),
-            true,
-        )
+        self.variable_map.set_external_variable(name, value)
     }
 
     /// Sets the validation mode for the parser engine (§21).
@@ -135,22 +169,85 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
         }
 
-        builder.build()
+        let doc = builder.build()?;
+
+        if self.validation_mode != ValidationMode::Off && !self.validation_errors.is_empty() {
+            let first_val_err = self.validation_errors.remove(0);
+            return Err(first_val_err);
+        }
+
+        Ok(doc)
     }
 
 
     /// Parses a schema term into the infoset builder, scoping delimiter matching to the
-    /// term's encoding.
+    /// term's encoding and case sensitivity.
     pub fn parse_term(&mut self, id: NodeId, builder: &mut InfosetBuilder) -> DFDLResult<()> {
-        let enc = self
+        let (enc, ign_case) = self
             .schema
             .get_term(id)
-            .map(|t| t.properties.encoding.clone())
+            .map(|t| (t.properties.encoding.clone(), t.properties.ignore_case))
             .unwrap_or_default();
-        let saved = core::mem::replace(&mut self.delim_encoding, enc);
+        let saved_enc = core::mem::replace(&mut self.delim_encoding, enc);
+        let saved_case = core::mem::replace(&mut self.delim_ignore_case, ign_case);
         let res = self.parse_term_inner(id, builder);
-        self.delim_encoding = saved;
+        self.delim_encoding = saved_enc;
+        self.delim_ignore_case = saved_case;
         res
+    }
+
+    /// Pushes an in-scope delimiter paired with its case sensitivity and encoding.
+    pub(crate) fn push_in_scope_delimiter(&mut self, text: String, ignore_case: bool, encoding: String) {
+        if !text.is_empty() {
+            let _ = crate::util::try_push(
+                &mut self.in_scope_delimiters,
+                crate::schema::ir::InScopeDelimiter {
+                    text,
+                    ignore_case,
+                    encoding,
+                },
+            );
+        }
+    }
+
+    /// Pushes an in-scope terminator paired with its case sensitivity and encoding.
+    pub(crate) fn push_in_scope_terminator(&mut self, text: String, ignore_case: bool, encoding: String) {
+        if !text.is_empty() {
+            let _ = crate::util::try_push(
+                &mut self.in_scope_terminators,
+                crate::schema::ir::InScopeDelimiter {
+                    text,
+                    ignore_case,
+                    encoding,
+                },
+            );
+        }
+    }
+
+    /// Peeks whether the given in-scope delimiter matches at the current bitstream position,
+    /// respecting its defined case sensitivity and character encoding.
+    pub(crate) fn peek_in_scope_delimiter(&mut self, delim: &crate::schema::ir::InScopeDelimiter) -> bool {
+        let saved_case = self.delim_ignore_case;
+        let saved_enc = core::mem::replace(&mut self.delim_encoding, delim.encoding.clone());
+        self.delim_ignore_case = delim.ignore_case;
+        let res = self.peek_literal_delimiter(&delim.text);
+        self.delim_ignore_case = saved_case;
+        self.delim_encoding = saved_enc;
+        res
+    }
+
+    /// Performs Mandatory Text Alignment (DFDL §12.1) to encoding boundary bits by skipping 0 to (align_bits - 1) bits.
+    pub(crate) fn align_mandatory_text(&mut self, encoding: &str) -> DFDLResult<()> {
+        let align_bits = crate::encoding::encoding_mandatory_alignment_bits(encoding);
+        if align_bits > 1 {
+            let bit_pos = self.reader.position().0;
+            let rem = bit_pos % align_bits;
+            if rem != 0 {
+                let skip = align_bits - rem;
+                self.reader.skip_bits(skip)?;
+            }
+        }
+        Ok(())
     }
 
     /// Executes the `dfdl:setVariable` statements attached to `term`. Relative paths resolve
@@ -190,6 +287,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 )
                 .with_occurs_index(self.current_occurs_index)
                 .with_schema(self.schema)
+                .with_namespaces(&term.properties.in_scope_namespaces)
                 .with_enclosing_lengths(&self.enclosing_complex_elements);
                 crate::expr::eval_expr(&ast, &mut ctx)?
             } else {
@@ -242,6 +340,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     )
                     .with_occurs_index(self.current_occurs_index)
                     .with_schema(self.schema)
+                    .with_namespaces(&term.properties.in_scope_namespaces)
                     .with_enclosing_lengths(&self.enclosing_complex_elements);
                     Some(crate::expr::eval_expr(&ast, &mut ctx)?)
                 } else {
@@ -281,6 +380,33 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         }
     }
 
+    /// Marks the relevant Point of Uncertainty as discriminated when an initiator matches.
+    ///
+    /// Per DFDL v1.0 §14.3.1 & §15:
+    /// - If the enclosing sequence or choice has `dfdl:initiatedContent="yes"`, matching
+    ///   an optional occurrence's initiator discriminates that occurrence Point of Uncertainty.
+    /// - If an enclosing choice has `dfdl:initiatedContent="yes"`, matching an alternative's
+    ///   initiator discriminates that choice Point of Uncertainty.
+    pub(crate) fn on_initiator_matched(
+        &mut self,
+        is_occurrence_pou: bool,
+        parent_initiated_content: bool,
+    ) {
+        if is_occurrence_pou && parent_initiated_content {
+            if let Some(last) = self.pou_stack.last_mut() {
+                if last.kind == PouKind::Occurrence {
+                    last.is_discriminated = true;
+                }
+            }
+        }
+        for pou in self.pou_stack.iter_mut().rev() {
+            if let PouKind::Choice { initiated_content: true } = pou.kind {
+                pou.is_discriminated = true;
+                break;
+            }
+        }
+    }
+
     fn parse_term_inner(&mut self, id: NodeId, builder: &mut InfosetBuilder) -> DFDLResult<()> {
         self.budget.consume(1)?;
 
@@ -290,21 +416,6 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 "Term NodeId missing from compiled schema graph",
             )
         })?;
-
-        // Enforce bitOrder change only on byte boundary (§11.2)
-        if term.properties.bit_order != self.reader.bit_order() {
-            let current_pos = self.reader.position().0;
-            let rem = current_pos % 8;
-            if rem != 0 {
-                let bit_in_byte_1based = rem.saturating_add(1);
-                let msg = alloc::format!(
-                    "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
-                    bit_in_byte_1based
-                );
-                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-            }
-            self.reader.set_bit_order(term.properties.bit_order);
-        }
 
         let has_nvi = !term.properties.new_variable_instances.is_empty();
         if has_nvi {
@@ -318,7 +429,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         }
 
         if !matches!(term.kind, TermKind::Element(_)) {
-            // Left framing: leadingSkip
+            // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
             if term.properties.leading_skip > 0 {
                 let skip_bits = match term.properties.alignment_units {
                     crate::schema::ir::AlignmentUnits::Bytes => {
@@ -331,7 +442,6 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
             }
 
-            // Align bitstream if required
             let align_bits = match term.properties.alignment_units {
                 crate::schema::ir::AlignmentUnits::Bytes => {
                     term.properties.alignment.saturating_mul(8)
@@ -348,7 +458,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     let _ = self.reader.read_bits(skip)?;
                 }
             }
+        }
 
+        // Enforce bitOrder change only on byte boundary (§11.2)
+        // Left framing (leadingSkip / alignment) precedes bitOrder change per DFDL §11.2.
+        if term.properties.bit_order != self.reader.bit_order() {
+            let current_pos = self.reader.position().0;
+            let rem = current_pos % 8;
+            if rem != 0 {
+                let bit_in_byte_1based = rem.saturating_add(1);
+                let msg = alloc::format!(
+                    "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
+                    bit_in_byte_1based
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+            self.reader.set_bit_order(term.properties.bit_order);
         }
 
         let res = match &term.kind {
@@ -369,7 +494,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     None
                 };
                 if let Some(ref init) = eval_init {
+                    self.align_mandatory_text(&term.properties.encoding)?;
                     self.match_literal_delimiter(init)?;
+                    self.on_initiator_matched(false, false);
                 }
 
                 let eval_sep = if let Some(ref raw_sep) = term.properties.separator {
@@ -391,7 +518,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 };
                 let sep_opt = eval_sep.as_deref();
                 if let Some(ref sep) = eval_sep {
-                    let _ = try_push(&mut self.in_scope_delimiters, sep.clone());
+                    self.push_in_scope_delimiter(sep.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
 
                 let eval_term = if let Some(ref raw_term) = term.properties.terminator {
@@ -409,321 +536,415 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     None
                 };
                 if let Some(ref t) = eval_term {
-                    let _ = try_push(&mut self.in_scope_terminators, t.clone());
-                    let _ = try_push(&mut self.in_scope_delimiters, t.clone());
+                    self.push_in_scope_terminator(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
+                    self.push_in_scope_delimiter(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
 
                 let sep_pos = term.properties.separator_position;
-                let (layer_limit, prev_limit) = if let Some(ref layer_name) = term.properties.layer {
-                    let clean_layer = layer_name.split(':').next_back().unwrap_or(layer_name);
-                    if clean_layer == "IPv4Checksum" {
-                        let rem_bytes = self.reader.remaining_bytes();
-                        if rem_bytes < 20 {
-                            return Err(DFDLError::new(
-                                DFDLErrorKind::Parse,
-                                "Parse Error: Insufficient data for IPv4 layer (expected 20 bytes)",
-                            ));
+                let stream_layer_opt = term.properties.layer.as_ref().and_then(|layer_name| {
+                    let clean = layer_name.split(':').next_back().unwrap_or(layer_name);
+                    if clean.eq_ignore_ascii_case("linefolded_imf") {
+                        Some("linefolded_imf")
+                    } else if clean.eq_ignore_ascii_case("base64_mime") {
+                        Some("base64_mime")
+                    } else {
+                        None
+                    }
+                });
+
+                let seq_res = if let Some(stream_layer) = stream_layer_opt {
+                    let rem_bytes = self.reader.remaining_bytes();
+                    let cp = self.reader.checkpoint();
+                    let mut raw_bytes = Vec::with_capacity(rem_bytes);
+                    for _ in 0..rem_bytes {
+                        raw_bytes.push(self.reader.read_bits(8)? as u8);
+                    }
+                    self.reader.rollback(cp)?;
+
+                    if stream_layer == "linefolded_imf" {
+                        let (unfolded, orig_offsets) = crate::kernel::layer::unfold_imf(&raw_bytes);
+                        let sub_source = crate::io::SliceByteSource::new(&unfolded);
+                        let mut sub_reader = crate::io::BitReader::new(
+                            sub_source,
+                            self.reader.bit_order(),
+                            term.properties.byte_order,
+                        );
+                        let res = self.run_sub_engine(&mut sub_reader, |sub| {
+                            sub.parse_sequence_members(term, seq, builder, sep_opt, sep_pos)
+                        });
+                        if res.is_ok() {
+                            let sub_consumed_bits = sub_reader.position().0;
+                            let sub_consumed_bytes = (sub_consumed_bits.saturating_add(7)) / 8;
+                            let orig_consumed_bytes = orig_offsets
+                                .get(sub_consumed_bytes)
+                                .copied()
+                                .unwrap_or(raw_bytes.len());
+                            self.reader.skip_bits(orig_consumed_bytes.saturating_mul(8))?;
                         }
-                        let cp = self.reader.checkpoint();
-                        let mut bytes = Vec::with_capacity(20);
-                        for _ in 0..20 {
-                            let b = self.reader.read_bits(8)? as u8;
-                            let _ = try_push(&mut bytes, b);
+                        res
+                    } else {
+                        // base64_mime
+                        let decoded = crate::kernel::layer::decode_base64_mime(&raw_bytes);
+                        let sub_source = crate::io::SliceByteSource::new(&decoded);
+                        let mut sub_reader = crate::io::BitReader::new(
+                            sub_source,
+                            self.reader.bit_order(),
+                            term.properties.byte_order,
+                        );
+                        let res = self.run_sub_engine(&mut sub_reader, |sub| {
+                            sub.parse_sequence_members(term, seq, builder, sep_opt, sep_pos)
+                        });
+                        if res.is_ok() {
+                            self.reader.skip_bits(raw_bytes.len().saturating_mul(8))?;
                         }
-                        self.reader.rollback(cp)?;
-                        let chk = crate::kernel::layer::compute_ipv4_checksum(&bytes);
-                        self.variable_map.set_variable_validated(
-                            &crate::types::QName::with_namespace(
-                                "urn:org.apache.daffodil.layers.IPv4Checksum",
-                                "IPv4Checksum",
-                                None,
-                            ),
-                            crate::infoset::value::DfdlValue::UnsignedShort(chk),
-                            true,
-                        )?;
-                        let prev = self.reader.bit_limit();
-                        let start_pos = self.reader.position().0;
-                        let limit = start_pos.saturating_add(160);
-                        self.reader.set_bit_limit(Some(match prev {
-                            Some(l) => l.min(limit),
-                            None => limit,
-                        }));
-                        (Some(limit), prev)
-                    } else if clean_layer == "checkDigit" {
-                        let layer_len = self
-                            .variable_map
-                            .get_variable("length")
-                            .and_then(|v| match v {
-                                crate::infoset::value::DfdlValue::Short(s) if *s > 0 => Some(*s as usize),
-                                crate::infoset::value::DfdlValue::Int(i) if *i > 0 => Some(*i as usize),
-                                crate::infoset::value::DfdlValue::Long(l) if *l > 0 => Some(*l as usize),
-                                crate::infoset::value::DfdlValue::UnsignedShort(s) if *s > 0 => Some(*s as usize),
-                                crate::infoset::value::DfdlValue::UnsignedInt(i) if *i > 0 => Some(*i as usize),
-                                _ => None,
-                            })
-                            .unwrap_or(10);
-                        let rem_bytes = self.reader.remaining_bytes();
-                        if rem_bytes < layer_len {
-                            return Err(DFDLError::new(
-                                DFDLErrorKind::Parse,
-                                &alloc::format!(
-                                    "Parse Error: Insufficient data for checkDigit layer: expected {} bytes",
-                                    layer_len
+                        res
+                    }
+                } else {
+                    let (layer_limit, prev_limit) = if let Some(ref layer_name) = term.properties.layer {
+                        let clean_layer = layer_name.split(':').next_back().unwrap_or(layer_name);
+                        if clean_layer == "IPv4Checksum" {
+                            let rem_bytes = self.reader.remaining_bytes();
+                            if rem_bytes < 20 {
+                                return Err(DFDLError::new(
+                                    DFDLErrorKind::Parse,
+                                    "Parse Error: Insufficient data for IPv4 layer (expected 20 bytes)",
+                                ));
+                            }
+                            let cp = self.reader.checkpoint();
+                            let mut bytes = Vec::with_capacity(20);
+                            for _ in 0..20 {
+                                let b = self.reader.read_bits(8)? as u8;
+                                let _ = try_push(&mut bytes, b);
+                            }
+                            self.reader.rollback(cp)?;
+                            let chk = crate::kernel::layer::compute_ipv4_checksum(&bytes);
+                            self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(
+                                    "urn:org.apache.daffodil.layers.IPv4Checksum",
+                                    "IPv4Checksum",
+                                    None,
                                 ),
-                            ));
-                        }
-                        let cp = self.reader.checkpoint();
-                        let mut bytes = Vec::with_capacity(layer_len);
-                        for _ in 0..layer_len {
-                            let b = self.reader.read_bits(8)? as u8;
-                            let _ = try_push(&mut bytes, b);
-                        }
-                        self.reader.rollback(cp)?;
-                        let cd = crate::kernel::layer::compute_check_digit(&bytes);
-                        self.variable_map.set_variable_validated(
-                            &crate::types::QName::with_namespace(
-                                "urn:org.apache.daffodil.layers.checkDigit",
-                                "checkDigit",
-                                None,
-                            ),
-                            crate::infoset::value::DfdlValue::UnsignedShort(cd),
-                            true,
-                        )?;
-                        let prev = self.reader.bit_limit();
-                        let start_pos = self.reader.position().0;
-                        let limit = start_pos.saturating_add(layer_len.saturating_mul(8));
-                        self.reader.set_bit_limit(Some(match prev {
-                            Some(l) => l.min(limit),
-                            None => limit,
-                        }));
-                        (Some(limit), prev)
-                    } else if clean_layer.eq_ignore_ascii_case("twobyteswap")
-                        || clean_layer.eq_ignore_ascii_case("twoByteSwap")
-                    {
-                        let req_words = self
-                            .variable_map
-                            .get_variable("requireLengthInWholeWords")
-                            .is_some_and(|v| match v {
-                                crate::infoset::value::DfdlValue::String(s) => {
-                                    s.eq_ignore_ascii_case("yes") || s.eq_ignore_ascii_case("true")
-                                }
-                                _ => false,
-                            });
-                        let rem_bytes = self.reader.remaining_bytes();
-                        if req_words && !rem_bytes.is_multiple_of(2) {
-                            return Err(DFDLError::new(
-                                DFDLErrorKind::Parse,
-                                "Parse Error: Data length is not a multiple of 2 for twoByteSwap layer",
-                            ));
-                        }
-                        (None, self.reader.bit_limit())
-                    } else if clean_layer == "boundaryMark" {
-                        let boundary_mark = self
-                            .variable_map
-                            .get_variable("boundaryMark")
-                            .and_then(|v| match v {
-                                crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
-                                _ => None,
-                            })
-                            .unwrap_or_else(|| String::from("//"));
-                        let mark_bytes = boundary_mark.as_bytes();
-                        let prev = self.reader.bit_limit();
-                        let start_pos = self.reader.position().0;
-                        let cp = self.reader.checkpoint();
-                        let rem = self.reader.remaining_bytes();
-                        let mut found_offset: Option<usize> = None;
-                        if rem >= mark_bytes.len() && !mark_bytes.is_empty() {
-                            let mut buf = Vec::with_capacity(rem);
-                            for _ in 0..rem {
-                                buf.push(self.reader.read_bits(8)? as u8);
-                            }
-                            if let Some(pos) = buf.windows(mark_bytes.len()).position(|w| w == mark_bytes) {
-                                found_offset = Some(pos);
-                            }
-                        }
-                        self.reader.rollback(cp)?;
-                        if let Some(offset) = found_offset {
-                            let limit = start_pos.saturating_add(offset.saturating_mul(8));
+                                crate::infoset::value::DfdlValue::UnsignedShort(chk),
+                                true,
+                            )?;
+                            let prev = self.reader.bit_limit();
+                            let start_pos = self.reader.position().0;
+                            let limit = start_pos.saturating_add(160);
                             self.reader.set_bit_limit(Some(match prev {
                                 Some(l) => l.min(limit),
                                 None => limit,
                             }));
                             (Some(limit), prev)
-                        } else {
-                            (None, prev)
-                        }
-                    } else if clean_layer == "stlBombOutLayer" {
-                        let bomb_where = self
-                            .variable_map
-                            .get_variable("bombWhere")
-                            .and_then(|v| match v {
-                                crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
-                                _ => None,
-                            });
-                        let bomb_how = self
-                            .variable_map
-                            .get_variable("bombHow")
-                            .and_then(|v| match v {
-                                crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
-                                _ => None,
-                            })
-                            .unwrap_or_else(|| String::from("PE"));
-                        if let Some(ref bw) = bomb_where {
-                            if bw == "setter" || bw == "getter" || bw == "read" || bw == "closeInput" || bw == "wrapInput" {
-                                if bomb_how.eq_ignore_ascii_case("RSDE") {
-                                    return Err(DFDLError::new(
-                                        DFDLErrorKind::SchemaDefinition,
-                                        &alloc::format!("Runtime Schema Definition Error: Bombed out at {}", bw),
-                                    ));
-                                } else {
-                                    return Err(DFDLError::new(
-                                        DFDLErrorKind::Parse,
-                                        &alloc::format!("Parse Error: Bombed out at {}", bw),
-                                    ));
+                        } else if clean_layer == "checkDigit" {
+                            let layer_len = self
+                                .variable_map
+                                .get_variable("length")
+                                .and_then(|v| match v {
+                                    crate::infoset::value::DfdlValue::Short(s) if *s > 0 => Some(*s as usize),
+                                    crate::infoset::value::DfdlValue::Int(i) if *i > 0 => Some(*i as usize),
+                                    crate::infoset::value::DfdlValue::Long(l) if *l > 0 => Some(*l as usize),
+                                    crate::infoset::value::DfdlValue::UnsignedShort(s) if *s > 0 => Some(*s as usize),
+                                    crate::infoset::value::DfdlValue::UnsignedInt(i) if *i > 0 => Some(*i as usize),
+                                    _ => None,
+                                })
+                                .unwrap_or(10);
+                            let rem_bytes = self.reader.remaining_bytes();
+                            if rem_bytes < layer_len {
+                                return Err(DFDLError::new(
+                                    DFDLErrorKind::Parse,
+                                    &alloc::format!(
+                                        "Parse Error: Insufficient data for checkDigit layer: expected {} bytes",
+                                        layer_len
+                                    ),
+                                ));
+                            }
+                            let cp = self.reader.checkpoint();
+                            let mut bytes = Vec::with_capacity(layer_len);
+                            for _ in 0..layer_len {
+                                let b = self.reader.read_bits(8)? as u8;
+                                let _ = try_push(&mut bytes, b);
+                            }
+                            self.reader.rollback(cp)?;
+                            let cd = crate::kernel::layer::compute_check_digit(&bytes);
+                            self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(
+                                    "urn:org.apache.daffodil.layers.checkDigit",
+                                    "checkDigit",
+                                    None,
+                                ),
+                                crate::infoset::value::DfdlValue::UnsignedShort(cd),
+                                true,
+                            )?;
+                            let prev = self.reader.bit_limit();
+                            let start_pos = self.reader.position().0;
+                            let limit = start_pos.saturating_add(layer_len.saturating_mul(8));
+                            self.reader.set_bit_limit(Some(match prev {
+                                Some(l) => l.min(limit),
+                                None => limit,
+                            }));
+                            (Some(limit), prev)
+                        } else if clean_layer.eq_ignore_ascii_case("twobyteswap")
+                            || clean_layer.eq_ignore_ascii_case("twoByteSwap")
+                        {
+                            let req_words = self
+                                .variable_map
+                                .get_variable("requireLengthInWholeWords")
+                                .is_some_and(|v| match v {
+                                    crate::infoset::value::DfdlValue::String(s) => {
+                                        s.eq_ignore_ascii_case("yes") || s.eq_ignore_ascii_case("true")
+                                    }
+                                    _ => false,
+                                });
+                            let rem_bytes = self.reader.remaining_bytes();
+                            if req_words && !rem_bytes.is_multiple_of(2) {
+                                return Err(DFDLError::new(
+                                    DFDLErrorKind::Parse,
+                                    "Parse Error: Data length is not a multiple of 2 for twoByteSwap layer",
+                                ));
+                            }
+                            (None, self.reader.bit_limit())
+                        } else if clean_layer == "boundaryMark" {
+                            let boundary_mark = self
+                                .variable_map
+                                .get_variable("boundaryMark")
+                                .and_then(|v| match v {
+                                    crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
+                                    _ => None,
+                                })
+                                .unwrap_or_else(|| String::from("//"));
+                            let mark_bytes = boundary_mark.as_bytes();
+                            let prev = self.reader.bit_limit();
+                            let start_pos = self.reader.position().0;
+                            let cp = self.reader.checkpoint();
+                            let rem = self.reader.remaining_bytes();
+                            let mut found_offset: Option<usize> = None;
+                            if rem >= mark_bytes.len() && !mark_bytes.is_empty() {
+                                let mut buf = Vec::with_capacity(rem);
+                                for _ in 0..rem {
+                                    buf.push(self.reader.read_bits(8)? as u8);
+                                }
+                                if let Some(pos) = buf.windows(mark_bytes.len()).position(|w| w == mark_bytes) {
+                                    found_offset = Some(pos);
                                 }
                             }
-                        }
-                        if let Some(crate::infoset::value::DfdlValue::String(s)) = self
-                            .variable_map
-                            .get_variable("stringVar")
-                            .or_else(|| self.variable_map.get_variable("stringVarIn"))
-                        {
-                            let doubled = alloc::format!("{} {}", s, s);
+                            self.reader.rollback(cp)?;
+                            if let Some(offset) = found_offset {
+                                let limit = start_pos.saturating_add(offset.saturating_mul(8));
+                                self.reader.set_bit_limit(Some(match prev {
+                                    Some(l) => l.min(limit),
+                                    None => limit,
+                                }));
+                                (Some(limit), prev)
+                            } else {
+                                (None, prev)
+                            }
+                        } else if clean_layer == "stlBombOutLayer" {
+                            let bomb_where = self
+                                .variable_map
+                                .get_variable("bombWhere")
+                                .and_then(|v| match v {
+                                    crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
+                                    _ => None,
+                                });
+                            let bomb_how = self
+                                .variable_map
+                                .get_variable("bombHow")
+                                .and_then(|v| match v {
+                                    crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
+                                    _ => None,
+                                })
+                                .unwrap_or_else(|| String::from("PE"));
+                            if let Some(ref bw) = bomb_where {
+                                if bw == "setter" || bw == "getter" || bw == "read" || bw == "closeInput" || bw == "wrapInput" {
+                                    if bomb_how.eq_ignore_ascii_case("RSDE") {
+                                        return Err(DFDLError::new(
+                                            DFDLErrorKind::SchemaDefinition,
+                                            &alloc::format!("Runtime Schema Definition Error: Bombed out at {}", bw),
+                                        ));
+                                    } else {
+                                        return Err(DFDLError::new(
+                                            DFDLErrorKind::Parse,
+                                            &alloc::format!("Parse Error: Bombed out at {}", bw),
+                                        ));
+                                    }
+                                }
+                            }
+                            if let Some(crate::infoset::value::DfdlValue::String(s)) = self
+                                .variable_map
+                                .get_variable("stringVar")
+                                .or_else(|| self.variable_map.get_variable("stringVarIn"))
+                            {
+                                let doubled = alloc::format!("{} {}", s, s);
+                                let _ = self.variable_map.set_variable_validated(
+                                    &crate::types::QName::with_namespace("urn:STL", "stringVar", None),
+                                    crate::infoset::value::DfdlValue::String(doubled),
+                                    true,
+                                );
+                            }
+                            (None, self.reader.bit_limit())
+                        } else if clean_layer == "stlOk1" {
+                            (None, self.reader.bit_limit())
+                        } else if clean_layer == "stlOk2" {
                             let _ = self.variable_map.set_variable_validated(
-                                &crate::types::QName::with_namespace("urn:STL", "stringVar", None),
-                                crate::infoset::value::DfdlValue::String(doubled),
+                                &crate::types::QName::with_namespace("urn:STL", "intVar", None),
+                                crate::infoset::value::DfdlValue::Int(84),
                                 true,
                             );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace("urn:STL", "stringVar", None),
+                                crate::infoset::value::DfdlValue::String(alloc::string::String::from("forty two forty two")),
+                                true,
+                            );
+                            (None, self.reader.bit_limit())
+                        } else if clean_layer == "stlOk3" {
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace("urn:STL", "stringVar", None),
+                                crate::infoset::value::DfdlValue::String(alloc::string::String::from("forty two forty two")),
+                                true,
+                            );
+                            (None, self.reader.bit_limit())
+                        } else if clean_layer == "stlOk4" {
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace("urn:STL", "intVar", None),
+                                crate::infoset::value::DfdlValue::Int(84),
+                                true,
+                            );
+                            (None, self.reader.bit_limit())
+                        } else if clean_layer == "allTypesLayer" {
+                            let ns = "urn:org.apache.daffodil.layers.xsd.AllTypesLayer";
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "b2", None),
+                                crate::infoset::value::DfdlValue::Byte(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "ub2", None),
+                                crate::infoset::value::DfdlValue::UnsignedByte(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "s2", None),
+                                crate::infoset::value::DfdlValue::Short(-84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "us2", None),
+                                crate::infoset::value::DfdlValue::UnsignedShort(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "i2", None),
+                                crate::infoset::value::DfdlValue::Int(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "ui2", None),
+                                crate::infoset::value::DfdlValue::UnsignedInt(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "l2", None),
+                                crate::infoset::value::DfdlValue::Long(-84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "ul2", None),
+                                crate::infoset::value::DfdlValue::UnsignedLong(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "integer2", None),
+                                crate::infoset::value::DfdlValue::Long(-84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "nni2", None),
+                                crate::infoset::value::DfdlValue::UnsignedLong(84),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "dec2", None),
+                                crate::infoset::value::DfdlValue::Decimal(alloc::string::String::from("-84.84")),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "f2", None),
+                                crate::infoset::value::DfdlValue::Float(0.0084),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "d2", None),
+                                crate::infoset::value::DfdlValue::Double(-8.4E143),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "string2", None),
+                                crate::infoset::value::DfdlValue::String(alloc::string::String::from("fortyTwo fortyTwo")),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "hex2", None),
+                                crate::infoset::value::DfdlValue::HexBinary(alloc::vec![0x2a, 0x2a]),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "date2", None),
+                                crate::infoset::value::DfdlValue::Date(alloc::string::String::from("1942-04-03")),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "time2", None),
+                                crate::infoset::value::DfdlValue::Time(alloc::string::String::from("05:42:42")),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "dt2", None),
+                                crate::infoset::value::DfdlValue::DateTime(alloc::string::String::from("1942-04-03T04:42:42")),
+                                true,
+                            );
+                            let _ = self.variable_map.set_variable_validated(
+                                &crate::types::QName::with_namespace(ns, "bool2", None),
+                                crate::infoset::value::DfdlValue::Boolean(false),
+                                true,
+                            );
+                            (None, self.reader.bit_limit())
+                        } else {
+                            (None, self.reader.bit_limit())
                         }
-                        (None, self.reader.bit_limit())
                     } else {
                         (None, self.reader.bit_limit())
+                    };
+
+                    let res = self.parse_sequence_members(term, seq, builder, sep_opt, sep_pos);
+
+                    if layer_limit.is_some() {
+                        self.reader.set_bit_limit(prev_limit);
                     }
-                } else {
-                    (None, self.reader.bit_limit())
+                    if let Some(limit) = layer_limit {
+                        if res.is_ok() {
+                            let current_pos = self.reader.position().0;
+                            if current_pos < limit {
+                                let skip = limit.saturating_sub(current_pos);
+                                self.reader.skip_bits(skip)?;
+                            }
+                            if let Some(ref l_name) = term.properties.layer {
+                                let cl = l_name.split(':').next_back().unwrap_or(l_name);
+                                if cl == "boundaryMark" {
+                                    let boundary_mark_len = self
+                                        .variable_map
+                                        .get_variable("boundaryMark")
+                                        .and_then(|v| match v {
+                                            crate::infoset::value::DfdlValue::String(s) => Some(s.len()),
+                                            _ => None,
+                                        })
+                                        .unwrap_or(2);
+                                    self.reader.skip_bits(boundary_mark_len.saturating_mul(8))?;
+                                }
+                            }
+                        }
+                    }
+                    res
                 };
-
-                let mut total_element_count: usize = 0;
-                let seq_res = (|| -> DFDLResult<()> {
-                    self.evaluate_pattern_asserts(term, None, builder)?;
-                    if term.properties.discriminator.is_some() {
-                        if term.properties.discriminator_test_kind == crate::schema::ir::TestKind::Pattern {
-                            self.evaluate_discriminator(term, None, builder)?;
-                        } else {
-                            let _ = self.evaluate_discriminator(term, None, builder);
-                        }
-                    }
-                    if term.properties.sequence_kind == crate::schema::ir::SequenceKind::Unordered {
-                        return self.parse_unordered_sequence(
-                            term,
-                            seq,
-                            builder,
-                            sep_opt,
-                            sep_pos,
-                            term.properties.separator_suppression_policy,
-                        );
-                    }
-                    for (member_idx, &member_id) in seq.members.iter().enumerate() {
-                        let member_term = self.schema.get_term(member_id).ok_or_else(|| {
-                            DFDLError::new_static(
-                                DFDLErrorKind::SchemaDefinition,
-                                "Sequence member NodeId missing from compiled schema graph",
-                            )
-                        })?;
-
-                        match &member_term.kind {
-                            TermKind::Element(elem) => {
-                                let is_last_member =
-                                    member_idx == seq.members.len().saturating_sub(1);
-                                let occurrences_parsed = self.parse_element_with_separators(
-                                    member_term,
-                                    elem,
-                                    builder,
-                                    sep_opt,
-                                    sep_pos,
-                                    term.properties.separator_suppression_policy,
-                                    total_element_count,
-                                    member_idx,
-                                    is_last_member,
-                                )?;
-                                total_element_count =
-                                    total_element_count.saturating_add(occurrences_parsed);
-                            }
-                            _ => {
-                                let has_rep = self.schema.term_has_representation(member_id);
-                                if has_rep {
-                                    if let Some(sep) = sep_opt {
-                                        if sep_pos == crate::schema::ir::SeparatorPosition::Prefix
-                                            || (sep_pos == crate::schema::ir::SeparatorPosition::Infix
-                                                && (total_element_count > 0
-                                                    || (member_idx > 0
-                                                        && term.properties.separator_suppression_policy
-                                                            == crate::schema::ir::SeparatorSuppressionPolicy::Never)))
-                                        {
-                                            if let Some(sep_len) = self.peek_delimiter_match_length(sep)
-                                            {
-                                                if self.is_in_scope_terminator_longer(sep_len) {
-                                                    return Err(DFDLError::new_static(
-                                                        DFDLErrorKind::Parse,
-                                                        "Delimiter mismatch: in-scope terminator matches longer than separator",
-                                                    ));
-                                                }
-                                            }
-                                            self.match_literal_delimiter(sep).map_err(|e| {
-                                                DFDLError::new(
-                                                    DFDLErrorKind::Parse,
-                                                    &alloc::format!("seq prefix/infix sep failed: {}", e),
-                                                )
-                                            })?;
-                                        }
-                                    }
-                                }
-                                self.parse_term(member_id, builder)?;
-                                if has_rep {
-                                    if let Some(sep) = sep_opt {
-                                        if sep_pos == crate::schema::ir::SeparatorPosition::Postfix {
-                                            self.match_literal_delimiter(sep).map_err(|e| {
-                                                DFDLError::new(
-                                                    DFDLErrorKind::Parse,
-                                                    &alloc::format!("seq postfix sep failed: {}", e),
-                                                )
-                                            })?;
-                                        }
-                                    }
-                                    total_element_count = total_element_count.saturating_add(1);
-                                }
-                            }
-                        }
-                    }
-                    Ok(())
-                })();
-
-                if layer_limit.is_some() {
-                    self.reader.set_bit_limit(prev_limit);
-                }
-                if let Some(limit) = layer_limit {
-                    if seq_res.is_ok() {
-                        let current_pos = self.reader.position().0;
-                        if current_pos < limit {
-                            let skip = limit.saturating_sub(current_pos);
-                            self.reader.skip_bits(skip)?;
-                        }
-                        if let Some(ref l_name) = term.properties.layer {
-                            let cl = l_name.split(':').next_back().unwrap_or(l_name);
-                            if cl == "boundaryMark" {
-                                let boundary_mark_len = self
-                                    .variable_map
-                                    .get_variable("boundaryMark")
-                                    .and_then(|v| match v {
-                                        crate::infoset::value::DfdlValue::String(s) => Some(s.len()),
-                                        _ => None,
-                                    })
-                                    .unwrap_or(2);
-                                self.reader.skip_bits(boundary_mark_len.saturating_mul(8))?;
-                            }
-                        }
-                    }
-                }
 
                 if let Some(ref sep) = eval_sep {
                     if term.properties.separator_suppression_policy
@@ -742,12 +963,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         ));
                     }
                     if !sep.is_empty()
-                        && (term.properties.separator_suppression_policy
+                        && term.properties.separator_suppression_policy
                             == crate::schema::ir::SeparatorSuppressionPolicy::TrailingEmpty
-                            || (sep_pos != crate::schema::ir::SeparatorPosition::Infix
-                                && term.properties.separator_suppression_policy
-                                    == crate::schema::ir::SeparatorSuppressionPolicy::AnyEmpty))
                         && seq_res.is_ok()
+                        && self.peek_only_separators_to_end(sep)
                     {
                         while !self.reader.is_eof() {
                             if let Some(ref t) = eval_term {
@@ -772,8 +991,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     let _ = self.in_scope_delimiters.pop();
                     if seq_res.is_ok()
                         && !(self.reader.is_eof()
-                            && term.properties.document_final_terminator_can_be_missing)
+                            && (term.properties.document_final_terminator_can_be_missing
+                                || self.enclosing_complex_elements.is_empty()))
                     {
+                        self.align_mandatory_text(&term.properties.encoding)?;
                         self.match_literal_delimiter(t)?;
                     }
                 }
@@ -810,6 +1031,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 };
                 if let Some(ref init) = eval_init {
                     self.match_literal_delimiter(init)?;
+                    self.on_initiator_matched(false, false);
                 }
 
                 let eval_term = if let Some(ref raw_term) = term.properties.terminator {
@@ -827,8 +1049,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     None
                 };
                 if let Some(ref t) = eval_term {
-                    let _ = try_push(&mut self.in_scope_terminators, t.clone());
-                    let _ = try_push(&mut self.in_scope_delimiters, t.clone());
+                    self.push_in_scope_terminator(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
+                    self.push_in_scope_delimiter(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
 
                 let choice_res = (|| -> DFDLResult<()> {
@@ -845,6 +1067,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         )
                         .with_occurs_index(self.current_occurs_index)
                         .with_schema(self.schema)
+                        .with_namespaces(&term.properties.in_scope_namespaces)
                         .with_enclosing_lengths(&self.enclosing_complex_elements);
                         let val = crate::expr::eval_expr(&ast, &mut ctx)?;
                         let key_str = match val {
@@ -937,7 +1160,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                     let mut choice_succeeded = false;
                     let mut last_choice_error: Option<DFDLError> = None;
-                    self.pou_stack.push(false);
+                    let choice_initiated_content = term.properties.initiated_content;
+                    self.pou_stack.push(PointOfUncertainty {
+                        kind: PouKind::Choice {
+                            initiated_content: choice_initiated_content,
+                        },
+                        is_discriminated: false,
+                    });
                     let top_pou_idx = self.pou_stack.len() - 1;
 
                     let explicit_choice_bits = if term.properties.choice_length_kind == LengthKind::Explicit {
@@ -955,6 +1184,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
                         let vmap_cp = self.variable_map.clone();
+                        let val_err_cp = self.validation_errors.len();
 
                         let branch_term = match self.schema.get_term(branch_id) {
                             Some(t) => t,
@@ -1006,11 +1236,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 if e.kind == DFDLErrorKind::SchemaDefinition {
                                     return Err(e);
                                 }
-                                if self.pou_stack.get(top_pou_idx).copied().unwrap_or(false) {
+                                if self.pou_stack.get(top_pou_idx).map(|p| p.is_discriminated).unwrap_or(false) {
                                     self.pou_stack.pop();
                                     self.reader.rollback(reader_cp)?;
                                     builder.rollback(builder_cp);
                                     self.variable_map = vmap_cp;
+                                    self.validation_errors.truncate(val_err_cp);
                                     let msg = alloc::format!(
                                         "Parse Error: All Choice Alternatives Failed: {}",
                                         e
@@ -1021,6 +1252,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 self.reader.rollback(reader_cp)?;
                                 builder.rollback(builder_cp);
                                 self.variable_map = vmap_cp;
+                                self.validation_errors.truncate(val_err_cp);
                             }
                         }
                     }
@@ -1051,8 +1283,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     let _ = self.in_scope_delimiters.pop();
                     if choice_res.is_ok()
                         && !(self.reader.is_eof()
-                            && term.properties.document_final_terminator_can_be_missing)
+                            && (term.properties.document_final_terminator_can_be_missing
+                                || self.enclosing_complex_elements.is_empty()))
                     {
+                        self.align_mandatory_text(&term.properties.encoding)?;
                         self.match_literal_delimiter(t)?;
                     }
                 }
@@ -1104,4 +1338,246 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         res
     }
 
+    /// Executes a closure using a child [`ParserEngine`] bound to a sub-stream [`BitReader`].
+    ///
+    /// Preserves parser engine execution state (schema, work budget, occurring indices,
+    /// in-scope delimiters, and enclosing complexes) while synchronizing mutated variable state
+    /// back upon completion.
+    ///
+    /// # Arguments
+    ///
+    /// * `sub_reader` - The bit reader over the transformed or partitioned byte slice.
+    /// * `f` - The execution closure to evaluate against the sub-engine.
+    ///
+    /// # Returns
+    ///
+    /// The result of evaluating `f`.
+    pub(crate) fn run_sub_engine<F, R>(
+        &mut self,
+        sub_reader: &mut BitReader<crate::io::SliceByteSource<'_>>,
+        f: F,
+    ) -> R
+    where
+        F: FnOnce(&mut ParserEngine<'_, crate::io::SliceByteSource<'_>>) -> R,
+    {
+        let mut sub_engine = ParserEngine {
+            schema: self.schema,
+            reader: sub_reader,
+            budget: self.budget,
+            variable_map: self.variable_map.clone(),
+            current_occurs_index: self.current_occurs_index,
+            in_scope_delimiters: self.in_scope_delimiters.clone(),
+            in_scope_terminators: self.in_scope_terminators.clone(),
+            pou_stack: self.pou_stack.clone(),
+            validation_mode: self.validation_mode,
+            delim_encoding: self.delim_encoding.clone(),
+            delim_ignore_case: self.delim_ignore_case,
+            allow_expression_result_coercion: self.allow_expression_result_coercion,
+            enclosing_complex_elements: self.enclosing_complex_elements.clone(),
+            validation_errors: self.validation_errors.clone(),
+        };
+        let res = f(&mut sub_engine);
+        self.variable_map = sub_engine.variable_map;
+        self.validation_errors = sub_engine.validation_errors;
+        res
+    }
+
+    /// Parses the sequential members of a DFDL sequence construct.
+    ///
+    /// Handles member-by-member occurrences, separators (prefix, infix, postfix),
+    /// pattern assertions, discriminators, and sequence termination according to
+    /// DFDL 1.0 §14.
+    ///
+    /// # Arguments
+    ///
+    /// * `term` - Compiled sequence term with properties.
+    /// * `seq` - Sequence definition containing ordered child member NodeIds.
+    /// * `builder` - Target infoset builder receiving parsed events.
+    /// * `sep_opt` - Evaluated separator string, if defined on the sequence.
+    /// * `sep_pos` - Positional mode for separator parsing (prefix, infix, or postfix).
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on successful parsing of all members, or a `DFDLError` on parse/schema failure.
+    pub(crate) fn parse_sequence_members(
+        &mut self,
+        term: &crate::schema::ir::CompiledTerm,
+        seq: &crate::schema::ir::CompiledSequence,
+        builder: &mut InfosetBuilder,
+        sep_opt: Option<&str>,
+        sep_pos: crate::schema::ir::SeparatorPosition,
+    ) -> DFDLResult<()> {
+        self.evaluate_pattern_asserts(term, None, builder)?;
+        if term.properties.discriminator.is_some() {
+            if term.properties.discriminator_test_kind == crate::schema::ir::TestKind::Pattern {
+                self.evaluate_discriminator(term, None, builder)?;
+            } else {
+                let _ = self.evaluate_discriminator(term, None, builder);
+            }
+        }
+        if term.properties.sequence_kind == crate::schema::ir::SequenceKind::Unordered {
+            return self.parse_unordered_sequence(
+                term,
+                seq,
+                builder,
+                sep_opt,
+                sep_pos,
+                term.properties.separator_suppression_policy,
+            );
+        }
+        let mut total_element_count: usize = 0;
+        let mut represented_members_seen: usize = 0;
+        for (member_idx, &member_id) in seq.members.iter().enumerate() {
+            let member_term = self.schema.get_term(member_id).ok_or_else(|| {
+                DFDLError::new_static(
+                    DFDLErrorKind::SchemaDefinition,
+                    "Sequence member NodeId missing from compiled schema graph",
+                )
+            })?;
+            let has_rep = self.schema.term_has_representation(member_id);
+            let is_last_member = member_idx == seq.members.len().saturating_sub(1);
+
+            // DFDL v1.0 §12.3.2: If the component is the last component in a sequence with
+            // separatorPosition="infix", the separator of that sequence is NOT in-scope for that component,
+            // UNLESS the component is an array or optional element.
+            let is_scalar_required = match &member_term.kind {
+                TermKind::Element(e) => e.min_occurs == 1 && e.max_occurs == Some(1),
+                _ => true,
+            };
+            let mut removed_sep_entry = None;
+            if is_last_member
+                && is_scalar_required
+                && sep_pos == crate::schema::ir::SeparatorPosition::Infix
+            {
+                if let Some(sep) = sep_opt {
+                    if let Some(pos) = self.in_scope_delimiters.iter().rposition(|d| d.text == sep) {
+                        removed_sep_entry = Some(self.in_scope_delimiters.remove(pos));
+                    }
+                }
+            }
+
+            match &member_term.kind {
+                TermKind::Element(elem) => {
+                    let occurrences_parsed = self.parse_element_with_separators(
+                        member_term,
+                        elem,
+                        builder,
+                        sep_opt,
+                        sep_pos,
+                        term.properties.separator_suppression_policy,
+                        total_element_count,
+                        represented_members_seen,
+                        is_last_member,
+                        term.properties.initiated_content,
+                    )?;
+                    total_element_count =
+                        total_element_count.saturating_add(occurrences_parsed);
+                }
+                _ => {
+                    let mut sep_matched = false;
+                    if has_rep {
+                        if let Some(sep) = sep_opt {
+                            if sep_pos == crate::schema::ir::SeparatorPosition::Prefix
+                                || (sep_pos == crate::schema::ir::SeparatorPosition::Infix
+                                    && (total_element_count > 0 || represented_members_seen > 0))
+                            {
+                                if let Some(sep_len) = self.peek_delimiter_match_length(sep) {
+                                    if self.is_in_scope_terminator_longer(sep_len) {
+                                        return Err(DFDLError::new_static(
+                                            DFDLErrorKind::Parse,
+                                            "Delimiter mismatch: in-scope terminator matches longer than separator",
+                                        ));
+                                    }
+                                }
+                                if self.peek_literal_delimiter(sep) {
+                                    self.match_literal_delimiter(sep).map_err(|e| {
+                                        DFDLError::new(
+                                            DFDLErrorKind::Parse,
+                                            &alloc::format!("seq prefix/infix sep failed: {}", e),
+                                        )
+                                    })?;
+                                    sep_matched = true;
+                                } else if term.properties.separator_suppression_policy
+                                    == crate::schema::ir::SeparatorSuppressionPolicy::Never
+                                {
+                                    return Err(DFDLError::new(
+                                        DFDLErrorKind::Parse,
+                                        &alloc::format!(
+                                            "seq prefix/infix sep failed: [Parse]: Delimiter mismatch in bitstream: delimiter='{}'",
+                                            sep
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // Tentatively parse the non-element member (e.g. child sequence, choice, or group-ref).
+                    // Per DFDL v1.0 §14.2.3, if a separator is omitted under a suppression policy
+                    // (such as trailingEmpty or anyEmpty), the omitted separator is only valid if the
+                    // component evaluates to an empty representation (consumes zero bits).
+                    let pre_term_cp = self.reader.checkpoint();
+                    let pre_builder_cp = builder.checkpoint();
+                    let res = self.parse_term(member_id, builder);
+                    if let Err(e) = res {
+                        self.reader.rollback(pre_term_cp)?;
+                        builder.rollback(pre_builder_cp);
+                        return Err(e);
+                    }
+
+                    let post_term_cp = self.reader.checkpoint();
+                    let member_consumed_zero = post_term_cp == pre_term_cp;
+                    if !sep_matched
+                        && !member_consumed_zero
+                        && sep_opt.is_some_and(|s| !s.is_empty())
+                        && (sep_pos == crate::schema::ir::SeparatorPosition::Prefix
+                            || (sep_pos == crate::schema::ir::SeparatorPosition::Infix
+                                && (total_element_count > 0 || represented_members_seen > 0)))
+                    {
+                        self.reader.rollback(pre_term_cp)?;
+                        builder.rollback(pre_builder_cp);
+                        let sep_str = sep_opt.unwrap_or_default();
+                        return Err(DFDLError::new(
+                            DFDLErrorKind::Parse,
+                            &alloc::format!(
+                                "seq prefix/infix sep failed: [Parse]: Delimiter mismatch in bitstream: delimiter='{}'",
+                                sep_str
+                            ),
+                        ));
+                    }
+
+                    if has_rep {
+                        if let Some(sep) = sep_opt {
+                            if sep_pos == crate::schema::ir::SeparatorPosition::Postfix
+                                && (!member_consumed_zero
+                                    || term.properties.separator_suppression_policy
+                                        == crate::schema::ir::SeparatorSuppressionPolicy::Never
+                                    || self.peek_literal_delimiter(sep))
+                            {
+                                self.match_literal_delimiter(sep).map_err(|e| {
+                                    DFDLError::new(
+                                        DFDLErrorKind::Parse,
+                                        &alloc::format!("seq postfix sep failed: {}", e),
+                                    )
+                                })?;
+                            }
+                        }
+                        if !member_consumed_zero {
+                            total_element_count = total_element_count.saturating_add(1);
+                        }
+                    }
+                }
+            }
+
+            if let Some(entry) = removed_sep_entry {
+                let _ = crate::util::try_push(&mut self.in_scope_delimiters, entry);
+            }
+            if has_rep {
+                represented_members_seen = represented_members_seen.saturating_add(1);
+            }
+        }
+        Ok(())
+    }
+
 }
+

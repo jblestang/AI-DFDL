@@ -407,6 +407,100 @@ pub fn encode_ibm4690_packed(value: i64) -> Vec<u8> {
     bytes
 }
 
+/// Remaps raw control characters to Unicode Private Use Area (PUA) codepoints
+/// for XML Infoset compatibility per DFDL Section 22.
+///
+/// In DFDL infosets (e.g. XML Infoset serialization in TDML test suites), characters that cannot
+/// be represented directly in XML 1.0 (such as ASCII NUL or C0 control characters) or characters
+/// that would be normalized by XML parsers (such as carriage return `%CR;` U+000D) are mapped
+/// to the Unicode Private Use Area:
+/// - U+E000..=U+E01F maps to raw C0 control bytes 0x00..=0x1F (e.g. U+E000 -> 0x00, U+E00D -> 0x0D `%CR;`).
+/// - U+E07F maps to raw ASCII DEL 0x7F.
+/// - U+E080..=U+E09F maps to raw C1 control bytes 0x80..=0x9F.
+pub fn remap_raw_chars_to_pua(text: &str) -> alloc::string::String {
+    let mut out = alloc::string::String::with_capacity(text.len());
+    for c in text.chars() {
+        let u = c as u32;
+        if (u <= 0x1F && u != 0x09 && u != 0x0A && u != 0x0D) || (0x80..=0x9F).contains(&u) {
+            if let Some(mapped) = core::char::from_u32(u.saturating_add(0xE000)) {
+                out.push(mapped);
+            } else {
+                out.push(c);
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Remaps Unicode Private Use Area (PUA) codepoints representing XML-illegal or protected
+/// control characters back to their raw ASCII/control characters per DFDL infoset representation.
+pub fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
+    let mut out = alloc::string::String::with_capacity(text.len());
+    for c in text.chars() {
+        let u = c as u32;
+        if (0xE000..=0xE01F).contains(&u) || (0xE080..=0xE09F).contains(&u) {
+            if let Some(mapped) = core::char::from_u32(u.saturating_sub(0xE000)) {
+                out.push(mapped);
+            } else {
+                out.push(c);
+            }
+        } else if u == 0xE07F {
+            out.push('\x7F');
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Reorders integer bytes between machine representation and wire format according to DFDL `ByteOrder`.
+///
+/// Under DFDL v1.0 §13.7.1.4, when `dfdl:byteOrder` is `'littleEndian'`, the least-significant byte
+/// is stored first on the wire, followed by bytes of increasing significance. When integers have
+/// explicit lengths (such as 16-bit, 24-bit, 48-bit), byte reversal must operate strictly over
+/// the integer's effective byte width (`bits / 8`), preserving sign extension and magnitude.
+///
+/// # Arguments
+/// * `val` - Unsigned 64-bit integer word containing the value bits.
+/// * `bits` - Bit width of the integer representation (1 to 64).
+/// * `byte_order` - The DFDL byte order (`BigEndian` or `LittleEndian`).
+///
+/// # Returns
+/// The integer with byte ordering adjusted for the specified byte width.
+///
+/// # Examples
+/// ```rust
+/// use dfdl_core::io::ByteOrder;
+/// use dfdl_core::util::order_integer_bytes;
+///
+/// // 16-bit integer byte reversal
+/// assert_eq!(order_integer_bytes(0x1234, 16, ByteOrder::LittleEndian), 0x3412);
+/// // 24-bit integer byte reversal
+/// assert_eq!(order_integer_bytes(0x123456, 24, ByteOrder::LittleEndian), 0x563412);
+/// // Big-endian leaves value unchanged
+/// assert_eq!(order_integer_bytes(0x123456, 24, ByteOrder::BigEndian), 0x123456);
+/// ```
+#[inline]
+pub fn order_integer_bytes(val: u64, bits: usize, byte_order: crate::io::ByteOrder) -> u64 {
+    if byte_order == crate::io::ByteOrder::BigEndian || bits <= 8 {
+        return val;
+    }
+    let num_bytes = bits / 8;
+    if num_bytes <= 1 {
+        return val;
+    }
+    let mut result = 0u64;
+    for i in 0..num_bytes {
+        let shift = (num_bytes.saturating_sub(1).saturating_sub(i)).saturating_mul(8);
+        let byte = (val >> shift) & 0xFF;
+        let dest_shift = i.saturating_mul(8);
+        result |= byte << dest_shift;
+    }
+    result
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -527,5 +621,46 @@ mod tests {
         );
         // 0x12, 0x3B with "C D F C" should fail because 'B' is not an allowed sign code
         assert!(decode_packed_decimal_with_signs(&[0x12, 0x3B], Some("C D F C")).is_err());
+    }
+
+    /// Verifies standard conforming integer byte reordering across all valid byte widths (1..8)
+    /// under both BigEndian and LittleEndian according to DFDL v1.0 §13.7.1.4.
+    #[test]
+    fn test_order_integer_bytes() {
+        use crate::io::ByteOrder;
+
+        // BigEndian should always leave the raw bit pattern intact regardless of bit length
+        assert_eq!(order_integer_bytes(0x1234, 16, ByteOrder::BigEndian), 0x1234);
+        assert_eq!(order_integer_bytes(0x123456, 24, ByteOrder::BigEndian), 0x123456);
+
+        // Sub-byte or single byte values remain unchanged under LittleEndian
+        assert_eq!(order_integer_bytes(0x05, 4, ByteOrder::LittleEndian), 0x05);
+        assert_eq!(order_integer_bytes(0x7F, 8, ByteOrder::LittleEndian), 0x7F);
+
+        // 16-bit (2-byte) reversal: 0x1234 -> 0x3412
+        assert_eq!(order_integer_bytes(0x1234, 16, ByteOrder::LittleEndian), 0x3412);
+        // Round-trip property: applying reversal twice returns original value
+        assert_eq!(
+            order_integer_bytes(order_integer_bytes(0x1234, 16, ByteOrder::LittleEndian), 16, ByteOrder::LittleEndian),
+            0x1234
+        );
+
+        // 24-bit (3-byte) reversal: 0x123456 -> 0x563412
+        assert_eq!(order_integer_bytes(0x123456, 24, ByteOrder::LittleEndian), 0x563412);
+
+        // 32-bit (4-byte) reversal: 0x12345678 -> 0x78563412
+        assert_eq!(order_integer_bytes(0x12345678, 32, ByteOrder::LittleEndian), 0x78563412);
+
+        // 40-bit (5-byte) reversal: 0x123456789A -> 0x9A78563412
+        assert_eq!(order_integer_bytes(0x123456789A, 40, ByteOrder::LittleEndian), 0x9A78563412);
+
+        // 48-bit (6-byte) reversal: 0x123456789ABC -> 0xBC9A78563412
+        assert_eq!(order_integer_bytes(0x123456789ABC, 48, ByteOrder::LittleEndian), 0xBC9A78563412);
+
+        // 56-bit (7-byte) reversal: 0x123456789ABCDE -> 0xDEBC9A78563412
+        assert_eq!(order_integer_bytes(0x123456789ABCDE, 56, ByteOrder::LittleEndian), 0xDEBC9A78563412);
+
+        // 64-bit (8-byte) reversal: 0x123456789ABCDEF0 -> 0xF0DEBC9A78563412
+        assert_eq!(order_integer_bytes(0x123456789ABCDEF0, 64, ByteOrder::LittleEndian), 0xF0DEBC9A78563412);
     }
 }

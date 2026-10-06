@@ -245,7 +245,69 @@ impl VariableMap {
         Ok(())
     }
 
-    /// Pushes a new variable instance for `dfdl:newVariableInstance` (§7.7).
+    /// Sets an external variable value on the variable map (§7.7).
+    ///
+    /// Per DFDL v1.0 §7.7, an external variable binding overrides the `defaultValue`
+    /// of the variable defined by `dfdl:defineVariable`. It provides an initial value
+    /// from the external invocation environment rather than executing a runtime `dfdl:setVariable`.
+    /// Consequently, the variable transitions to or remains in the [`VariableState::Defined`] state,
+    /// enabling subsequent runtime setting via `dfdl:setVariable` or scoped inheritance by
+    /// `dfdl:newVariableInstance` without triggering spurious "cannot set variable twice" errors.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Qualified or local name of the external variable to bind.
+    /// * `value` - String representation of the value supplied by the invocation environment.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DFDLError` if the variable name is invalid or cannot be processed.
+    pub fn set_external_variable(&mut self, name: &str, value: &str) -> DFDLResult<()> {
+        let clean = name.trim_start_matches('$');
+        let (prefix, local) = if let Some(idx) = clean.find(':') {
+            (clean.get(..idx), clean.get(idx.saturating_add(1)..).unwrap_or(""))
+        } else {
+            (None, clean)
+        };
+        if let Some(var) = self.variables.iter_mut().find(|v| {
+            let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
+            let local_match = v_local == local || v.name.local_name == clean || v.name.local_name == name;
+            if let Some(p) = prefix {
+                local_match && (v.name.prefix.as_deref() == Some(p) || v.name.prefix.is_none())
+            } else {
+                local_match
+            }
+        }) {
+            let string_val = DfdlValue::String(alloc::string::ToString::to_string(value));
+            let coerced = var.var_type.coerce_value(&string_val).unwrap_or(string_val);
+            var.default_value = Some(coerced.clone());
+            var.current_value = Some(coerced.clone());
+            var.state.set(VariableState::Defined);
+            var.instance_stack = alloc::vec![(Some(coerced), Cell::new(VariableState::Defined))];
+            Ok(())
+        } else {
+            let val = DfdlValue::String(alloc::string::ToString::to_string(value));
+            self.define_variable(QName::local(name), DfdlSimpleType::String, Some(val));
+            Ok(())
+        }
+    }
+
+    /// Pushes a new variable instance for `dfdl:newVariableInstance` (§7.7, §7.8).
+    ///
+    /// When `value` is provided (evaluating the `defaultValue` attribute of `dfdl:newVariableInstance`),
+    /// the value is coerced to the declared variable type and the instance begins in the
+    /// [`VariableState::Defined`] state so that subsequent `dfdl:setVariable` calls inside the scope
+    /// are permitted. When `value` is omitted, the instance inherits the default value from
+    /// the original `dfdl:defineVariable` definition (including any external variable override).
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Qualified name of the variable to instantiate.
+    /// * `value` - Optional initial default value evaluated from the instance declaration.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DFDLError` if the instance stack cannot be updated.
     pub fn new_variable_instance(
         &mut self,
         name: &QName,
@@ -257,8 +319,9 @@ impl VariableMap {
             let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
             v_local == local || v.name.local_name == clean || v.name.local_name == name.local_name
         }) {
-            let (effective, st) = if let Some(v) = value {
-                (Some(v), VariableState::Set)
+            let coerced_value = value.map(|v| var.var_type.coerce_value(&v).unwrap_or(v));
+            let (effective, st) = if let Some(v) = coerced_value {
+                (Some(v), VariableState::Defined)
             } else if let Some(ref d) = var.default_value {
                 (Some(d.clone()), VariableState::Defined)
             } else {
@@ -270,7 +333,7 @@ impl VariableMap {
             Ok(())
         } else {
             let (effective, st) = if let Some(v) = value {
-                (Some(v), VariableState::Set)
+                (Some(v), VariableState::Defined)
             } else {
                 (None, VariableState::Undefined)
             };
@@ -493,5 +556,71 @@ mod tests {
         // Attempting to set variable after runtime read must fail with SchemaDefinition per DFDL-7-131R
         let set_res = map.set_variable_validated(&QName::local("vRuntime"), DfdlValue::Int(20), true);
         assert!(matches!(set_res, Err(ref e) if e.kind == DFDLErrorKind::SchemaDefinition));
+    }
+
+    /// Verifies that an external variable binding overrides the defaultValue (§7.7),
+    /// initializes the variable in the Defined state rather than Set, and permits
+    /// subsequent runtime mutation via dfdl:setVariable before transition to Set.
+    #[test]
+    fn test_external_variable_override_and_runtime_set() {
+        // Initialize variable map with a schema-defined integer variable
+        let mut map = VariableMap::new();
+        // Variable declared with defaultValue="42"
+        map.define_variable(
+            QName::local("extVar"),
+            DfdlSimpleType::Int,
+            Some(DfdlValue::Int(42)),
+        );
+
+        // Bind external variable from invocation environment with value "100"
+        let ext_res = map.set_external_variable("extVar", "100");
+        assert!(ext_res.is_ok());
+
+        // Validate that defaultValue and current_value are coerced to Int(100)
+        assert_eq!(map.get_variable("extVar"), Some(&DfdlValue::Int(100)));
+
+        // Ensure state is Defined so dfdl:setVariable can still set it at runtime
+        let set_res = map.set_variable_validated(&QName::local("extVar"), DfdlValue::Int(200), true);
+        assert!(set_res.is_ok());
+        assert_eq!(map.get_variable("extVar"), Some(&DfdlValue::Int(200)));
+
+        // Setting variable again after it transitioned to Set must fail
+        let set_again = map.set_variable_validated(&QName::local("extVar"), DfdlValue::Int(300), true);
+        assert!(matches!(set_again, Err(ref e) if e.kind == DFDLErrorKind::SchemaDefinition));
+    }
+
+    /// Verifies that dfdl:newVariableInstance without defaultValue inherits the external
+    /// override value, and that explicit defaultValue coercions function properly (§7.8).
+    #[test]
+    fn test_external_variable_new_instance_inheritance() {
+        // Initialize variable map
+        let mut map = VariableMap::new();
+        // Variable declared without defaultValue
+        map.define_variable(
+            QName::local("scopeVar"),
+            DfdlSimpleType::Int,
+            None,
+        );
+
+        // Supply initial value via external variable binding
+        let ext_res = map.set_external_variable("scopeVar", "50");
+        assert!(ext_res.is_ok());
+
+        // Push new instance without defaultValue: must inherit 50
+        let nvi_res = map.new_variable_instance(&QName::local("scopeVar"), None);
+        assert!(nvi_res.is_ok());
+        assert_eq!(map.get_variable("scopeVar"), Some(&DfdlValue::Int(50)));
+
+        // Push another instance with explicit defaultValue string "99": must coerce to Int(99)
+        let nvi_res2 = map.new_variable_instance(
+            &QName::local("scopeVar"),
+            Some(DfdlValue::String("99".into())),
+        );
+        assert!(nvi_res2.is_ok());
+        assert_eq!(map.get_variable("scopeVar"), Some(&DfdlValue::Int(99)));
+
+        // Pop nested scope: must restore previous instance value 50
+        map.pop_variable_instance(&QName::local("scopeVar"));
+        assert_eq!(map.get_variable("scopeVar"), Some(&DfdlValue::Int(50)));
     }
 }

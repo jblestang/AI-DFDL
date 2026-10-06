@@ -11,7 +11,7 @@ use crate::infoset::events::InfosetEvent;
 use crate::infoset::{DfdlSimpleType, DfdlValue, InfosetBuilder};
 use crate::io::traits::{ByteOrder, ByteSource};
 use crate::schema::ir::{
-    CompiledElement, CompiledTerm, Representation, ResolvedProperties, TermKind,
+    CompiledElement, CompiledTerm, OccursCountKind, Representation, ResolvedProperties, TermKind,
 };
 use crate::util::try_push;
 
@@ -19,7 +19,7 @@ use super::delimiters::split_delimiter_alternatives;
 use super::numbers::{
     parse_flexible_f64, parse_flexible_int_i64, parse_flexible_uint_u64,
 };
-use super::{ParserEngine, ValidationMode};
+use super::{ParserEngine, PointOfUncertainty, PouKind, ValidationMode};
 
 fn dfdl_value_type_name(val: &DfdlValue) -> &'static str {
     match val {
@@ -596,6 +596,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         elem: &CompiledElement,
         builder: &mut InfosetBuilder,
     ) -> DFDLResult<()> {
+        let parent_choice_initiated = self
+            .pou_stack
+            .iter()
+            .rev()
+            .find_map(|p| match p.kind {
+                PouKind::Choice { initiated_content } => Some(initiated_content),
+                _ => None,
+            })
+            .unwrap_or(false);
         let _ = self.parse_element_with_separators(
             term,
             elem,
@@ -606,6 +615,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             0,
             0,
             true,
+            parent_choice_initiated,
         )?;
         Ok(())
     }
@@ -622,6 +632,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         mut total_element_count: usize,
         member_idx: usize,
         is_last_member: bool,
+        parent_initiated_content: bool,
     ) -> DFDLResult<usize> {
         use crate::schema::ir::OccursCountKind;
 
@@ -690,20 +701,26 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     elem.max_occurs.unwrap_or(1)
                 }
             }
-            // For an array under `parsed` the number of occurrences is whatever the data yields;
-            // maxOccurs is only checked by validation (DFDL §16.1.1). Scalars and optionals
-            // (maxOccurs <= 1) still stop at their single occurrence.
-            OccursCountKind::Parsed => match elem.max_occurs {
-                Some(m) if m > 1 => usize::MAX,
-                other => other.unwrap_or(usize::MAX),
-            },
+            // Under `occursCountKind="parsed"`, the parser continues looking for occurrences
+            // until speculative parsing fails to find another one (DFDL §16.1.3).
+            // maxOccurs is only enforced as a validation check when validation is enabled.
+            // Strictly scalar elements (minOccurs=1 and maxOccurs=1) occur exactly once.
+            OccursCountKind::Parsed => {
+                if elem.min_occurs == 1 && elem.max_occurs == Some(1) {
+                    1
+                } else {
+                    usize::MAX
+                }
+            }
             OccursCountKind::Implicit => elem.max_occurs.unwrap_or(usize::MAX),
             OccursCountKind::Fixed | OccursCountKind::StopValue => {
                 elem.max_occurs.unwrap_or(usize::MAX)
             }
         };
 
-        if !self.schema.term_has_representation(term.id) {
+        if term.properties.input_value_calc.is_some()
+            || (!self.schema.term_has_representation(term.id) && sep_opt.is_none())
+        {
             let target_occurs = match term.properties.occurs_count_kind {
                 OccursCountKind::Expression => max_occurs,
                 OccursCountKind::Fixed => elem.min_occurs.max(1),
@@ -721,13 +738,17 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 self.current_occurs_index = occurrences.saturating_add(1);
                 let builder_cp = builder.checkpoint();
                 let reader_cp = self.reader.checkpoint();
-                match self.parse_single_element_occurrence(term, elem, builder) {
+                let vmap_cp = self.variable_map.clone();
+                let val_err_cp = self.validation_errors.len();
+                match self.parse_single_element_occurrence(term, elem, builder, false, false) {
                     Ok(()) => {
                         count = count.saturating_add(1);
                     }
                     Err(e) => {
                         self.reader.rollback(reader_cp)?;
                         builder.rollback(builder_cp);
+                        self.variable_map = vmap_cp;
+                        self.validation_errors.truncate(val_err_cp);
                         if count >= elem.min_occurs && e.kind != DFDLErrorKind::SchemaDefinition {
                             break;
                         }
@@ -739,11 +760,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             return Ok(0);
         }
 
+        // Per DFDL v1.0 §16.1.4: "When dfdl:occursCountKind is 'parsed', the number of
+        // occurrences is determined by parsing occurrences until a Processing Error occurs.
+        // It is a Processing Error if fewer than minOccurs occurrences are found."
         let min_occurs = elem.min_occurs;
         let mut count = 0;
         let mut slots_processed: usize = 0;
 
-        while count < max_occurs {
+        while count < max_occurs && slots_processed < max_occurs {
             let is_simple_repr = matches!(elem.type_ir, crate::schema::ir::CompiledType::Simple(_))
                 && term.properties.input_value_calc.is_none();
             if (count > 0 || is_simple_repr) && count >= min_occurs && self.reader.is_eof() {
@@ -766,9 +790,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
             let reader_cp = self.reader.checkpoint();
             let builder_cp = builder.checkpoint();
+            let vmap_cp = self.variable_map.clone();
+            let val_err_cp = self.validation_errors.len();
+            let bo_cp = self.reader.bit_order();
             let is_occurrence_pou = count >= min_occurs;
             if is_occurrence_pou {
-                self.pou_stack.push(false);
+                self.pou_stack.push(PointOfUncertainty {
+                    kind: PouKind::Occurrence,
+                    is_discriminated: false,
+                });
             }
             let occurrences = builder.count_child_occurrences(&elem.name.local_name);
             self.current_occurs_index = occurrences.saturating_add(1);
@@ -781,10 +811,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     if !sep.is_empty() {
                         if sep_pos == crate::schema::ir::SeparatorPosition::Prefix
                             || (sep_pos == crate::schema::ir::SeparatorPosition::Infix
-                                && (total_element_count > 0
-                                    || (member_idx > 0
-                                        && sep_policy
-                                            == crate::schema::ir::SeparatorSuppressionPolicy::Never)))
+                                && (count > 0 || member_idx > 0 || total_element_count > 0))
                         {
                             if let Some(sep_len) = self.peek_delimiter_match_length(sep) {
                                 if self.is_in_scope_terminator_longer(sep_len) {
@@ -801,23 +828,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 )
                             })?;
                             sep_consumed = true;
-                            if sep_policy == crate::schema::ir::SeparatorSuppressionPolicy::AnyEmpty
-                            {
-                                while !self.reader.is_eof() {
-                                    if let Some(sep_len) = self.peek_delimiter_match_length(sep) {
-                                        if sep_len == 0
-                                            || self.is_in_scope_terminator_longer(sep_len)
-                                        {
-                                            break;
-                                        }
-                                        let _ = self.match_literal_delimiter(sep);
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
                         } else if sep_pos == crate::schema::ir::SeparatorPosition::Infix
                             && sep_policy == crate::schema::ir::SeparatorSuppressionPolicy::AnyEmpty
+                            && term.properties.occurs_count_kind != OccursCountKind::Expression
+                            && term.properties.occurs_count_kind != OccursCountKind::Fixed
                             && count == 0
                             && total_element_count == 0
                             && elem.min_occurs == 0
@@ -836,23 +850,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     }
                 }
 
-                // Enforce bitOrder change only on byte boundary (§11.2)
-                if term.properties.bit_order != self.reader.bit_order() {
-                    let current_pos = self.reader.position().0;
-                    let rem = current_pos % 8;
-                    if rem != 0 {
-                        let bit_in_byte_1based = rem.saturating_add(1);
-                        let msg = alloc::format!(
-                            "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
-                            bit_in_byte_1based
-                        );
-                        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-                    }
-                    self.reader.set_bit_order(term.properties.bit_order);
-                }
                 pre_elem_cp = self.reader.checkpoint();
 
-                // Left framing: leadingSkip then alignment (DFDL §12: leadingSkip, alignment, initiator)
+                // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
                 if term.properties.leading_skip > 0 {
                     let skip_bits = match term.properties.alignment_units {
                         crate::schema::ir::AlignmentUnits::Bytes => {
@@ -881,7 +881,29 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         let _ = self.reader.read_bits(skip)?;
                     }
                 }
-                let res = self.parse_single_element_occurrence(term, elem, builder);
+
+                // Enforce bitOrder change only on byte boundary (§11.2)
+                // Left framing (leadingSkip / alignment) precedes bitOrder change per DFDL §11.2.
+                if term.properties.bit_order != self.reader.bit_order() {
+                    let current_pos = self.reader.position().0;
+                    let rem = current_pos % 8;
+                    if rem != 0 {
+                        let bit_in_byte_1based = rem.saturating_add(1);
+                        let msg = alloc::format!(
+                            "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
+                            bit_in_byte_1based
+                        );
+                        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                    }
+                    self.reader.set_bit_order(term.properties.bit_order);
+                }
+                let res = self.parse_single_element_occurrence(
+                    term,
+                    elem,
+                    builder,
+                    is_occurrence_pou,
+                    parent_initiated_content,
+                );
                 let post_elem_cp = self.reader.checkpoint();
                 if post_elem_cp == pre_elem_cp {
                     elem_consumed_zero = true;
@@ -935,10 +957,18 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             );
                             return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                         } else {
+                            // Under DFDL v1.0 §16.1, an optional or array element parsing to an empty
+                            // representation with emptyElementParsePolicy="treatAsAbsent" is rolled back
+                            // and treated as absent without creating an infoset item.
+                            // For scalars (maxOccurs == 1), processing terminates immediately.
+                            // For arrays (maxOccurs > 1 or unbounded), additional occurrences may follow
+                            // separated by delimiters (e.g. under separatorSuppressionPolicy="anyEmpty").
                             builder.rollback(builder_cp);
+                            self.variable_map = vmap_cp;
+                            self.validation_errors.truncate(val_err_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             total_element_count = total_element_count.saturating_add(1);
-                            if elem.max_occurs.unwrap_or(1) == 1 || self.reader.is_eof() {
+                            if elem.max_occurs == Some(1) || self.reader.is_eof() {
                                 break;
                             } else {
                                 continue;
@@ -973,7 +1003,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 Err(e) => {
                     let is_discriminated = if is_occurrence_pou {
-                        self.pou_stack.pop().unwrap_or(false)
+                        self.pou_stack.pop().map(|p| p.is_discriminated).unwrap_or(false)
                     } else {
                         false
                     };
@@ -989,29 +1019,43 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         && elem_consumed_zero
                         && count >= min_occurs
                     {
+                        let is_trailing = is_last_member
+                            || sep_opt.is_some_and(|sep| self.peek_only_separators_to_end(sep));
                         if sep_policy
                             == crate::schema::ir::SeparatorSuppressionPolicy::TrailingEmptyStrict
-                            && (is_last_member
-                                || sep_opt.is_some_and(|sep| self.peek_only_separators_to_end(sep)))
+                            && is_trailing
                         {
                             return Err(DFDLError::new_static(
                                 DFDLErrorKind::Parse,
                                 "Parse Error: Empty trailing optional element with trailingEmptyStrict separatorSuppressionPolicy",
                             ));
                         }
-                        self.reader.rollback(reader_cp)?;
+                        if is_trailing
+                            || sep_policy == crate::schema::ir::SeparatorSuppressionPolicy::AnyEmpty
+                        {
+                            self.reader.rollback(reader_cp)?;
+                        } else {
+                            self.reader.rollback(pre_elem_cp)?;
+                            slots_processed = slots_processed.saturating_add(1);
+                        }
+                        self.reader.set_bit_order(bo_cp);
                         builder.rollback(builder_cp);
+                        self.variable_map = vmap_cp;
+                        self.validation_errors.truncate(val_err_cp);
                         self.current_occurs_index = 1;
                         break;
                     }
 
                     if elem_consumed_zero
                         && count >= min_occurs
+                        && elem.max_occurs != Some(1)
                         && sep_policy == crate::schema::ir::SeparatorSuppressionPolicy::Never
                     {
                         if let Some(sep) = sep_opt {
                             if !sep.is_empty() && self.peek_literal_delimiter(sep) {
                                 builder.rollback(builder_cp);
+                                self.variable_map = vmap_cp;
+                                self.validation_errors.truncate(val_err_cp);
                                 slots_processed = slots_processed.saturating_add(1);
                                 let _ = self.match_literal_delimiter(sep);
                                 continue;
@@ -1019,39 +1063,90 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         if (sep_consumed || slots_processed > 0) && self.reader.is_eof() {
                             builder.rollback(builder_cp);
+                            self.variable_map = vmap_cp;
+                            self.validation_errors.truncate(val_err_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             self.current_occurs_index = 1;
                             break;
                         }
                     }
 
-                    if sep_consumed
-                        && elem_consumed_zero
-                        && count >= min_occurs
-                        && !is_last_member
-                        && sep_opt.is_some_and(|sep| self.peek_literal_delimiter(sep))
-                    {
-                        self.reader.rollback(pre_elem_cp)?;
-                        builder.rollback(builder_cp);
-                        slots_processed = slots_processed.saturating_add(1);
-                        self.current_occurs_index = 1;
-                        break;
+                    if sep_consumed && count >= min_occurs {
+                        let is_trailing = is_last_member
+                            || self.reader.is_eof()
+                            || sep_opt.is_some_and(|sep| self.peek_only_separators_to_end(sep));
+                        if sep_policy
+                            == crate::schema::ir::SeparatorSuppressionPolicy::TrailingEmptyStrict
+                            && is_trailing
+                        {
+                            return Err(DFDLError::new_static(
+                                DFDLErrorKind::Parse,
+                                "Parse Error: Empty trailing optional element with trailingEmptyStrict separatorSuppressionPolicy",
+                            ));
+                        }
+
+                        if term.properties.occurs_count_kind == OccursCountKind::Implicit
+                            && elem.max_occurs.is_some_and(|m| slots_processed < m)
+                            && sep_opt.is_some_and(|sep| self.peek_literal_delimiter(sep))
+                        {
+                            self.reader.rollback(pre_elem_cp)?;
+                            builder.rollback(builder_cp);
+                            self.variable_map = vmap_cp;
+                            self.validation_errors.truncate(val_err_cp);
+                            self.reader.set_bit_order(bo_cp);
+                            slots_processed = slots_processed.saturating_add(1);
+                            continue;
+                        }
+
+                        if count == 0 {
+                            if sep_policy == crate::schema::ir::SeparatorSuppressionPolicy::Never
+                                || (!is_trailing
+                                    && (sep_policy
+                                        == crate::schema::ir::SeparatorSuppressionPolicy::TrailingEmptyStrict
+                                        || sep_policy
+                                            == crate::schema::ir::SeparatorSuppressionPolicy::TrailingEmpty))
+                            {
+                                self.reader.rollback(pre_elem_cp)?;
+                            } else {
+                                self.reader.rollback(reader_cp)?;
+                            }
+                            builder.rollback(builder_cp);
+                            self.variable_map = vmap_cp;
+                            self.validation_errors.truncate(val_err_cp);
+                            self.reader.set_bit_order(bo_cp);
+                            slots_processed = slots_processed.saturating_add(1);
+                            self.current_occurs_index = 1;
+                            break;
+                        } else {
+                            self.reader.rollback(reader_cp)?;
+                            builder.rollback(builder_cp);
+                            self.variable_map = vmap_cp;
+                            self.validation_errors.truncate(val_err_cp);
+                            self.reader.set_bit_order(bo_cp);
+                            self.current_occurs_index = 1;
+                            break;
+                        }
                     }
 
                     self.reader.rollback(reader_cp)?;
                     builder.rollback(builder_cp);
+                    self.variable_map = vmap_cp;
+                    self.validation_errors.truncate(val_err_cp);
                     self.current_occurs_index = 1;
                     if count >= min_occurs {
-                        if let Some(sep) = sep_opt {
-                            if !sep.is_empty()
-                                && sep_policy
-                                    == crate::schema::ir::SeparatorSuppressionPolicy::Never
-                                && !self.peek_literal_delimiter(sep)
-                            {
-                                return Err(DFDLError::new_static(
-                                    DFDLErrorKind::Parse,
-                                    "Parse Error: Missing required separator for optional element with separatorSuppressionPolicy='never'",
-                                ));
+                        if count == 0 && elem.min_occurs == 0 && elem.max_occurs == Some(1) {
+                            if let Some(sep) = sep_opt {
+                                if !sep.is_empty()
+                                    && sep_policy
+                                        == crate::schema::ir::SeparatorSuppressionPolicy::Never
+                                    && !(is_last_member && sep_pos == crate::schema::ir::SeparatorPosition::Infix)
+                                    && !self.peek_literal_delimiter(sep)
+                                {
+                                    return Err(DFDLError::new_static(
+                                        DFDLErrorKind::Parse,
+                                        "Parse Error: Missing required separator for optional element with separatorSuppressionPolicy='never'",
+                                    ));
+                                }
                             }
                         }
                         break;
@@ -1074,6 +1169,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         if term.properties.occurs_count_kind == OccursCountKind::Parsed
             && self.validation_mode != ValidationMode::Off
         {
+            if count < elem.min_occurs {
+                let msg = alloc::format!(
+                    "Validation Error: element '{}' occurs {} times, less than minOccurs {}",
+                    elem.name.local_name, count, elem.min_occurs
+                );
+                return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
+            }
             if let Some(max) = elem.max_occurs {
                 if count > max {
                     let msg = alloc::format!(
@@ -1141,22 +1243,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
         }
 
-        // Enforce bitOrder change only on byte boundary (§11.2)
-        if term.properties.bit_order != self.reader.bit_order() {
-            let current_pos = self.reader.position().0;
-            let rem = current_pos % 8;
-            if rem != 0 {
-                let bit_in_byte_1based = rem.saturating_add(1);
-                let msg = alloc::format!(
-                    "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
-                    bit_in_byte_1based
-                );
-                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-            }
-            self.reader.set_bit_order(term.properties.bit_order);
-        }
-
-        // Left framing: leadingSkip then alignment (DFDL §12: leadingSkip, alignment, initiator)
+        // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
         if term.properties.leading_skip > 0 {
             let skip_bits = match term.properties.alignment_units {
                 crate::schema::ir::AlignmentUnits::Bytes => {
@@ -1186,9 +1273,25 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
         }
 
+        // Enforce bitOrder change only on byte boundary (§11.2)
+        // Left framing (leadingSkip / alignment) precedes bitOrder change per DFDL §11.2.
+        if term.properties.bit_order != self.reader.bit_order() {
+            let current_pos = self.reader.position().0;
+            let rem = current_pos % 8;
+            if rem != 0 {
+                let bit_in_byte_1based = rem.saturating_add(1);
+                let msg = alloc::format!(
+                    "Schema Definition Error: Can only change bitOrder on a byte boundary. Bit position {} is not on a byte boundary",
+                    bit_in_byte_1based
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+            self.reader.set_bit_order(term.properties.bit_order);
+        }
+
         let occurrences = builder.count_child_occurrences(&elem.name.local_name);
         self.current_occurs_index = occurrences.saturating_add(1);
-        let res = self.parse_single_element_occurrence(term, elem, builder);
+        let res = self.parse_single_element_occurrence(term, elem, builder, false, false);
         self.current_occurs_index = 1;
         res?;
 
@@ -1260,7 +1363,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         if !self.schema.term_has_representation(member_term.id) {
                             continue;
                         }
-                        let max_occurs = elem.max_occurs.unwrap_or(usize::MAX);
+                        let is_array = elem.max_occurs.is_none() || elem.max_occurs > Some(1);
+                        let max_occurs = if is_array
+                            && member_term.properties.occurs_count_kind == OccursCountKind::Parsed
+                        {
+                            usize::MAX
+                        } else {
+                            elem.max_occurs.unwrap_or(usize::MAX)
+                        };
                         let cur_count = counts.get(idx).copied().unwrap_or(0);
                         if cur_count >= max_occurs {
                             continue;
@@ -1268,6 +1378,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
+                        let vmap_cp = self.variable_map.clone();
+                        let val_err_cp = self.validation_errors.len();
 
                         match self.parse_single_unordered_element_occurrence(
                             member_term,
@@ -1282,6 +1394,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 if new_reader_cp == reader_cp && cur_count >= elem.min_occurs {
                                     let _ = self.reader.rollback(reader_cp);
                                     builder.rollback(builder_cp);
+                                    self.variable_map = vmap_cp;
+                                    self.validation_errors.truncate(val_err_cp);
                                     continue;
                                 }
                                 if let Some(c) = counts.get_mut(idx) {
@@ -1294,12 +1408,16 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             Err(_) => {
                                 let _ = self.reader.rollback(reader_cp);
                                 builder.rollback(builder_cp);
+                                self.variable_map = vmap_cp;
+                                self.validation_errors.truncate(val_err_cp);
                             }
                         }
                     }
                     _ => {
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
+                        let vmap_cp = self.variable_map.clone();
+                        let val_err_cp = self.validation_errors.len();
                         let group_res = (|| -> DFDLResult<()> {
                             if let Some(sep) = sep_opt {
                                 if !sep.is_empty()
@@ -1332,6 +1450,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             Err(_) => {
                                 let _ = self.reader.rollback(reader_cp);
                                 builder.rollback(builder_cp);
+                                self.variable_map = vmap_cp;
+                                self.validation_errors.truncate(val_err_cp);
                             }
                         }
                     }
@@ -1353,7 +1473,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 if !self.schema.term_has_representation(member_term.id) {
                     let occurrences = builder.count_child_occurrences(&elem.name.local_name);
                     self.current_occurs_index = occurrences.saturating_add(1);
-                    self.parse_single_element_occurrence(member_term, elem, builder)?;
+                    self.parse_single_element_occurrence(member_term, elem, builder, false, false)?;
                     self.current_occurs_index = 1;
                     if let Some(c) = counts.get_mut(idx) {
                         *c = 1;
@@ -1362,7 +1482,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
         }
 
-        // Validate minOccurs constraints
+        // Validate minOccurs and maxOccurs constraints (§14.3 & §16.1.4)
         for (idx, &member_id) in seq.members.iter().enumerate() {
             let member_term = match self.schema.get_term(member_id) {
                 Some(t) => t,
@@ -1376,6 +1496,27 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         elem.name.local_name, parsed_cnt, elem.min_occurs
                     );
                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
+                }
+                if self.validation_mode != ValidationMode::Off {
+                    if let Some(max_occ) = elem.max_occurs {
+                        if parsed_cnt > max_occ {
+                            let display_name = if let Some(ref pfx) = elem.name.prefix {
+                                alloc::format!("{}:{}", pfx, elem.name.local_name)
+                            } else {
+                                elem.name.local_name.clone()
+                            };
+                            let msg = alloc::format!(
+                                "Validation Error: Element '{}' failed check: occurrence count {} exceeds maxOccurs {}",
+                                display_name,
+                                parsed_cnt,
+                                max_occ
+                            );
+                            let _ = crate::util::try_push(
+                                &mut self.validation_errors,
+                                DFDLError::new(DFDLErrorKind::Validation, &msg),
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -1393,11 +1534,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         term: &CompiledTerm,
         elem: &CompiledElement,
         builder: &mut InfosetBuilder,
+        is_occurrence_pou: bool,
+        parent_initiated_content: bool,
     ) -> DFDLResult<()> {
         let saved_delim_enc =
             core::mem::replace(&mut self.delim_encoding, term.properties.encoding.clone());
-        let res = self.parse_single_element_occurrence_inner(term, elem, builder);
+        let saved_delim_case =
+            core::mem::replace(&mut self.delim_ignore_case, term.properties.ignore_case);
+        let res = self.parse_single_element_occurrence_inner(
+            term,
+            elem,
+            builder,
+            is_occurrence_pou,
+            parent_initiated_content,
+        );
         self.delim_encoding = saved_delim_enc;
+        self.delim_ignore_case = saved_delim_case;
         res
     }
 
@@ -1406,6 +1558,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         term: &CompiledTerm,
         elem: &CompiledElement,
         builder: &mut InfosetBuilder,
+        is_occurrence_pou: bool,
+        parent_initiated_content: bool,
     ) -> DFDLResult<()> {
         let is_hidden = term.properties.is_hidden;
 
@@ -1465,8 +1619,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 if let Err(e) = term.properties.facets.validate_value_detailed(&value) {
                     let msg_str = e.message.as_str();
                     let detail = msg_str.strip_prefix("Validation Error: ").unwrap_or(msg_str);
-                    let msg = alloc::format!("Validation Error: element '{}' {}", elem.name, detail);
-                    return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
+                    let msg = alloc::format!("Validation Error: element '{}' {}", elem.name.prefixed_name(), detail);
+                    let _ = crate::util::try_push(&mut self.validation_errors, DFDLError::new(DFDLErrorKind::Validation, &msg));
                 }
             }
             builder.push_event_with_hidden(
@@ -1538,17 +1692,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                         }
                                     }
                                 }
-                                let mut matched_in_scope = false;
-                                for i in (0..self.in_scope_delimiters.len()).rev() {
-                                    if let Ok(delim) = crate::util::get_checked(&self.in_scope_delimiters, i) {
-                                        let delim_clone = delim.clone();
-                                        if !delim_clone.is_empty() && self.peek_literal_delimiter(&delim_clone) {
-                                            matched_in_scope = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if matched_in_scope {
+                                if self.peek_any_in_scope_delimiter() {
                                     break;
                                 }
                                 if let Ok(b) = self.reader.read_bits(8) {
@@ -1646,18 +1790,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                             } else if self.reader.is_eof() {
                                                 true
                                             } else {
-                                                let mut matched = false;
-                                                let count = self.in_scope_delimiters.len();
-                                                for idx in (0..count).rev() {
-                                                    let delim_opt = self.in_scope_delimiters.get(idx).cloned();
-                                                    if let Some(delim) = delim_opt {
-                                                        if !delim.is_empty() && self.peek_literal_delimiter(&delim) {
-                                                            matched = true;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                matched
+                                                self.peek_any_in_scope_delimiter()
                                             }
                                         } else {
                                             trimmed_str.is_empty()
@@ -1671,18 +1804,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                             } else if self.reader.is_eof() {
                                                 true
                                             } else {
-                                                let mut matched = false;
-                                                let count = self.in_scope_delimiters.len();
-                                                for idx in (0..count).rev() {
-                                                    let delim_opt = self.in_scope_delimiters.get(idx).cloned();
-                                                    if let Some(delim) = delim_opt {
-                                                        if !delim.is_empty() && self.peek_literal_delimiter(&delim) {
-                                                            matched = true;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                matched
+                                                self.peek_any_in_scope_delimiter()
                                             }
                                         } else {
                                             trimmed_str.is_empty()
@@ -1783,9 +1905,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                                     i,
                                                 ) {
                                                     let delim_clone = delim.clone();
-                                                    if !delim_clone.is_empty()
-                                                        && delim_clone != "%ES;"
-                                                        && self.peek_literal_delimiter(&delim_clone)
+                                                    if !delim_clone.text.is_empty()
+                                                        && delim_clone.text != "%ES;"
+                                                        && self.peek_in_scope_delimiter(&delim_clone)
                                                     {
                                                         is_delim = true;
                                                         break;
@@ -1854,13 +1976,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         }
 
         if term.properties.representation == crate::schema::ir::Representation::Text
-            || matches!(
-                elem.type_ir,
-                crate::schema::ir::CompiledType::Simple(DfdlSimpleType::String)
-            )
+            && term.properties.alignment_kind == crate::schema::ir::AlignmentKind::Automatic
+            && term.properties.rep_type.is_none()
+            && term.properties.rep_simple_type.is_none()
         {
-            self.check_mandatory_alignment(&term.properties.encoding)?;
+            self.align_mandatory_text(&term.properties.encoding)?;
         }
+
+        let evdp = term.properties.empty_value_delimiter_policy;
+        let mut skipped_delimiters_for_empty = false;
 
         if let Some(ref init_raw) = term.properties.initiator {
             let init = self.evaluate_property_str_at(
@@ -1869,7 +1993,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 Some(&elem.name.local_name),
             )?;
             if !init.is_empty() {
-                self.match_literal_delimiter(&init)?;
+                let init_matched = self.peek_literal_delimiter(&init);
+                if init_matched {
+                    self.align_mandatory_text(&term.properties.encoding)?;
+                    self.match_literal_delimiter(&init)?;
+                    self.on_initiator_matched(is_occurrence_pou, parent_initiated_content);
+                } else if (evdp == crate::schema::ir::EmptyValueDelimiterPolicy::None
+                    || evdp == crate::schema::ir::EmptyValueDelimiterPolicy::Terminator)
+                    && (self.reader.is_eof() || self.peek_any_in_scope_delimiter())
+                {
+                    skipped_delimiters_for_empty = true;
+                } else {
+                    return Err(DFDLError::new(
+                        DFDLErrorKind::Parse,
+                        &alloc::format!("Initiator '{}' not found for element '{}'", init, elem.name.local_name),
+                    ));
+                }
             }
         }
 
@@ -1890,9 +2029,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     None
                 };
                 if let Some(ref t) = simple_term {
-                    let _ = try_push(&mut self.in_scope_terminators, t.clone());
-                    let _ = try_push(&mut self.in_scope_delimiters, t.clone());
+                    self.push_in_scope_terminator(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
+                    self.push_in_scope_delimiter(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
+                let elem_pname = elem.name.prefixed_name();
                 let simple_val_res = if (term.properties.rep_type.is_some()
                     || term.properties.rep_simple_type.is_some())
                     && !term.properties.facets.rep_values.is_empty()
@@ -1902,7 +2042,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     rep_props.facets = crate::schema::ir::SimpleTypeFacets::default();
                     let wire_res = self.parse_simple_value(
                         rep_st,
-                        Some(&elem.name.local_name),
+                        Some(&elem_pname),
                         &rep_props,
                         builder,
                     )?;
@@ -1925,7 +2065,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 } else {
                     self.parse_simple_value(
                         *st,
-                        Some(&elem.name.local_name),
+                        Some(&elem_pname),
                         &term.properties,
                         builder,
                     )
@@ -1939,7 +2079,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     && self.validation_mode != ValidationMode::Off
                     && term.properties.facets.has_facets()
                 {
-                    term.properties.facets.validate_value_detailed(&value)?;
+                    if let Err(e) = term.properties.facets.validate_value_detailed(&value) {
+                        let msg_str = e.message.as_str();
+                        let detail = msg_str.strip_prefix("Validation Error: ").unwrap_or(msg_str);
+                        let msg = alloc::format!("Validation Error: element '{}' {}", elem.name.prefixed_name(), detail);
+                        let _ = crate::util::try_push(&mut self.validation_errors, DFDLError::new(DFDLErrorKind::Validation, &msg));
+                    }
                 }
                 builder.push_event_with_hidden(
                     InfosetEvent::SimpleValue {
@@ -2011,8 +2156,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     None
                 };
                 if let Some(ref t) = eval_term {
-                    let _ = try_push(&mut self.in_scope_terminators, t.clone());
-                    let _ = try_push(&mut self.in_scope_delimiters, t.clone());
+                    self.push_in_scope_terminator(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
+                    self.push_in_scope_delimiter(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
                 let prev_bit_limit = self.reader.bit_limit();
                 if let Some(exp_bits) = expected_bits {
@@ -2060,18 +2205,25 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
         if res.is_ok() {
             if let Some(ref term_raw) = term.properties.terminator {
-                let term_str = self.evaluate_property_str_at(
-                    term_raw,
-                    builder,
-                    Some(&elem.name.local_name),
-                )?;
-                if !term_str.is_empty() {
-                    self.match_literal_delimiter(&term_str).map_err(|e| {
-                        DFDLError::new(
-                            DFDLErrorKind::Parse,
-                            &alloc::format!("Terminator '{}' not found: {}", term_raw, e.message),
-                        )
-                    })?;
+                let skip_term = skipped_delimiters_for_empty
+                    || (evdp == crate::schema::ir::EmptyValueDelimiterPolicy::None
+                        && (self.reader.is_eof() || self.peek_any_in_scope_delimiter()))
+                    || (self.reader.is_eof() && term.properties.document_final_terminator_can_be_missing);
+                if !skip_term {
+                    let term_str = self.evaluate_property_str_at(
+                        term_raw,
+                        builder,
+                        Some(&elem.name.local_name),
+                    )?;
+                    if !term_str.is_empty() {
+                        self.align_mandatory_text(&term.properties.encoding)?;
+                        self.match_literal_delimiter(&term_str).map_err(|e| {
+                            DFDLError::new(
+                                DFDLErrorKind::Parse,
+                                &alloc::format!("Terminator '{}' not found: {}", term_raw, e.message),
+                            )
+                        })?;
+                    }
                 }
             }
             self.execute_set_variables(term, builder, Some(&elem.name.local_name))?;
@@ -2258,8 +2410,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     alloc::format!("Discriminator failed for '{}'", disc_expr)
                 };
                 return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
-            } else if let Some(pou) = self.pou_stack.iter_mut().rev().find(|p| !**p) {
-                *pou = true;
+            } else if let Some(pou) = self.pou_stack.iter_mut().rev().find(|p| !p.is_discriminated) {
+                pou.is_discriminated = true;
             }
         }
         Ok(())
@@ -2414,6 +2566,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 (false, bits)
             };
 
+            let pad_char = parts.get(6).copied().unwrap_or("");
             let len = if is_text {
                 let byte_count = bits.div_ceil(8);
                 let mut bytes = Vec::new();
@@ -2423,7 +2576,27 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 let s =
                     crate::encoding::decode_text_bytes(&bytes, &props.encoding).unwrap_or_default();
-                s.trim().parse::<usize>().unwrap_or(0)
+                let trimmed = if !pad_char.is_empty() {
+                    s.trim_matches(|c: char| c.is_whitespace() || pad_char.contains(c))
+                } else {
+                    s.trim()
+                };
+                if let Ok(v) = trimmed.parse::<i64>() {
+                    if v < 0 {
+                        let msg = alloc::format!(
+                            "Runtime Schema Definition Error: Prefixed length result ({v}) must be non-negative"
+                        );
+                        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                    }
+                    v as usize
+                } else if trimmed.starts_with('-') {
+                    let msg = alloc::format!(
+                        "Runtime Schema Definition Error: Prefixed length result ({trimmed}) must be non-negative"
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                } else {
+                    s.trim_matches(|c: char| !c.is_ascii_digit()).parse::<usize>().unwrap_or(0)
+                }
             } else {
                 let prefix_val = self.read_binary_bits(bits)?;
                 match props.byte_order {
@@ -2506,41 +2679,36 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     }
                 }
                 let _ = self.reader.rollback(reader_cp);
-                let is_utf8 = sub_byte_bits.is_none()
-                    && matches!(props.encoding.trim().to_ascii_uppercase().as_str(), "UTF-8" | "UTF8");
-                // For UTF-8, `offsets[n]` is the source byte length of the first `n` characters.
-                let mut offsets = Vec::new();
-                let text_peek = if sub_byte_bits.is_some() {
-                    sub_byte_text
-                } else if is_utf8 {
-                    let (text, offs) = crate::encoding::utf8_lossy_with_offsets(&bytes);
-                    offsets = offs;
-                    text
+                // DFDL §12.3.4 (lengthKind="pattern"):
+                // Peek ahead and decode text according to the element's encoding while tracking
+                // byte offsets so character positions accurately map to source bytes or bits.
+                let (text_peek, offsets) = if sub_byte_bits.is_some() {
+                    (sub_byte_text, Vec::new())
                 } else {
-                    crate::encoding::decode_text_bytes(&bytes, &props.encoding).unwrap_or_default()
+                    crate::encoding::decode_text_bytes_with_offsets(&bytes, &props.encoding)
                 };
                 if let Ok(re) = crate::pattern::DfdlRegex::new(lp_str) {
                     if let Some(m_end) = re.match_prefix_len(&text_peek) {
-                        return Ok(Some(match sub_byte_bits {
-                            // Sub-byte text: report the match in characters, or in bits.
-                            Some(cb) => {
-                                let chars = text_peek.get(..m_end).map_or(0, |t| t.chars().count());
-                                if props.length_units == crate::schema::ir::LengthUnits::Bits {
-                                    chars.saturating_mul(cb)
-                                } else {
-                                    chars
+                        let chars = text_peek.get(..m_end).map_or(0, |t| t.chars().count());
+                        let result_len = match sub_byte_bits {
+                            // Sub-byte text (e.g. 5-bit, 6-bit, 7-bit): length is in bits, characters, or rounded bytes.
+                            Some(cb) => match props.length_units {
+                                crate::schema::ir::LengthUnits::Bits => chars.saturating_mul(cb),
+                                crate::schema::ir::LengthUnits::Bytes => chars.saturating_mul(cb).div_ceil(8),
+                                crate::schema::ir::LengthUnits::Characters => chars,
+                            },
+                            // Byte-aligned and multi-byte text (UTF-8, UTF-16, UTF-32, ISO-8859-*, ASCII, EBCDIC):
+                            None => match props.length_units {
+                                crate::schema::ir::LengthUnits::Characters => chars,
+                                crate::schema::ir::LengthUnits::Bytes => {
+                                    offsets.get(chars).copied().unwrap_or(chars)
                                 }
-                            }
-                            None if is_utf8 => {
-                                let chars = text_peek.get(..m_end).map_or(0, |t| t.chars().count());
-                                if props.length_units == crate::schema::ir::LengthUnits::Characters {
-                                    chars
-                                } else {
-                                    offsets.get(chars).copied().unwrap_or(m_end)
+                                crate::schema::ir::LengthUnits::Bits => {
+                                    offsets.get(chars).copied().unwrap_or(chars).saturating_mul(8)
                                 }
-                            }
-                            None => m_end,
-                        }));
+                            },
+                        };
+                        return Ok(Some(result_len));
                     }
                 }
                 // DFDL 1.0 §12.3.4: If the regular expression does not match at the current position,
@@ -2661,20 +2829,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let dynamic_len = self.evaluate_length_property(props, elem_name, builder)?;
         let rep = if simple_type == DfdlSimpleType::String {
             Representation::Text
-        } else if simple_type == DfdlSimpleType::HexBinary
-            && props.representation == Representation::Text
-        {
-            if let Some(len) = dynamic_len {
-                let bytes_avail = self.reader.remaining_bytes();
-                if bytes_avail == len || (bytes_avail < len.saturating_mul(2) && bytes_avail >= len)
-                {
-                    Representation::Binary
-                } else {
-                    Representation::Text
-                }
-            } else {
-                Representation::Text
-            }
+        } else if simple_type == DfdlSimpleType::HexBinary {
+            // DFDL 1.0 §12.3 & §13.7: xs:hexBinary is raw binary data and must always
+            // use binary representation even if representation="text" is inherited.
+            Representation::Binary
         } else {
             props.representation
         };
@@ -2694,7 +2852,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 let msg_str = e.message.as_str();
                 let detail = msg_str.strip_prefix("Validation Error: ").unwrap_or(msg_str);
                 let msg = alloc::format!("Validation Error: element '{}' {}", name, detail);
-                return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
+                let _ = crate::util::try_push(&mut self.validation_errors, DFDLError::new(DFDLErrorKind::Validation, &msg));
             }
         }
         Ok(val)

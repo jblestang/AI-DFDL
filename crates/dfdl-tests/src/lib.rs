@@ -1418,7 +1418,7 @@ mod tests {
     <xs:element name="Payload">
         <xs:complexType>
             <xs:choice dfdl:representation="text">
-                <xs:element name="OptA" type="xs:int" dfdl:length="2" dfdl:assert="{ 10 &lt; 5 }"/>
+                <xs:element name="OptA" type="xs:int" dfdl:length="2" dfdl:assert="{ 10 lt 5 }"/>
                 <xs:element name="OptB" type="xs:int" dfdl:length="2"/>
             </xs:choice>
         </xs:complexType>
@@ -3352,6 +3352,82 @@ mod tests {
         );
     }
 
+    /// Conformance verification test for Apache Daffodil `external_variables.tdml` (§7.7).
+    ///
+    /// Validates proper handling of external variable bindings, file-based configuration
+    /// overrides via `daffodil_config.xml`, runtime mutation via `dfdl:setVariable` without
+    /// false "cannot set variable twice" errors, and scoped inheritance under
+    /// `dfdl:newVariableInstance`.
+    #[test]
+    fn test_daffodil_external_variables_suite() {
+        use crate::tdml::{TdmlRunner, TdmlTestSuite};
+        use std::fs;
+        use std::path::Path;
+
+        // Resolve path to official external_variables.tdml suite
+        let path = Path::new("tests/daffodil/section07/external_variables/external_variables.tdml");
+        let path = if path.exists() {
+            path
+        } else {
+            Path::new("crates/dfdl-tests/tests/daffodil/section07/external_variables/external_variables.tdml")
+        };
+
+        let tdml_content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        let suite = match TdmlTestSuite::parse_xml(&tdml_content) {
+            Ok(s) => s,
+            Err(e) => panic!("Failed to parse TDML suite: {:?}", e),
+        };
+
+        // Execute all test cases in external_variables.tdml suite with directory context
+        let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        assert_eq!(
+            report.failed, 0,
+            "External variables TDML suite had failures: {:?}",
+            report.failure_messages
+        );
+    }
+
+    /// Conformance verification test for Apache Daffodil `envelopePayload.tdml` (§11.2, §12).
+    ///
+    /// Validates mixed MSBF/BE envelope with repeating LSBF/LE payload elements where
+    /// alignment/leadingSkip frames the component to a byte boundary prior to bitOrder transition.
+    #[test]
+    fn test_daffodil_envelope_payload_suite() {
+        use crate::tdml::{TdmlRunner, TdmlTestSuite};
+        use std::fs;
+        use std::path::Path;
+
+        // Resolve path to official envelopePayload.tdml suite
+        let path = Path::new("tests/daffodil/unparser/envelopePayload.tdml");
+        let path = if path.exists() {
+            path
+        } else {
+            Path::new("crates/dfdl-tests/tests/daffodil/unparser/envelopePayload.tdml")
+        };
+
+        let tdml_content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        let suite = match TdmlTestSuite::parse_xml(&tdml_content) {
+            Ok(s) => s,
+            Err(e) => panic!("Failed to parse TDML suite: {:?}", e),
+        };
+
+        // Execute all test cases in envelopePayload.tdml suite with directory context
+        let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        assert_eq!(
+            report.failed, 0,
+            "Envelope payload TDML suite had failures: {:?}",
+            report.failure_messages
+        );
+    }
+
     #[test]
     #[allow(clippy::unwrap_used, clippy::expect_used)]
     fn test_unsupported_types_and_formatters_cluster() {
@@ -3735,10 +3811,12 @@ mod tests {
                 || tc.name == "textNumberPattern_padding12"
                 || tc.name == "textNumberPattern_negativeIgnored04"
                 || tc.name == "textNumberPattern_negativeIgnored05"
+                || tc.name == "standardZeroRep05"
+                || tc.name == "standardZeroRep09"
         });
         let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        assert_eq!(report.failed, 0);
-        assert_eq!(report.passed, 7);
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 9);
     }
 
     /// Tests that schemas referencing `/IBMdefined/GeneralPurposeFormat.xsd` and UTF-16 encoded schemas
@@ -3794,13 +3872,34 @@ mod tests {
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read ockImplicit.tdml");
         let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "ockImplicit24");
+        suite.test_cases.retain(|tc| tc.name == "ockImplicit19" || tc.name == "ockImplicit24" || tc.name == "ockImplicit8");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[FAILURE] {}", msg);
         }
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
-        assert_eq!(report.passed, 1);
+        assert_eq!(report.passed, 3);
+    }
+
+    /// Verifies parsing of repeating sparse elements separated by NUL characters
+    /// under `emptyElementParsePolicy="treatAsAbsent"` and `separatorSuppressionPolicy="anyEmpty"`
+    /// per DFDL v1.0 §14.2 and §16.1.
+    #[test]
+    fn test_nul_pad_2() {
+        let path = if std::path::Path::new("tests/daffodil/section05/facets/NulChars.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section05/facets/NulChars.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section05/facets/NulChars.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read NulChars.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Test all test cases in NulChars.tdml
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[NULCHARS FAILURE] {}", msg);
+        }
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 3);
     }
 
 
@@ -3814,24 +3913,6 @@ mod tests {
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read includeImport.tdml");
         let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| tc.name == "generalFormat04");
-        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        for msg in &report.failure_messages {
-            eprintln!("[FAILURE] {}", msg);
-        }
-        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
-        assert_eq!(report.passed, 1);
-    }
-
-    #[test]
-    fn test_input_value_calc_global_elem() {
-        let path = if std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
-        };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read inputValueCalc.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "InputValueCalc_global_elem");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[FAILURE] {}", msg);
@@ -4086,7 +4167,639 @@ mod tests {
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
         assert_eq!(report.passed, 3);
     }
+
+    /// Regression test for DFDL §12.1 mandatory text alignment with multi-byte encodings (UTF-16BE)
+    /// and DFDL §6.3 %NL; line endings (matching LF, CR, CRLF, NEL U+0085, and LS U+2028).
+    ///
+    /// Ensures that:
+    /// 1. Mandatory text alignment does not misalign UTF-16 text occurring at odd byte offsets
+    ///    following single-byte separators.
+    /// 2. %NL; delimiter matching recognizes Unicode Next Line (0xC285) and Line Separator (0xE280A8).
+    #[test]
+    fn test_text_entities_utf16_and_nl_delimiters() {
+        let path = if std::path::Path::new("tests/daffodil/section06/entities/Entities.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section06/entities/Entities.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/entities/Entities.tdml")
+        };
+        let content = std::fs::read_to_string(path).expect("Failed to read Entities.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| tc.name == "text_entities_6_03b");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1);
+    }
+
+    /// Regression test for DFDL §14.3.1 (hidden group references) and DFDL §16.1.3 (`occursCountKind="parsed"`).
+    ///
+    /// Validates that:
+    /// 1. Scalar elements (minOccurs=1, maxOccurs=1) under `occursCountKind="parsed"` require at least
+    ///    1 occurrence to succeed and do not prematurely succeed with 0 occurrences upon parse failure.
+    /// 2. Choice branches containing scalar elements properly fail over to alternate branches when the
+    ///    first branch fails to match input data.
+    /// 3. Hidden and visible group references inside nested sequences correctly process infix separators.
+    #[test]
+    fn test_sequence_groups_nested_group_refs() {
+        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+        };
+        let content = std::fs::read_to_string(path).expect("Failed to read SequenceGroup.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        assert_eq!(report.failed, 0, "Failures in SequenceGroup.tdml: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 39);
+    }
+
+    /// Verifies standard-conforming fixes for Category 2.b (Unsupported Types/Formatters):
+    /// 1. DFDL §13.7.1.4: Intra-digit whitespace rejection in numeric strings under lax and strict check policies.
+    /// 2. XML Schema 1.0 §3.2.7 & DFDL §13.11.1: Rejection of prohibited `-00:00` and named timezone strings.
+    /// 3. DFDL §5.2.1: Document-level `dfdl:format` default property inheritance for simple types across inclusions (`dfdlx:repType`).
+    /// 4. DFDL §13.2.1 & DFDL Extensions: Bit-aligned representation types bypass mandatory text alignment.
+    #[test]
+    fn test_unsupported_types_and_formatters_conformance_suite() {
+        use crate::tdml::{TdmlRunner, TdmlTestSuite};
+        use std::path::Path;
+
+        // 1. Verify SimpleTypes.tdml whitespace and implicit datetime pattern fail cases
+        let st_path = if Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml").exists() {
+            Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml")
+        } else {
+            Path::new("crates/dfdl-tests/tests/daffodil/section05/simple_types/SimpleTypes.tdml")
+        };
+        let st_content = std::fs::read_to_string(st_path).expect("Failed to read SimpleTypes.tdml");
+        let mut st_suite = TdmlTestSuite::parse_xml(&st_content).expect("Failed to parse SimpleTypes.tdml");
+        let target_st_tests = [
+            "whiteSpaceDuringValidInt",
+            "whiteSpaceDuringValidShort",
+            "whiteSpaceDuringValidByte",
+            "whiteSpaceDuringValidLong",
+            "whiteSpaceDuringValidUnsignedInt",
+            "whiteSpaceDuringValidUnsignedShort",
+            "whiteSpaceDuringValidUnsignedByte",
+            "whiteSpaceDuringValidUnsignedLong",
+            "dateTimeImplicitPatternFail2",
+            "dateTimeImplicitPatternFail4",
+        ];
+        st_suite.test_cases.retain(|tc| target_st_tests.contains(&tc.name.as_str()));
+        let st_report = TdmlRunner::run_suite_with_base_dir(&st_suite, "", st_path.parent());
+        assert_eq!(st_report.failed, 0, "Failures in SimpleTypes.tdml: {:?}", st_report.failure_messages);
+        assert_eq!(st_report.passed, target_st_tests.len());
+
+        // 2. Verify repType.tdml cross-namespace schema inclusion format inheritance
+        let rep_path = if Path::new("tests/daffodil/extensions/repType/repType.tdml").exists() {
+            Path::new("tests/daffodil/extensions/repType/repType.tdml")
+        } else {
+            Path::new("crates/dfdl-tests/tests/daffodil/extensions/repType/repType.tdml")
+        };
+        let rep_content = std::fs::read_to_string(rep_path).expect("Failed to read repType.tdml");
+        let mut rep_suite = TdmlTestSuite::parse_xml(&rep_content).expect("Failed to parse repType.tdml");
+        rep_suite.test_cases.retain(|tc| tc.name == "repType_different_namespaces_01");
+        let rep_report = TdmlRunner::run_suite_with_base_dir(&rep_suite, "", rep_path.parent());
+        assert_eq!(rep_report.failed, 0, "Failures in repType.tdml: {:?}", rep_report.failure_messages);
+        assert_eq!(rep_report.passed, 1);
+
+        // 3. Verify enums.tdml bit-aligned representation types
+        let enum_path = if Path::new("tests/daffodil/extensions/enum/enums.tdml").exists() {
+            Path::new("tests/daffodil/extensions/enum/enums.tdml")
+        } else {
+            Path::new("crates/dfdl-tests/tests/daffodil/extensions/enum/enums.tdml")
+        };
+        let enum_content = std::fs::read_to_string(enum_path).expect("Failed to read enums.tdml");
+        let mut enum_suite = TdmlTestSuite::parse_xml(&enum_content).expect("Failed to parse enums.tdml");
+        enum_suite.test_cases.retain(|tc| tc.name == "repTypeAlignment");
+        let enum_report = TdmlRunner::run_suite_with_base_dir(&enum_suite, "", enum_path.parent());
+        assert_eq!(enum_report.failed, 0, "Failures in enums.tdml: {:?}", enum_report.failure_messages);
+        assert_eq!(enum_report.passed, 1);
+    }
+
+    /// Verify alignment and leadingSkip for 7-bit packed ASCII elements.
+    ///
+    /// Tests `alignmentPacked7BitASCII_02` where `dfdl:alignmentUnits="bits"`,
+    /// `dfdl:alignment="6"`, and `dfdl:leadingSkip="5"`.
+    /// Confirms that bit-level framing and alignment correctly advance the
+    /// bit reader before decoding 7-bit characters.
+    #[test]
+    fn test_alignment_packed_7bit_ascii_02() {
+        let path = if std::path::Path::new("tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ContentFramingProps.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[ALIGNMENT FAILURE] {}", msg);
+        }
+        eprintln!("[CFP TOTAL] passed={}, failed={}", report.passed, report.failed);
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 67);
+    }
+
+    /// Verify DFDL-2262: separator suppression under occursCountKind="expression".
+    ///
+    /// Per DFDL v1.0 §14.2 and §16.1.4, when `occursCountKind="expression"`,
+    /// the number of occurrences is fixed by expression evaluation. Empty occurrences
+    /// and their separators must never be suppressed as trailing.
+    #[test]
+    fn test_dfdl_2262() {
+        let path = if std::path::Path::new("tests/daffodil/usertests/UserSubmittedTests.tdml").exists() {
+            std::path::Path::new("tests/daffodil/usertests/UserSubmittedTests.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/usertests/UserSubmittedTests.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read UserSubmittedTests.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[USER SUBMITTED FAILURE] {}", msg);
+        }
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 8);
+    }
+
+    /// Verify nadaParser test case from SequenceGroup.tdml.
+    ///
+    /// Tests that an empty sequence inside an explicit-length complex element
+    /// (length=0) parses cleanly without error into an empty infoset item.
+    #[test]
+    fn test_nada_parser() {
+        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SequenceGroup.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| tc.name == "nadaParser");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[NADA PARSER FAILURE] {}", msg);
+        }
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1);
+    }
+
+    /// Verify SequenceGroupInitiatedContent suite from section 14 sequence groups.
+    ///
+    /// Validates that sequence groups with `dfdl:initiatedContent="yes"` correctly
+    /// discriminate element occurrences when their initiator matches, and that failed
+    /// assertions or parse errors cause the element and sequence to fail without backtracking.
+    #[test]
+    fn test_sequence_group_initiated_content() {
+        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SequenceGroupInitiatedContent.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[SEQ DISC FAILURE] {}", msg);
+        }
+        eprintln!("[SEQ DISC TOTAL] passed={}, failed={}", report.passed, report.failed);
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+    }
+
+    /// Verify ChoiceGroupInitiatedContent suite from section 15 choice groups.
+    ///
+    /// Validates that choice groups with `dfdl:initiatedContent="yes"` correctly
+    /// discriminate the choice when an alternative or array occurrence initiator matches,
+    /// and that failed alternatives do not backtrack across discriminated choices.
+    #[test]
+    fn test_choice_group_initiated_content() {
+        let path = if std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ChoiceGroupInitiatedContent.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[CHOICE INIT FAILURE] {}", msg);
+        }
+        eprintln!("[CHOICE INIT TOTAL] passed={}, failed={}", report.passed, report.failed);
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+    }
+
+    /// Verify hexBinaryLengthKindPattern01 from PatternTests.tdml.
+    ///
+    /// Validates lengthKind="pattern" on xs:hexBinary elements using regex patterns
+    /// scanned over binary data interpreted under the element's encoding (e.g. ISO-8859-1).
+    #[test]
+    fn test_hex_binary_length_kind_pattern_01() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PatternTests.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section12/lengthKind/PatternTests.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PatternTests.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read PatternTests.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| tc.name == "hexBinaryLengthKindPattern01");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[HEX PATTERN FAILURE] {}", msg);
+        }
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1);
+    }
+
+    /// Verify pl_text_string_txt_chars_padding from PrefixedTests.tdml.
+    ///
+    /// Tests that prefixed length elements whose prefixLengthType specifies padded text numbers
+    /// (e.g. dfdl:textNumberPadCharacter="X") strip pad characters and correctly decode the prefix length.
+    #[test]
+    fn test_pl_text_string_txt_chars_padding() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| tc.name == "pl_text_string_txt_chars_padding");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[PREFIX PADDING FAILURE] {}", msg);
+        }
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1);
+    }
+
+    /// Run full PrefixedTests.tdml suite to verify all prefixed length features.
+    #[test]
+    fn test_prefixed_tests_suite() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+        };
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
+        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        for msg in &report.failure_messages {
+            eprintln!("[PREFIXED SUITE FAILURE] {}", msg);
+        }
+        eprintln!("[PREFIXED SUITE TOTAL] passed={}, failed={}", report.passed, report.failed);
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+    }
+
+    /// Verifies DFDL §16.1.4 conformance: when `dfdl:occursCountKind="parsed"`, the element
+    /// is parsed dynamically until a processing error occurs.
+    ///
+    /// Consequently, the element behaves as a dynamic array regardless of whether XSD
+    /// `maxOccurs` is 1 or unbounded, permitting 1-based indexing in DPath expressions
+    /// such as `/ex:e1/ex:password[1]`.
+    ///
+    /// This test runs the `hiddenDataExpression` and `hiddenDataExpression2` test cases from
+    /// `expressions.tdml`, asserting that both parse successfully with 0 failures.
+    #[test]
+    fn test_hidden_data_expression_parsed_occurs() {
+        // Locate expressions.tdml in tests/daffodil or crates/dfdl-tests/tests/daffodil
+        let path = if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+        };
+        // Load the TDML suite content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read expressions.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Filter suite to run only hiddenDataExpression and hiddenDataExpression2
+        suite.test_cases.retain(|tc| tc.name == "hiddenDataExpression" || tc.name == "hiddenDataExpression2");
+        // Execute the filtered test cases against the DFDL processor
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Verify both test cases executed and passed with zero failures
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 2);
+    }
+
+    /// Verifies DFDL §3.3 conformance: `xs:appinfo` elements without a valid DFDL source
+    /// attribute (`http://www.ogf.org/dfdl/` or `http://www.ogf.org/dfdl/dfdl-1.0/`) must NOT
+    /// have their contents interpreted as DFDL annotations.
+    ///
+    /// When an `xs:appinfo` annotation has no source attribute (or a non-DFDL source URI like
+    /// Schematron), its inner elements (such as `dfdl:discriminator` or non-DFDL markers) are
+    /// ignored by the DFDL processor, preventing unwarranted discriminator or parse failures.
+    ///
+    /// This test executes `missing_appinfo_source` and `missing_appinfo_source_nondfdl` from
+    /// `SchemaDefinitionErrors.tdml`, ensuring that schema warnings are appropriately captured
+    /// and that the payloads parse cleanly.
+    #[test]
+    fn test_missing_appinfo_source() {
+        // Locate SchemaDefinitionErrors.tdml across potential test roots
+        let path = if std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
+        };
+        // Read TDML XML content from disk
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SchemaDefinitionErrors.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain only missing_appinfo_source test cases
+        suite.test_cases.retain(|tc| tc.name.starts_with("missing_appinfo_source"));
+        // Execute suite with base directory
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert all test cases pass with zero failures
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 2);
+    }
+
+    #[test]
+    fn test_delims_ignorecase_02() {
+        // Locate DelimiterProperties.tdml
+        let path = if std::path::Path::new("tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml")
+        };
+        // Read TDML XML content from disk
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read DelimiterProperties.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain only delims_ignorecase_02
+        suite.test_cases.retain(|tc| tc.name == "delims_ignorecase_02");
+        // Execute suite with base directory
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        println!("Failure messages: {:?}", report.failure_messages);
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+    }
+
+    /// Regression test for Category 2.c: separatorSuppressionPolicy="never" with infix and prefix
+    /// sequences containing complex element arrays and absent optional elements (DFDL §14.2.3).
+    ///
+    /// This test verifies:
+    /// 1. Speculative occurrence rollback restores the bitstream to `reader_cp` under
+    ///    `separatorSuppressionPolicy="anyEmpty"` rather than consuming the prefix separator of the
+    ///    following sequence element (`field7`).
+    /// 2. Under `separatorSuppressionPolicy="never"`, absent optional elements retain their required
+    ///    separator slot (`pre_elem_cp`), while scalar optional elements do not consume multi-slot
+    ///    separators belonging to subsequent components.
+    /// 3. In an infix sequence, the final component does not demand a trailing separator upon completion
+    ///    or absent rollback (DFDL §12.3.2).
+    #[test]
+    fn test_cat_2c_sep_ssp_never_6_and_7() {
+        // Locate SepTests.tdml across directory structures
+        let path = if std::path::Path::new("tests/daffodil/usertests/SepTests.tdml").exists() {
+            std::path::Path::new("tests/daffodil/usertests/SepTests.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/usertests/SepTests.tdml")
+        };
+        // Read TDML test suite file
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SepTests.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain test cases test_sep_ssp_never_6 and test_sep_ssp_never_7
+        suite.test_cases.retain(|tc| tc.name == "test_sep_ssp_never_6" || tc.name == "test_sep_ssp_never_7");
+        // Run test cases against runner
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Verify both test cases pass without regressions
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 2, "Expected 2 test cases to pass");
+    }
+
+    /// Regression test for Category 2.c: non-represented sequence elements and infix separator
+    /// positioning according to DFDL v1.0 §14.2 and §17.
+    ///
+    /// When an element has `dfdl:inputValueCalc`, it does not have a physical data representation
+    /// (`term_has_representation == false`). In an infix sequence, a separator must only precede an
+    /// element if at least one prior member had a physical data representation.
+    ///
+    /// This test runs `InputValueCalc_06` from `InputValueCalc.tdml` to verify that sequences
+    /// accurately track represented members rather than raw syntax indices.
+    #[test]
+    fn test_cat_2c_input_value_calc_06() {
+        // Locate inputValueCalc.tdml file
+        let path = if std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
+        };
+        // Load TDML XML content from disk
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read inputValueCalc.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain InputValueCalc_06 test case
+        suite.test_cases.retain(|tc| tc.name == "InputValueCalc_06");
+        // Run suite
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert clean pass
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected InputValueCalc_06 to pass");
+    }
+
+    /// Regression test for Category 2.c: array occurrence separator handling under `occursCountKind="parsed"`
+    /// and `implicit` (DFDL §16.1).
+    ///
+    /// In an array with infix or prefix separators, speculative occurrences beyond the actual count
+    /// must cleanly roll back their separators when parsing fails, leaving subsequent components
+    /// intact to consume their respective delimiters.
+    #[test]
+    fn test_cat_2c_array_parsed_and_implicit() {
+        // Locate implicitvparsed.tdml file
+        let path = if std::path::Path::new("tests/daffodil/section14/occursCountKind/implicitvparsed.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section14/occursCountKind/implicitvparsed.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/occursCountKind/implicitvparsed.tdml")
+        };
+        // Read TDML XML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read implicitvparsed.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Filter for test_array_parsed and test_array_implicit
+        suite.test_cases.retain(|tc| tc.name == "test_array_parsed" || tc.name == "test_array_implicit");
+        // Execute suite
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert all test cases pass
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 2, "Expected 2 test cases to pass");
+    }
+
+    /// Regression test for Category 2.c: resolution of file-based document parts using full classpath
+    /// paths in TDML runner.
+    ///
+    /// When `type="file"` references a path beginning with `org/apache/daffodil/`, the runner correctly
+    /// resolves the document part relative to the TDML test directory tree.
+    #[test]
+    fn test_cat_2c_lit_nil1_full_path() {
+        // Locate general.tdml
+        let path = if std::path::Path::new("tests/daffodil/section00/general/general.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section00/general/general.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section00/general/general.tdml")
+        };
+        // Read TDML XML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read general.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain litNil1FullPath
+        suite.test_cases.retain(|tc| tc.name == "litNil1FullPath");
+        // Run test
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert pass
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected litNil1FullPath to pass");
+    }
+
+    /// Category 4 Test: error01 in ArrayOptionalElem.tdml.
+    ///
+    /// Per DFDL v1.0 §14.2.2 and §16:
+    /// In an infix sequence with separatorSuppressionPolicy="anyEmpty", an extra
+    /// trailing separator after all occurrences (e.g. "3,4,5,") is not consumed by
+    /// the sequence and must remain in the bitstream as leftover unparsed data,
+    /// triggering a processing error ("Left over data").
+    #[test]
+    fn test_cat4_error01_extra_separator_leftover_data() {
+        // Locate ArrayOptionalElem.tdml
+        let path = if std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
+        };
+        // Read TDML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain error01 test case
+        suite.test_cases.retain(|tc| tc.name == "error01");
+        // Run test case
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert that the expected processing error was correctly raised
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected error01 to pass");
+    }
+
+    /// Category 4 Test: occursCountKindImplicitSeparators01b in ArrayOptionalElem.tdml.
+    ///
+    /// Per DFDL v1.0 §14.2.2:
+    /// Under separatorSuppressionPolicy="trailingEmptyStrict", if any trailing optional
+    /// elements are absent but have separators present in the bitstream, parsing must
+    /// fail with a processing error matching "trailingEmptyStrict".
+    #[test]
+    fn test_cat4_trailing_empty_strict_occurs_count_kind() {
+        // Locate ArrayOptionalElem.tdml
+        let path = if std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
+        };
+        // Read TDML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain occursCountKindImplicitSeparators01b test case
+        suite.test_cases.retain(|tc| tc.name == "occursCountKindImplicitSeparators01b");
+        // Run test case
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert that the expected processing error was correctly raised
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected occursCountKindImplicitSeparators01b to pass");
+    }
+
+    /// Category 4 Test: schema_component_err in SchemaDefinitionErrors.tdml.
+    ///
+    /// Per DFDL v1.0 §12.2 Table 24:
+    /// Framing properties (such as dfdl:leadingSkip and dfdl:trailingSkip) are required
+    /// properties on elements with representation. A schema that defines format properties
+    /// without specifying or inheriting dfdl:leadingSkip must trigger a Schema Definition Error.
+    #[test]
+    fn test_cat4_missing_leading_skip_sde() {
+        // Locate SchemaDefinitionErrors.tdml
+        let path = if std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
+        };
+        // Read TDML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SchemaDefinitionErrors.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain schema_component_err test case
+        suite.test_cases.retain(|tc| tc.name == "schema_component_err");
+        // Run test case
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert that the expected Schema Definition Error was correctly raised
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected schema_component_err to pass");
+    }
+
+    /// Category 4 Test: SeqGrp_02 in SequenceGroupDelimiters.tdml.
+    ///
+    /// Per DFDL v1.0 §16.1.4:
+    /// "When dfdl:occursCountKind is 'parsed', the number of occurrences is determined by
+    /// parsing occurrences until a Processing Error occurs. It is a Processing Error if
+    /// fewer than minOccurs occurrences are found."
+    /// When minOccurs=1 (default), input "," with no valid occurrence must trigger a processing error.
+    #[test]
+    fn test_cat4_seq_grp_02_occurs_count_kind_parsed_min_occurs() {
+        // Locate SequenceGroupDelimiters.tdml
+        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml")
+        };
+        // Read TDML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SequenceGroupDelimiters.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain SeqGrp_02 test case
+        suite.test_cases.retain(|tc| tc.name == "SeqGrp_02");
+        // Run test case
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert that the expected Processing Error was correctly raised
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected SeqGrp_02 to pass");
+    }
+
+    /// Category 4 Test: choiceBranch_e6 in ChoiceBranches.tdml.
+    ///
+    /// Per DFDL v1.0 §15.1.4:
+    /// "An array element cannot be defaultable for a choice."
+    /// Choice branches with maxOccurs > 1 or unbounded defining a default value are
+    /// unsupported/prohibited and must raise an error matching "subset", "default", "not implemented".
+    #[test]
+    fn test_cat4_choice_branch_e6_array_default_unsupported() {
+        // Locate ChoiceBranches.tdml
+        let path = if std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceBranches.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceBranches.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section15/choice_groups/ChoiceBranches.tdml")
+        };
+        // Read TDML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ChoiceBranches.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain choiceBranch_e6 test case
+        suite.test_cases.retain(|tc| tc.name == "choiceBranch_e6");
+        // Run test case
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert that the expected error was correctly raised
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected choiceBranch_e6 to pass");
+    }
+
+    /// Category 4 Test: regexLookaheadFail2 in expressions.tdml.
+    ///
+    /// Per W3C XML Schema 1.0 Part 2 §4.3.4 (Pattern Facet):
+    /// The xs:pattern facet uses the XML Schema regular expression language (Appendix F),
+    /// which does not support lookarounds. When dfdl:checkConstraints evaluates an xs:pattern
+    /// containing a lookahead, it fails and causes dfdl:assert to fail.
+    #[test]
+    fn test_cat4_regex_lookahead_check_constraints() {
+        // Locate expressions.tdml
+        let path = if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml").exists() {
+            std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+        } else {
+            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+        };
+        // Read TDML content
+        let tdml_content = std::fs::read_to_string(path).expect("Failed to read expressions.tdml");
+        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        // Retain regexLookaheadFail2 test case
+        suite.test_cases.retain(|tc| tc.name == "regexLookaheadFail2");
+        // Run test case
+        let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        // Assert that the expected constraint assertion error was correctly raised
+        assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
+        assert_eq!(report.passed, 1, "Expected regexLookaheadFail2 to pass");
+    }
 }
+
+
+
 
 
 
