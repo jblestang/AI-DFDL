@@ -642,7 +642,7 @@ pub struct ResolvedProperties {
     pub initiated_content: bool,
     /// Choice length strategy (Implicit or Explicit) (`dfdl:choiceLengthKind`).
     pub choice_length_kind: LengthKind,
-    /// Choice explicit length in length units (`dfdl:choiceLength`).
+    /// Choice explicit length in bytes (DFDL §15.1.2: `dfdl:choiceLength`).
     pub choice_length: Option<usize>,
     /// Optional terminator string.
     pub terminator: Option<String>,

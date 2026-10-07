@@ -787,10 +787,9 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
 
                 if term.properties.choice_length_kind == crate::schema::ir::LengthKind::Explicit {
                     if let Some(target_len) = term.properties.choice_length {
-                        let target_bits = match term.properties.length_units {
-                            crate::schema::ir::LengthUnits::Bits => target_len,
-                            _ => target_len.saturating_mul(8),
-                        };
+                        // DFDL §15.1.2: dfdl:choiceLength is always specified in bytes,
+                        // regardless of any in-scope dfdl:lengthUnits.
+                        let target_bits = target_len.saturating_mul(8);
                         if bits_written < target_bits {
                             let pad_bits = target_bits - bits_written;
                             let fill_byte = term.properties.fill_byte;
@@ -1698,6 +1697,9 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                         );
                                         return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
                                     }
+                                    let updated_vmap = sub_unparser.variable_map.clone();
+                                    drop(sub_unparser);
+                                    self.variable_map = updated_vmap;
                                     sub_writer.flush()?;
                                     let buf = sub_writer.into_sink().into_vec();
 
@@ -1712,6 +1714,32 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                         self.writer.write_bits(b as u64, 8)?;
                                     }
                                 } else {
+                                    // Per GFD.240 §12.3.7.3:
+                                    // When unparsing a complex element with dfdl:lengthKind 'explicit':
+                                    // - The content of the complex element is unparsed.
+                                    // - If content length > explicit length, it is an Unparse Error.
+                                    // - If content length < explicit length, the remaining bits are
+                                    //   filled with fillByte before any right framing (terminator/trailingSkip).
+                                    let explicit_bits = if term.properties.length_kind
+                                        == crate::schema::ir::LengthKind::Explicit
+                                    {
+                                        if let Some(l) = self.resolve_explicit_length(&term.properties)? {
+                                            let bits = match term.properties.length_units {
+                                                crate::schema::ir::LengthUnits::Bits => l,
+                                                crate::schema::ir::LengthUnits::Bytes => l.saturating_mul(8),
+                                                crate::schema::ir::LengthUnits::Characters => {
+                                                    l.saturating_mul(crate::encoding::encoding_unit_bits(&term.properties.encoding))
+                                                }
+                                            };
+                                            Some(bits)
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                    let content_start_bit = self.writer.position().0;
                                     let prev_cursor = self.child_cursor;
                                     self.child_cursor = 0;
                                     let term_res = self.unparse_term(child_id, elem);
@@ -1728,6 +1756,25 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                         return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
                                     }
                                     self.child_cursor = prev_cursor;
+
+                                    if let Some(target_bits) = explicit_bits {
+                                        let current_bit = self.writer.position().0;
+                                        let consumed_bits = current_bit.saturating_sub(content_start_bit);
+                                        if consumed_bits > target_bits {
+                                            let msg = alloc::format!(
+                                                "Unparse Error: Complex element '{}' content length ({} bits) exceeds explicit length ({} bits)",
+                                                elem.name.local_name,
+                                                consumed_bits,
+                                                target_bits
+                                            );
+                                            return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
+                                        }
+                                        if consumed_bits < target_bits {
+                                            let pad_bits = target_bits.saturating_sub(consumed_bits);
+                                            let fill = fill_byte_value(&term.properties)?;
+                                            write_fill_padding(self.writer, fill, pad_bits)?;
+                                        }
+                                    }
                                 }
                             } else {
                                 let default_val = match el.type_ir {

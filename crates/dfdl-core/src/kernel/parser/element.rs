@@ -1186,7 +1186,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     "Validation Error: element '{}' occurs {} times, less than minOccurs {}",
                     elem.name.local_name, count, elem.min_occurs
                 );
-                return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
+                let _ = crate::util::try_push(
+                    &mut self.validation_errors,
+                    DFDLError::new(DFDLErrorKind::Validation, &msg),
+                );
             }
             if let Some(max) = elem.max_occurs {
                 if count > max {
@@ -1194,7 +1197,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         "Validation Error: element '{}' occurs {} times, exceeding maxOccurs {}",
                         elem.name.local_name, count, max
                     );
-                    return Err(DFDLError::new(DFDLErrorKind::Validation, &msg));
+                    let _ = crate::util::try_push(
+                        &mut self.validation_errors,
+                        DFDLError::new(DFDLErrorKind::Validation, &msg),
+                    );
                 }
             }
         }
@@ -2134,8 +2140,46 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         let bits = match term.properties.length_units {
                             crate::schema::ir::LengthUnits::Bits => l,
                             crate::schema::ir::LengthUnits::Bytes => l.saturating_mul(8),
+                            // Per GFD.240 §12.3.7 (page 104):
+                            // "When lengthUnits is 'characters':
+                            // For variable-width encodings, the representation length is determined
+                            // by scanning characters in the specified encoding until the specified
+                            // number of characters is reached."
                             crate::schema::ir::LengthUnits::Characters => {
-                                l.saturating_mul(crate::encoding::encoding_unit_bits(&term.properties.encoding))
+                                let enc_upper = term.properties.encoding.to_ascii_uppercase();
+                                if enc_upper.contains("UTF-8")
+                                    || enc_upper.replace(['-', '_'], "") == "UTF8"
+                                {
+                                    // Scan `l` UTF-8 characters to compute the exact bit width.
+                                    let cp = self.reader.checkpoint();
+                                    let mut dummy = Vec::new();
+                                    let mut ok = true;
+                                    for _ in 0..l {
+                                        if self.read_utf8_char_bytes(&mut dummy).is_err() {
+                                            ok = false;
+                                            break;
+                                        }
+                                    }
+                                    let consumed_bits = self.reader.position().0.saturating_sub(start_bit);
+                                    let _ = self.reader.rollback(cp);
+                                    if !ok {
+                                        return Err(DFDLError::new_static(
+                                            DFDLErrorKind::Parse,
+                                            "Insufficient data for complex element character length",
+                                        ));
+                                    }
+                                    consumed_bits
+                                } else if crate::encoding::is_variable_width_encoding(&term.properties.encoding) {
+                                    let msg = alloc::format!(
+                                        "Runtime Schema Definition Error: Variable width character encoding '{}' with lengthUnits 'characters' is not supported for complex types on element '{}'",
+                                        term.properties.encoding,
+                                        elem.name.local_name
+                                    );
+                                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                                } else {
+                                    // For fixed-width encodings, character length = length * character unit bits.
+                                    l.saturating_mul(crate::encoding::encoding_unit_bits(&term.properties.encoding))
+                                }
                             }
                         };
                         Some(bits)
@@ -2674,23 +2718,42 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 let sub_byte_bits = crate::encoding::encoding_char_bits(&props.encoding);
                 let mut bytes = Vec::new();
                 let mut sub_byte_text = String::new();
-                for _ in 0..4096 {
-                    if self.reader.is_eof() {
-                        break;
-                    }
+                // DFDL §12.3.4 (lengthKind="pattern"):
+                // Read ahead without an arbitrary 4096-byte truncation limit, bounded by EOF or
+                // an explicit maximum implementation limit (1 MiB) to prevent memory exhaustion.
+                const MAX_PATTERN_LOOKAHEAD_BYTES: usize = 1_048_576; // 1 MiB
+                let mut exceeded_limit = false;
+                while !self.reader.is_eof() {
                     if let Some(cb) = sub_byte_bits {
+                        if sub_byte_text.len() >= MAX_PATTERN_LOOKAHEAD_BYTES {
+                            exceeded_limit = true;
+                            break;
+                        }
                         match self.reader.read_bits(cb) {
                             Ok(code) => sub_byte_text
                                 .push(crate::encoding::decode_sub_byte_char(code, &props.encoding)),
                             Err(_) => break,
                         }
-                    } else if let Ok(b) = self.reader.read_bits(8) {
-                        let _ = try_push(&mut bytes, b as u8);
                     } else {
-                        break;
+                        if bytes.len() >= MAX_PATTERN_LOOKAHEAD_BYTES {
+                            exceeded_limit = true;
+                            break;
+                        }
+                        if let Ok(b) = self.reader.read_bits(8) {
+                            let _ = try_push(&mut bytes, b as u8);
+                        } else {
+                            break;
+                        }
                     }
                 }
                 let _ = self.reader.rollback(reader_cp);
+                if exceeded_limit {
+                    let msg = alloc::format!(
+                        "Implementation Limit: dfdl:lengthPattern lookahead exceeded maximum buffer window ({} bytes)",
+                        MAX_PATTERN_LOOKAHEAD_BYTES
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::ImplementationLimit, &msg));
+                }
                 // DFDL §12.3.4 (lengthKind="pattern"):
                 // Peek ahead and decode text according to the element's encoding while tracking
                 // byte offsets so character positions accurately map to source bytes or bits.

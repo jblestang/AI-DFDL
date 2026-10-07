@@ -1191,13 +1191,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     });
                     let top_pou_idx = self.pou_stack.len() - 1;
 
+                    // DFDL §15.1.2: dfdl:choiceLength is always specified in bytes,
+                    // regardless of any in-scope dfdl:lengthUnits.
                     let explicit_choice_bits = if term.properties.choice_length_kind == LengthKind::Explicit {
-                        term.properties.choice_length.map(|l| {
-                            match term.properties.length_units {
-                                LengthUnits::Bits => l,
-                                _ => l.saturating_mul(8),
-                            }
-                        })
+                        term.properties.choice_length.map(|l| l.saturating_mul(8))
                     } else {
                         None
                     };
@@ -1239,9 +1236,23 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     let start_pos = reader_cp.bit_position.0;
                                     let consumed = self.reader.position().0.saturating_sub(start_pos);
                                     if consumed > choice_bits {
+                                        if self.pou_stack.get(top_pou_idx).map(|p| p.is_discriminated).unwrap_or(false) {
+                                            self.pou_stack.pop();
+                                            self.reader.rollback(reader_cp)?;
+                                            builder.rollback(builder_cp);
+                                            self.variable_map = vmap_cp;
+                                            self.validation_errors.truncate(val_err_cp);
+                                            self.in_scope_delimiters = delims_cp;
+                                            self.in_scope_terminators = terms_cp;
+                                            return Err(DFDLError::new(
+                                                DFDLErrorKind::Parse,
+                                                "Parse Error: All Choice Alternatives Failed: Branch consumed data exceeding explicit choiceLength",
+                                            ));
+                                        }
                                         self.reader.rollback(reader_cp)?;
                                         builder.rollback(builder_cp);
                                         self.variable_map = vmap_cp;
+                                        self.validation_errors.truncate(val_err_cp);
                                         self.in_scope_delimiters = delims_cp;
                                         self.in_scope_terminators = terms_cp;
                                         last_choice_error = Some(DFDLError::new(
@@ -1252,7 +1263,33 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     }
                                     if consumed < choice_bits {
                                         let pad_bits = choice_bits.saturating_sub(consumed);
-                                        let _ = self.reader.skip_bits(pad_bits);
+                                        // DFDL §15.1.2: ChoiceUnused region must exist in the input stream.
+                                        // If skipping padding bits fails (e.g. truncated input), propagate error
+                                        // with proper discriminator and backtracking semantics.
+                                        if let Err(e) = self.reader.skip_bits(pad_bits) {
+                                            if self.pou_stack.get(top_pou_idx).map(|p| p.is_discriminated).unwrap_or(false) {
+                                                self.pou_stack.pop();
+                                                self.reader.rollback(reader_cp)?;
+                                                builder.rollback(builder_cp);
+                                                self.variable_map = vmap_cp;
+                                                self.validation_errors.truncate(val_err_cp);
+                                                self.in_scope_delimiters = delims_cp;
+                                                self.in_scope_terminators = terms_cp;
+                                                let msg = alloc::format!(
+                                                    "Parse Error: All Choice Alternatives Failed: {}",
+                                                    e
+                                                );
+                                                return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
+                                            }
+                                            last_choice_error = Some(e);
+                                            self.reader.rollback(reader_cp)?;
+                                            builder.rollback(builder_cp);
+                                            self.variable_map = vmap_cp;
+                                            self.validation_errors.truncate(val_err_cp);
+                                            self.in_scope_delimiters = delims_cp;
+                                            self.in_scope_terminators = terms_cp;
+                                            continue;
+                                        }
                                     }
                                 }
                                 choice_succeeded = true;

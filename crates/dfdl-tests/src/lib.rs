@@ -5171,6 +5171,814 @@ mod tests {
         );
         assert_eq!(tnp_report.passed, 1);
     }
+
+    /// Regression test for Issue F8 (DFDL §15.1.2):
+    /// Verifies that `dfdl:choiceLength` is always interpreted in bytes, regardless of `dfdl:lengthUnits`.
+    /// When `dfdl:lengthUnits="bits"` is defined, a `dfdl:choiceLength="2"` must allocate 16 bits (2 bytes),
+    /// allowing a 16-bit binary element branch (`12 34`) to parse and unparse without being falsely rejected.
+    #[test]
+    fn test_f8_choice_length_independent_of_length_units() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::{BitReader, BitWriter};
+        use dfdl_core::io::sink::VecByteSink;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::{ParserEngine, UnparserEngine};
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="binary" lengthUnits="bits" alignment="1" alignmentUnits="bits"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:choice dfdl:choiceLengthKind="explicit" dfdl:choiceLength="2">
+                <xs:element name="Branch16" type="xs:unsignedShort" dfdl:lengthKind="explicit" dfdl:length="16"/>
+                <xs:element name="Branch8" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:length="8"/>
+            </xs:choice>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with choiceLength=2 and lengthUnits=bits");
+
+        // 1. Parse binary stream with Branch16 (0x12, 0x34) = 16 bits = 2 bytes
+        let data = [0x12, 0x34];
+        let src = SliceByteSource::new(&data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let doc = parser
+            .parse_document()
+            .expect("Parse 16-bit branch inside 2-byte choice must succeed");
+
+        let root = doc.root.as_ref().unwrap();
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref child) =
+            root.children.first().unwrap();
+        assert_eq!(child.name.local_name, "Branch16");
+        assert_eq!(
+            child.state,
+            dfdl_core::infoset::state::ElementState::Value(DfdlValue::UnsignedShort(0x1234))
+        );
+
+        // 2. Unparse back to binary stream and verify 2 bytes output
+        let sink = VecByteSink::new();
+        let mut writer =
+            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut unparse_budget = WorkBudget::new(100);
+
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut unparse_budget);
+        unparser
+            .unparse_document(&doc)
+            .expect("Unparse 16-bit branch inside 2-byte choice must succeed");
+        assert_eq!(writer.sink().as_slice(), &data);
+    }
+
+    /// Reproduction test 1 for Issue F7 (DFDL v1.0 §16.1.4 / GFD.240 page 173):
+    /// Verifies that speculative parsing does not impose `minOccurs` for `dfdl:occursCountKind="parsed"`.
+    /// When `minOccurs="2"`, `maxOccurs="3"` and only 1 occurrence is present in the stream:
+    /// - With validation disabled (`ValidationMode::Off`), parsing succeeds and constructs the infoset node.
+    #[test]
+    fn parsed_occurrence_minimum_is_validation_only() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::{ParserEngine, ValidationMode};
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="binary" lengthUnits="bytes" alignment="1" alignmentUnits="bytes"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Item" type="xs:unsignedByte" minOccurs="2" maxOccurs="3"
+                            dfdl:occursCountKind="parsed" dfdl:lengthKind="explicit" dfdl:length="1"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with parsed array minOccurs=2 maxOccurs=3");
+
+        // Input with only 1 occurrence (1 byte = 0x42)
+        let data = [0x42];
+        let src = SliceByteSource::new(&data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        parser.set_validation_mode(ValidationMode::Off);
+
+        let doc = parser
+            .parse_document()
+            .expect("Parsing must succeed without validation errors when validation is Off");
+
+        let root = doc.root.as_ref().unwrap();
+        assert_eq!(root.children.len(), 1);
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref child) = root.children[0];
+        assert_eq!(child.name.local_name, "Item");
+        assert_eq!(
+            child.state,
+            dfdl_core::infoset::state::ElementState::Value(DfdlValue::UnsignedByte(0x42))
+        );
+    }
+
+    /// Reproduction test 2 for Issue F7 (DFDL v1.0 §16.1.4 / GFD.240 page 173):
+    /// Verifies that when `dfdl:occursCountKind="parsed"` with `minOccurs="2"`, `maxOccurs="3"`,
+    /// an occurrence count less than `minOccurs` (1 < 2) triggers `DFDLErrorKind::Validation`
+    /// with the diagnostic "occurs 1 times, less than minOccurs 2" when validation is enabled.
+    #[test]
+    fn parsed_occurrence_minimum_reports_validation_error() {
+        use dfdl_core::error::DFDLErrorKind;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::{ParserEngine, ValidationMode};
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="binary" lengthUnits="bytes" alignment="1" alignmentUnits="bytes"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Item" type="xs:unsignedByte" minOccurs="2" maxOccurs="3"
+                            dfdl:occursCountKind="parsed" dfdl:lengthKind="explicit" dfdl:length="1"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with parsed array minOccurs=2 maxOccurs=3");
+
+        // Input with only 1 occurrence (1 byte = 0x42)
+        let data = [0x42];
+        let src = SliceByteSource::new(&data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        parser.set_validation_mode(ValidationMode::Limited);
+
+        let err = parser
+            .parse_document()
+            .expect_err("Parsing must fail with validation error when validation is enabled");
+
+        assert_eq!(err.kind, DFDLErrorKind::Validation);
+        assert!(
+            err.message.as_str().contains("occurs 1 times, less than minOccurs 2"),
+            "Unexpected error message: {}",
+            err.message
+        );
+    }
+
+    /// Reproduction test for Issue F6:
+    /// Verifies that variable mutations performed via `dfdl:setVariable` inside a prefixed complex
+    /// element are propagated back to the parent unparser engine and preserved for subsequent elements
+    /// (e.g. evaluating `dfdl:outputValueCalc`).
+    /// Specifically: variable `v` is initialized to 0, mutated to 7 inside prefixed complex `PrefixComp`
+    /// containing 1 byte "A" (`0x41`) prefixed with 2-byte length (`00 01`), followed by `Follow`
+    /// calculating `{ xs:string($ex:v) }` (`0x37`), producing the exact byte stream `00 01 41 37`.
+    #[test]
+    fn prefixed_complex_unparse_must_preserve_set_variable() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitWriter;
+        use dfdl_core::io::sink::VecByteSink;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::UnparserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.dfdl.org/7793"
+           xmlns:ex="http://example.com"
+           targetNamespace="http://example.com">
+    <dfdl:format byteOrder="bigEndian" representation="binary" lengthUnits="bytes"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <dfdl:defineVariable name="v" type="xs:int" defaultValue="0"/>
+
+    <xs:simpleType name="prefixShort" dfdl:representation="binary" dfdl:lengthKind="explicit" dfdl:length="2">
+        <xs:restriction base="xs:unsignedShort"/>
+    </xs:simpleType>
+
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="PrefixComp" dfdl:lengthKind="prefixed" dfdl:prefixLengthType="ex:prefixShort">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Sub" type="xs:string" dfdl:representation="text"
+                                        dfdl:lengthKind="explicit" dfdl:length="1">
+                                <xs:annotation>
+                                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                                        <dfdl:setVariable ref="ex:v">{ 7 }</dfdl:setVariable>
+                                    </xs:appinfo>
+                                </xs:annotation>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                <xs:element name="Follow" type="xs:string" dfdl:representation="text"
+                            dfdl:lengthKind="explicit" dfdl:length="1"
+                            dfdl:outputValueCalc="{ xs:string($ex:v) }"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with prefixed complex and setVariable");
+
+        // Construct infoset:
+        // <Root>
+        //   <PrefixComp>
+        //     <Sub>A</Sub>
+        //   </PrefixComp>
+        // </Root>
+        // (Follow is computed by outputValueCalc)
+        use dfdl_core::infoset::events::InfosetEvent;
+        use dfdl_core::infoset::tree::InfosetBuilder;
+        use dfdl_core::types::QName;
+
+        let qn_root = QName::with_namespace("http://example.com", "Root", Some("ex"));
+        let qn_prefix_comp = QName::local("PrefixComp");
+        let qn_sub = QName::local("Sub");
+
+        let mut builder = InfosetBuilder::with_limits(dfdl_core::limits::ResourceLimits::default());
+        builder.push_event(InfosetEvent::StartDocument).unwrap();
+        builder
+            .push_event(InfosetEvent::StartElement {
+                name: qn_root.clone(),
+                is_nil: false,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::StartElement {
+                name: qn_prefix_comp.clone(),
+                is_nil: false,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::SimpleValue {
+                name: qn_sub,
+                value: DfdlValue::String("A".to_string()),
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::EndElement {
+                name: qn_prefix_comp,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::EndElement { name: qn_root })
+            .unwrap();
+        builder.push_event(InfosetEvent::EndDocument).unwrap();
+
+        let doc = builder.build().expect("Build infoset");
+
+        let sink = VecByteSink::new();
+        let mut writer =
+            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+        unparser
+            .unparse_document(&doc)
+            .expect("Unparse document with prefixed complex and outputValueCalc");
+
+        // Expected output: 00 01 (length=1 for PrefixComp) | 41 ('A' for Sub) | 37 ('7' for Follow from $ex:v)
+        let expected = [0x00, 0x01, 0x41, 0x37];
+        assert_eq!(writer.sink().as_slice(), &expected);
+    }
+
+    /// Reproduction test 1 for Issue F5 (DFDL §12.3.4 `lengthKind="pattern"`):
+    /// Verifies that lengthKind="pattern" does not silently truncate evaluation at 4,096 bytes.
+    /// An element with `lengthPattern="A+"` over 5,000 'A' characters must consume all 5,000 bytes
+    /// without leaving 904 bytes unconsumed at the root level (32,768 bits).
+    #[test]
+    fn pattern_length_must_not_truncate_at_4096() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::ParserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="bytes"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <xs:element name="Root" type="xs:string" dfdl:lengthKind="pattern" dfdl:lengthPattern="A+"/>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with lengthKind=pattern A+");
+
+        let input_data = vec![b'A'; 5000];
+        let src = SliceByteSource::new(&input_data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let doc = parser
+            .parse_document()
+            .expect("Parsing 5,000 'A's with lengthPattern=A+ must not fail or leave trailing data");
+
+        let root = doc.root.as_ref().unwrap();
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s)) = root.state {
+            assert_eq!(s.len(), 5000);
+            assert!(s.chars().all(|c| c == 'A'));
+        } else {
+            panic!("Expected Value(String) state for Root element");
+        }
+    }
+
+    /// Reproduction test 2 for Issue F5 (DFDL §12.3.4 `lengthKind="pattern"`):
+    /// Verifies that when a lengthPattern field is followed by a delimited field in a sequence,
+    /// the pattern lookahead does not silently truncate at 4,096 bytes and erroneously reassign
+    /// the remaining 904 bytes of the pattern field to the subsequent field.
+    #[test]
+    fn pattern_window_must_not_silently_reassign_data_to_next_field() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::ParserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="bytes"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Field1" type="xs:string" dfdl:lengthKind="pattern" dfdl:lengthPattern="A+"/>
+                <xs:element name="Field2" type="xs:string" dfdl:lengthKind="delimited"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with Field1 (pattern A+) and Field2 (delimited)");
+
+        // 5,000 'A' characters followed by "END"
+        let mut input_data = vec![b'A'; 5000];
+        input_data.extend_from_slice(b"END");
+
+        let src = SliceByteSource::new(&input_data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let doc = parser
+            .parse_document()
+            .expect("Parsing sequence with Field1 (pattern) and Field2 (delimited) must succeed");
+
+        let root = doc.root.as_ref().unwrap();
+        assert_eq!(root.children.len(), 2);
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref f1) = root.children[0];
+        assert_eq!(f1.name.local_name, "Field1");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s1)) = f1.state {
+            assert_eq!(s1.len(), 5000, "Field1 must consume all 5000 'A' characters");
+            assert!(s1.chars().all(|c| c == 'A'));
+        } else {
+            panic!("Expected Value(String) state for Field1");
+        }
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref f2) = root.children[1];
+        assert_eq!(f2.name.local_name, "Field2");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s2)) = f2.state {
+            assert_eq!(s2, "END", "Field2 must only contain 'END', not stolen 'A' characters");
+        } else {
+            panic!("Expected Value(String) state for Field2");
+        }
+    }
+
+    /// Reproduction test 1 for Issue F4 (DFDL §12.3.7 `lengthUnits="characters"` with variable-width UTF-8):
+    /// Verifies that a complex parent with `lengthUnits="characters"` counts multi-byte UTF-8
+    /// characters properly (e.g. 2 characters for "éA" consuming 3 bytes) instead of treating
+    /// character length as raw byte count (which would erroneously truncate after 2 bytes).
+    #[test]
+    fn complex_utf8_character_length_must_count_characters() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::ParserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="characters"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="p" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:lengthUnits="characters">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="s" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:lengthUnits="characters"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with complex parent of length 2 characters in UTF-8");
+
+        // "éA" in UTF-8 is [0xC3, 0xA9, 0x41] (3 bytes, 2 characters)
+        let input_data = "éA".as_bytes();
+        let src = SliceByteSource::new(input_data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let doc = parser
+            .parse_document()
+            .expect("Parsing 'éA' into complex parent of length 2 characters must succeed");
+
+        let root = doc.root.as_ref().unwrap();
+        assert_eq!(root.children.len(), 1);
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref p) = root.children[0];
+        assert_eq!(p.name.local_name, "p");
+        assert_eq!(p.children.len(), 1);
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref s) = p.children[0];
+        assert_eq!(s.name.local_name, "s");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val)) = s.state {
+            assert_eq!(val, "éA", "Child element 's' must receive 'éA'");
+        } else {
+            panic!("Expected Value(String) state for element 's'");
+        }
+    }
+
+    /// Reproduction test 2 for Issue F4 (DFDL §12.3.7 `lengthUnits="characters"` with variable-width UTF-8):
+    /// Verifies that when input is "éAZ", a complex parent `p` of length 2 characters in UTF-8
+    /// accurately consumes "éA" (3 bytes), and the following field `tail` correctly receives "Z",
+    /// rather than truncating `p` after 2 bytes ("é") and silently reassigning "AZ" to `tail`.
+    #[test]
+    fn complex_utf8_must_not_silently_reassign_a_character_to_next_field() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::ParserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="characters"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="p" dfdl:lengthKind="explicit" dfdl:length="2" dfdl:lengthUnits="characters">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="s" type="xs:string" dfdl:lengthKind="delimited"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                <xs:element name="tail" type="xs:string" dfdl:lengthKind="delimited"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with complex p (length 2 chars) followed by tail");
+
+        // "éAZ" in UTF-8 is [0xC3, 0xA9, 0x41, 0x5A] (4 bytes)
+        // With length=2 characters:
+        // p consumes 2 characters: 'é' (2 bytes) + 'A' (1 byte) = 3 bytes
+        // tail consumes the remaining byte: 'Z'
+        let input_data = "éAZ".as_bytes();
+        let src = SliceByteSource::new(input_data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let doc = parser
+            .parse_document()
+            .expect("Parsing 'éAZ' into sequence (p[2 chars], tail) must succeed");
+
+        let root = doc.root.as_ref().unwrap();
+        assert_eq!(root.children.len(), 2);
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref p) = root.children[0];
+        assert_eq!(p.name.local_name, "p");
+        assert_eq!(p.children.len(), 1);
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref s) = p.children[0];
+        assert_eq!(s.name.local_name, "s");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val_s)) = s.state {
+            assert_eq!(val_s, "éA", "p/s must receive 'éA'");
+        } else {
+            panic!("Expected Value(String) state for p/s");
+        }
+
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref tail) = root.children[1];
+        assert_eq!(tail.name.local_name, "tail");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val_tail)) = tail.state {
+            assert_eq!(val_tail, "Z", "tail must receive 'Z', not 'AZ'");
+        } else {
+            panic!("Expected Value(String) state for tail");
+        }
+    }
+
+    /// Reproduction test for Issue F3 (DFDL §15.1.2 ChoiceUnused truncated region):
+    /// Verifies that an explicit choice of length 4 bytes does not accept a 1-byte input
+    /// without the required 3 padding bytes of ChoiceUnused, but fails with a Parse Error.
+    #[test]
+    fn choice_unused_region_must_not_hide_truncated_input() {
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitReader;
+        use dfdl_core::io::source::SliceByteSource;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::ParserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="bytes"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:choice dfdl:choiceLengthKind="explicit" dfdl:choiceLength="4">
+                <xs:element name="Branch1" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+            </xs:choice>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with explicit choice of length 4 bytes");
+
+        // 1. Truncated input: only 1 byte 'A', missing the 3-byte ChoiceUnused region.
+        // Must fail with Parse Error, not succeed silently.
+        let truncated_data = b"A";
+        let src = SliceByteSource::new(truncated_data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let parse_res = parser.parse_document();
+        assert!(
+            parse_res.is_err(),
+            "Parsing truncated 1-byte input for a 4-byte explicit choice must fail"
+        );
+
+        // 2. Full input: 1 byte 'A' followed by 3 bytes of ChoiceUnused padding.
+        // Must succeed and parse Branch1 as "A".
+        let full_data = b"A***";
+        let src_full = SliceByteSource::new(full_data);
+        let mut reader_full =
+            BitReader::new(src_full, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_full = WorkBudget::new(100);
+
+        let mut parser_full = ParserEngine::new(&schema, &mut reader_full, &mut budget_full);
+        let doc = parser_full
+            .parse_document()
+            .expect("Parsing full 4-byte input for explicit choice must succeed");
+
+        let root = doc.root.as_ref().unwrap();
+        assert_eq!(root.children.len(), 1);
+        let dfdl_core::infoset::tree::InfosetNode::Element(ref b1) = root.children[0];
+        assert_eq!(b1.name.local_name, "Branch1");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val)) = b1.state {
+            assert_eq!(val, "A");
+        } else {
+            panic!("Expected Value(String) state for Branch1");
+        }
+    }
+
+    /// Reproduction test 1 for Issue F2 (DFDL §12.3.7.3):
+    /// Verifies that unparsing a complex element with explicit length (e.g. 4 bytes)
+    /// containing less data than the explicit length (e.g. 1 byte 'A') correctly
+    /// fills the unused content region with fillByte (e.g. space 0x20), producing [65, 32, 32, 32].
+    #[test]
+    fn complex_explicit_length_must_fill_unused_region() {
+        use dfdl_core::infoset::events::InfosetEvent;
+        use dfdl_core::infoset::tree::InfosetBuilder;
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitWriter;
+        use dfdl_core::io::sink::VecByteSink;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::UnparserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_core::types::QName;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="bytes"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8" fillByte="%#r20;"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Comp" dfdl:lengthKind="explicit" dfdl:length="4" dfdl:lengthUnits="bytes">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Item" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with explicit complex element of length 4 bytes");
+
+        let mut builder = InfosetBuilder::new();
+        builder.push_event(InfosetEvent::StartDocument).unwrap();
+        builder
+            .push_event(InfosetEvent::StartElement {
+                name: QName::local("Root"),
+                is_nil: false,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::StartElement {
+                name: QName::local("Comp"),
+                is_nil: false,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::SimpleValue {
+                name: QName::local("Item"),
+                value: DfdlValue::String("A".to_string()),
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::EndElement {
+                name: QName::local("Comp"),
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::EndElement {
+                name: QName::local("Root"),
+            })
+            .unwrap();
+        builder.push_event(InfosetEvent::EndDocument).unwrap();
+
+        let doc = builder.build().expect("Build infoset");
+
+        let sink = VecByteSink::new();
+        let mut writer =
+            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+        unparser
+            .unparse_document(&doc)
+            .expect("Unparse document with explicit 4-byte complex parent");
+
+        writer.flush().unwrap();
+        let bytes = writer.into_sink().into_vec();
+
+        // Must output 'A' (65) followed by 3 space fillBytes (32, 32, 32)
+        assert_eq!(bytes, vec![65, 32, 32, 32]);
+    }
+
+    /// Reproduction test 2 for Issue F2 (DFDL §12.3.7.3):
+    /// Verifies that unparsing a complex element with explicit length (e.g. 1 byte)
+    /// containing more content than the explicit length (e.g. 2 bytes "AB") correctly
+    /// fails with an Unparse Error rather than silently outputting overflowing data.
+    #[test]
+    fn complex_explicit_length_must_reject_overflow() {
+        use dfdl_core::infoset::events::InfosetEvent;
+        use dfdl_core::infoset::tree::InfosetBuilder;
+        use dfdl_core::infoset::value::DfdlValue;
+        use dfdl_core::io::bitstream::BitWriter;
+        use dfdl_core::io::sink::VecByteSink;
+        use dfdl_core::io::traits::{BitOrder, ByteOrder};
+        use dfdl_core::kernel::UnparserEngine;
+        use dfdl_core::limits::WorkBudget;
+        use dfdl_core::types::QName;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="bytes"
+                 alignment="1" alignmentUnits="bytes" encoding="UTF-8" fillByte="%#r20;"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Comp" dfdl:lengthKind="explicit" dfdl:length="1" dfdl:lengthUnits="bytes">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Item" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="2"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+
+        let schema = compiler
+            .compile_str(xml)
+            .expect("Compile schema with explicit complex element of length 1 byte");
+
+        let mut builder = InfosetBuilder::new();
+        builder.push_event(InfosetEvent::StartDocument).unwrap();
+        builder
+            .push_event(InfosetEvent::StartElement {
+                name: QName::local("Root"),
+                is_nil: false,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::StartElement {
+                name: QName::local("Comp"),
+                is_nil: false,
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::SimpleValue {
+                name: QName::local("Item"),
+                value: DfdlValue::String("AB".to_string()),
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::EndElement {
+                name: QName::local("Comp"),
+            })
+            .unwrap();
+        builder
+            .push_event(InfosetEvent::EndElement {
+                name: QName::local("Root"),
+            })
+            .unwrap();
+        builder.push_event(InfosetEvent::EndDocument).unwrap();
+
+        let doc = builder.build().expect("Build infoset");
+
+        let sink = VecByteSink::new();
+        let mut writer =
+            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(100);
+
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+        let res = unparser.unparse_document(&doc);
+
+        assert!(
+            res.is_err(),
+            "Unparsing 2 bytes into a complex element with explicit length 1 byte must fail"
+        );
+    }
 }
 
 
