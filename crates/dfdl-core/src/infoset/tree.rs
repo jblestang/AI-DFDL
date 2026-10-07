@@ -347,18 +347,25 @@ impl InfosetDocument {
                 return Ok(None);
             }
             let is_last_step = idx == segs.len().saturating_sub(1);
-            let explicit_index =
-                if let (Some(b_open), Some(b_close)) = (clean_seg.find('['), clean_seg.find(']')) {
-                    if b_open < b_close {
-                        clean_seg
-                            .get(b_open.saturating_add(1)..b_close)
-                            .and_then(|s| s.parse::<usize>().ok())
-                    } else {
-                        None
+            let mut explicit_index = None;
+            if let (Some(b_open), Some(b_close)) = (clean_seg.find('['), clean_seg.find(']')) {
+                if b_open < b_close {
+                    if let Some(pred_str) = clean_seg.get(b_open.saturating_add(1)..b_close) {
+                        let trimmed = pred_str.trim();
+                        if let Ok(idx_i64) = trimmed.parse::<i64>() {
+                            if idx_i64 <= 0 || (idx_i64 as usize) > matches.len() {
+                                let msg = alloc::format!(
+                                    "Schema Definition Error: expression evaluation error: Value {} is out of range with length {}",
+                                    idx_i64,
+                                    matches.len()
+                                );
+                                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                            }
+                            explicit_index = Some(idx_i64 as usize);
+                        }
                     }
-                } else {
-                    None
-                };
+                }
+            }
 
             let is_self_instance = is_self_ref && is_last_step && occurs_index > 0;
             if matches.len() > 1 && explicit_index.is_none() && !is_self_instance {

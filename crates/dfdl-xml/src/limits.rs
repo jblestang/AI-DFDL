@@ -26,7 +26,7 @@ impl Default for XmlReaderLimits {
         Self {
             max_depth: 128,
             max_attributes: 128,
-            max_token_length: 65_536,             // 64 KiB
+            max_token_length: 5_000,              // 5,000 chars standard W3C XML parser entity/name limit
             max_entity_expansion_bytes: 104_8576, // 1 MiB
             strict_namespaces: true,
         }

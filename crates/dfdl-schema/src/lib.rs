@@ -49,8 +49,8 @@ mod tests {
     <xs:element name="Packet">
         <xs:complexType>
             <xs:sequence dfdl:byteOrder="bigEndian">
-                <xs:element name="Magic" type="xs:int" dfdl:length="4" default="1234"/>
-                <xs:element name="Payload" type="xs:string" dfdl:length="16"/>
+                <xs:element name="Magic" type="xs:int" dfdl:length="4" dfdl:lengthKind="explicit" default="1234"/>
+                <xs:element name="Payload" type="xs:string" dfdl:length="16" dfdl:lengthKind="explicit"/>
             </xs:sequence>
         </xs:complexType>
     </xs:element>
@@ -85,14 +85,14 @@ mod tests {
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
     <xs:group name="HeaderGroup">
         <xs:sequence dfdl:byteOrder="bigEndian">
-            <xs:element name="Tag" type="xs:int" dfdl:length="2"/>
+            <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit"/>
         </xs:sequence>
     </xs:group>
     <xs:element name="Record">
         <xs:complexType>
             <xs:sequence>
                 <xs:group ref="HeaderGroup"/>
-                <xs:element name="Val" type="xs:int" dfdl:length="2"/>
+                <xs:element name="Val" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit"/>
             </xs:sequence>
         </xs:complexType>
     </xs:element>
@@ -122,7 +122,7 @@ mod tests {
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
     <xs:group name="CommonGroup">
         <xs:sequence>
-            <xs:element name="CommonChild" type="xs:int" dfdl:length="4"/>
+            <xs:element name="CommonChild" type="xs:int" dfdl:length="4" dfdl:lengthKind="explicit"/>
         </xs:sequence>
     </xs:group>
 </xs:schema>"#;
@@ -150,7 +150,7 @@ mod tests {
     <xs:element name="Root">
         <xs:complexType>
             <xs:sequence>
-                <xs:element name="Child" type="xs:string" dfdl:length="4"/>
+                <xs:element name="Child" type="xs:string" dfdl:length="4" dfdl:lengthKind="explicit"/>
             </xs:sequence>
         </xs:complexType>
     </xs:element>
@@ -184,7 +184,7 @@ mod tests {
         <xs:complexType>
             <xs:sequence>
                 <dfdl:setVariable ref="intVar" value="100"/>
-                <xs:element name="Field" type="xs:int" dfdl:length="4"/>
+                <xs:element name="Field" type="xs:int" dfdl:length="4" dfdl:lengthKind="explicit"/>
             </xs:sequence>
         </xs:complexType>
     </xs:element>
@@ -203,6 +203,11 @@ mod tests {
         let compiler = SchemaCompiler::new();
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <xs:annotation>
+        <xs:appinfo source="http://www.dfdl.org/7793">
+            <dfdl:format byteOrder="bigEndian" alignment="1" representation="text" encoding="UTF-8" lengthKind="explicit" textStandardDecimalSeparator="."/>
+        </xs:appinfo>
+    </xs:annotation>
     <xs:element name="Record">
         <xs:complexType>
             <xs:sequence dfdl:separator=",">
@@ -230,7 +235,7 @@ mod tests {
     <xs:annotation>
         <xs:documentation>Sample DFDL Schema documentation text</xs:documentation>
         <xs:appinfo source="http://www.dfdl.org/7793">
-            <dfdl:format byteOrder="bigEndian" alignment="1"/>
+            <dfdl:format byteOrder="bigEndian" alignment="1" lengthKind="explicit"/>
         </xs:appinfo>
     </xs:annotation>
     <xs:element name="Item" type="xs:int" dfdl:length="4"/>
@@ -248,7 +253,7 @@ mod tests {
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
     <xs:annotation>
         <xs:appinfo source="http://www.dfdl.org/7793">
-            <dfdl:format byteOrder="bigEndian" alignment="1"/>
+            <dfdl:format byteOrder="bigEndian" alignment="1" lengthKind="explicit"/>
         </xs:appinfo>
     </xs:annotation>
     <xs:include schemaLocation="sub.xsd"/>

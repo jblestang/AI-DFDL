@@ -578,6 +578,13 @@ pub fn decode_sub_byte_char(code: u64, encoding: &str) -> char {
         (if c < 32 { c.saturating_add(0x40) } else { c }) as char
     } else if enc_upper.contains("7-BIT") || enc_upper.contains("ASCII-7-BIT-PACKED") {
         if code <= 127 { code as u8 as char } else { '?' }
+    } else if enc_upper.contains("8-BIT-PACKED") || enc_upper.contains("ISO-88591-8-BIT-PACKED") {
+        if enc_upper.contains("REVERSE") {
+            let inv = 255u8.saturating_sub(code as u8);
+            core::char::from_u32(inv as u32).unwrap_or('?')
+        } else {
+            core::char::from_u32(code as u32).unwrap_or('?')
+        }
     } else {
         core::char::from_u32(code as u32).unwrap_or('?')
     }
@@ -632,6 +639,16 @@ pub fn strict_sub_byte_code(ch: char, encoding: &str) -> Option<u64> {
         ('\u{20}'..='\u{5F}').contains(&ch).then_some((ch as u64) & 0x3F)
     } else if enc_upper.contains("7-BIT") || enc_upper.contains("ASCII-7-BIT-PACKED") {
         ch.is_ascii().then_some(ch as u64)
+    } else if enc_upper.contains("8-BIT-PACKED") || enc_upper.contains("ISO-88591-8-BIT-PACKED") {
+        if enc_upper.contains("REVERSE") {
+            if (ch as u32) <= 255 {
+                Some((255u8.saturating_sub(ch as u8)) as u64)
+            } else {
+                None
+            }
+        } else {
+            ((ch as u32) <= 255).then_some(ch as u64)
+        }
     } else {
         Some(ch as u64)
     }

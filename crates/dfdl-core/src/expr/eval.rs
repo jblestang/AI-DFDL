@@ -48,6 +48,8 @@ pub struct ExprContext<'a> {
     pub unqualified_path_step_policy: crate::types::UnqualifiedPathStepPolicy,
     /// In-scope namespaces at the expression evaluation point (`[(prefix, uri)]`).
     pub in_scope_namespaces: &'a [(alloc::string::String, alloc::string::String)],
+    /// Computed outputValueCalc values for elements during unparsing.
+    pub ovc_values: Option<&'a alloc::collections::BTreeMap<alloc::string::String, DfdlValue>>,
 }
 
 impl<'a> ExprContext<'a> {
@@ -72,6 +74,7 @@ impl<'a> ExprContext<'a> {
             enclosing_lengths: &[],
             unqualified_path_step_policy: Default::default(),
             in_scope_namespaces: &[],
+            ovc_values: None,
         }
     }
 
@@ -97,7 +100,18 @@ impl<'a> ExprContext<'a> {
             enclosing_lengths: &[],
             unqualified_path_step_policy: Default::default(),
             in_scope_namespaces: &[],
+            ovc_values: None,
         }
+    }
+
+    /// Attaches precomputed OVC values for unparsing.
+    #[must_use]
+    pub fn with_ovc_values(
+        mut self,
+        ovc_values: Option<&'a alloc::collections::BTreeMap<alloc::string::String, DfdlValue>>,
+    ) -> Self {
+        self.ovc_values = ovc_values;
+        self
     }
 
     /// Attaches known enclosing element lengths during parsing.
@@ -507,8 +521,17 @@ pub fn eval_expr(ast: &ExprAst, ctx: &mut ExprContext) -> DFDLResult<DfdlValue> 
                     }
 
                     let val_opt = if let Some(doc) = ctx.doc {
-                        doc.find_element_with_context(&norm, ctx.occurs_index)
-                            .filter(|elem| matches!(&elem.state, ElementState::Value(_)) || !elem.children.is_empty())
+                        doc.find_element_with_policy_checked(
+                            &norm,
+                            ctx.occurs_index,
+                            is_enclosing,
+                            ctx.unqualified_path_step_policy,
+                            ctx.in_scope_namespaces,
+                        )
+                        .ok()
+                        .flatten()
+                        .or_else(|| doc.find_element_with_context(&norm, ctx.occurs_index))
+                        .filter(|elem| matches!(&elem.state, ElementState::Value(_)) || !elem.children.is_empty())
                     } else {
                         None
                     };
@@ -913,8 +936,40 @@ fn calc_elem_value_length(
     }
 }
 
+fn strip_path_namespaces(path: &InfosetPath) -> alloc::string::String {
+    let mut s = alloc::string::String::new();
+    for seg in path.segments() {
+        s.push('/');
+        if let (Some(open), Some(close)) = (seg.find('['), seg.rfind(']')) {
+            if open < close {
+                let p = seg[..open].split(':').next_back().unwrap_or(&seg[..open]);
+                let idx = &seg[open..=close];
+                s.push_str(p);
+                s.push_str(idx);
+            } else {
+                let p = seg.split(':').next_back().unwrap_or(seg.as_str());
+                s.push_str(p);
+            }
+        } else {
+            let p = seg.split(':').next_back().unwrap_or(seg.as_str());
+            s.push_str(p);
+        }
+    }
+    if s.is_empty() {
+        s.push('/');
+    }
+    s
+}
+
 /// Evaluates the `dfdl:outputValueCalc` of the schema element addressed by `norm`, if any.
 fn eval_ovc_for_path(ctx: &ExprContext, norm: &InfosetPath) -> Option<DfdlValue> {
+    if let Some(ovc_map) = ctx.ovc_values {
+        let norm_str = alloc::format!("{}", norm);
+        let stripped_norm = strip_path_namespaces(norm);
+        if let Some(val) = ovc_map.get(&norm_str).or_else(|| ovc_map.get(&stripped_norm)) {
+            return Some(val.clone());
+        }
+    }
     let schema = ctx.schema?;
     let seg_name = norm.segments().last()?;
     let clean_seg = seg_name.split('[').next().unwrap_or(seg_name);
@@ -923,6 +978,11 @@ fn eval_ovc_for_path(ctx: &ExprContext, norm: &InfosetPath) -> Option<DfdlValue>
     let ovc_expr = term.properties.output_value_calc.as_ref()?;
     let ast = crate::expr::parse_expr(ovc_expr).ok()?;
     let mut sub_budget = WorkBudget::new(100_000);
+    let namespaces = if !term.properties.in_scope_namespaces.is_empty() {
+        &term.properties.in_scope_namespaces
+    } else {
+        ctx.in_scope_namespaces
+    };
     let mut sub_ctx = ExprContext::with_variable_map(
         ctx.doc,
         norm,
@@ -931,7 +991,14 @@ fn eval_ovc_for_path(ctx: &ExprContext, norm: &InfosetPath) -> Option<DfdlValue>
         &mut sub_budget,
     )
     .with_occurs_index(ctx.occurs_index)
-    .with_schema(schema);
+    .with_schema(schema)
+    .with_namespaces(namespaces);
+    if let Some(ovc_map) = ctx.ovc_values {
+        sub_ctx = sub_ctx.with_ovc_values(Some(ovc_map));
+    }
+    if !ctx.is_parsing {
+        sub_ctx = sub_ctx.for_unparsing();
+    }
     eval_expr(&ast, &mut sub_ctx).ok()
 }
 
@@ -1156,6 +1223,14 @@ fn resolve_path(path: &InfosetPath, ctx: &ExprContext) -> DFDLResult<DfdlValue> 
     };
 
     let norm = normalize_infoset_path(path, ctx, doc)?;
+
+    if let Some(ovc_map) = ctx.ovc_values {
+        let norm_str = alloc::format!("{}", norm);
+        let stripped_norm = strip_path_namespaces(&norm);
+        if let Some(val) = ovc_map.get(&norm_str).or_else(|| ovc_map.get(&stripped_norm)) {
+            return Ok(val.clone());
+        }
+    }
 
     let is_self_ref = norm == *ctx.current_path
         || (norm.segments().last().is_some()

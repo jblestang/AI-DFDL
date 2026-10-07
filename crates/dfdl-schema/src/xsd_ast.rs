@@ -102,6 +102,19 @@ pub struct DfdlSetVariable {
     pub value_expr: String,
 }
 
+/// Named simple type declaration in an XSD schema.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct XsdNamedSimpleType {
+    /// Qualified name of the simple type.
+    pub name: QName,
+    /// Base XSD type.
+    pub xsd_type: XsdType,
+    /// Direct properties explicitly specified on `<xs:simpleType>`.
+    pub local_props: PropertyStore,
+    /// Effective properties including inherited `dfdl:format` defaults from its defining schema.
+    pub effective_props: PropertyStore,
+}
+
 /// Root parsed XSD Schema container.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct XsdSchema {
@@ -116,7 +129,7 @@ pub struct XsdSchema {
     /// Table of named complex type declarations (`<xs:complexType name="...">`).
     pub named_complex_types: Vec<(QName, XsdType)>,
     /// Table of named simple type declarations (`<xs:simpleType name="...">`).
-    pub named_simple_types: Vec<(QName, XsdType, PropertyStore)>,
+    pub named_simple_types: Vec<XsdNamedSimpleType>,
     /// Table of global format definitions (`<dfdl:defineFormat>`).
     pub defined_formats: Vec<(QName, PropertyStore)>,
     /// Table of declared DFDL escape schemes (`<dfdl:defineEscapeScheme>`).
@@ -233,23 +246,28 @@ impl XsdSchema {
                 self.named_complex_types.push((ctname, ct));
             }
         }
-        for (stname, st, mut props) in other.named_simple_types {
+        for other_st in other.named_simple_types {
+            let mut eff_props = other_st.effective_props;
             for binding in other.global_format.bindings() {
-                if props.get_property(&binding.key).is_none() {
-                    let _ = props.set_property(&binding.key, &binding.value);
+                if eff_props.get_property(&binding.key).is_none() {
+                    let _ = eff_props.set_property(&binding.key, &binding.value);
                 }
             }
-            let effective_props = props;
-            if let Some(existing) = self.named_simple_types.iter().find(|(n, _, _)| n == &stname) {
-                if existing.1 != st || existing.2 != effective_props {
+            if let Some(existing) = self.named_simple_types.iter().find(|st| st.name == other_st.name) {
+                if existing.xsd_type != other_st.xsd_type || existing.local_props != other_st.local_props {
                     let msg = alloc::format!(
                         "Schema Definition Error: More than one definition for name: {}",
-                        stname.local_name
+                        other_st.name.local_name
                     );
                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                 }
             } else {
-                self.named_simple_types.push((stname, st, effective_props));
+                self.named_simple_types.push(XsdNamedSimpleType {
+                    name: other_st.name,
+                    xsd_type: other_st.xsd_type,
+                    local_props: other_st.local_props,
+                    effective_props: eff_props,
+                });
             }
         }
         for var in other.defined_variables {

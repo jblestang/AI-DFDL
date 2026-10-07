@@ -249,6 +249,249 @@ pub fn encode_base64_mime(input: &[u8]) -> alloc::vec::Vec<u8> {
     out
 }
 
+/// Swaps adjacent byte pairs (16-bit word byte swap) in place.
+///
+/// Used by the `twoByteSwap` layer extension to reverse endianness of 16-bit words.
+///
+/// # Arguments
+///
+/// * `bytes` - Slice of bytes to mutate. Only full 2-byte pairs are swapped.
+pub fn swap_two_bytes(bytes: &mut [u8]) {
+    let mut i = 0usize;
+    while i.saturating_add(1) < bytes.len() {
+        bytes.swap(i, i.saturating_add(1));
+        i = i.saturating_add(2);
+    }
+}
+
+/// Computes the standard IEEE 802.3 32-bit Cyclic Redundancy Check (CRC-32).
+///
+/// Implements the canonical CRC-32 algorithm using the reversed polynomial `0xEDB88320`.
+/// This matches the CRC-32 algorithm required by RFC 1952 section 2.3.1 for GZIP headers.
+///
+/// # Arguments
+///
+/// * `bytes` - Slice of raw bytes to checksum.
+///
+/// # Returns
+///
+/// Calculated 32-bit CRC-32 checksum.
+#[must_use]
+pub fn compute_crc32(bytes: &[u8]) -> u32 {
+    let mut crc = 0xffff_ffffu32;
+    for &b in bytes {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+/// Compresses raw bytes into an RFC 1952 GZIP stream.
+///
+/// Constructs a standard GZIP member containing:
+/// 1. A 10-byte header:
+///    - ID1 = 0x1F, ID2 = 0x8B (GZIP magic)
+///    - CM = 0x08 (DEFLATE compression method)
+///    - FLG = 0x00 (no optional headers)
+///    - MTIME = 0x00000000 (deterministic timestamp)
+///    - XFL = 0x00 (extra flags)
+///    - OS = 0xFF (unknown / neutral operating system)
+/// 2. Raw DEFLATE payload compressed at the requested compression level (0..=9).
+/// 3. An 8-byte footer:
+///    - CRC-32 of uncompressed bytes (4 bytes, little-endian)
+///    - ISIZE: uncompressed input size modulo 2^32 (4 bytes, little-endian)
+///
+/// # Arguments
+///
+/// * `bytes` - Raw uncompressed byte slice.
+/// * `level` - Compression level (0..=9), where 6 is standard and 9 is maximum.
+///
+/// # Returns
+///
+/// A GZIP-formatted byte vector.
+#[must_use]
+pub fn gzip_compress(bytes: &[u8], level: u8) -> alloc::vec::Vec<u8> {
+    let clamped_level = level.min(9);
+    let raw_deflate = miniz_oxide::deflate::compress_to_vec(bytes, clamped_level);
+    let mut out = alloc::vec::Vec::with_capacity(raw_deflate.len().saturating_add(18));
+    // Fixed 10-byte RFC 1952 header (OS=255 unknown, XFL=0)
+    out.extend_from_slice(&[0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]);
+    out.extend_from_slice(&raw_deflate);
+    let crc = compute_crc32(bytes);
+    out.extend_from_slice(&crc.to_le_bytes());
+    let isize = (bytes.len() as u32).to_le_bytes();
+    out.extend_from_slice(&isize);
+    out
+}
+
+/// Decompresses an RFC 1952 GZIP stream into raw uncompressed bytes.
+///
+/// Validates the 10-byte GZIP header, extracts and skips any optional headers
+/// specified by the FLG field (FEXTRA, FNAME, FCOMMENT, FHCRC), streams the
+/// compressed DEFLATE payload through miniz_oxide, and verifies the trailing
+/// 8-byte footer containing the IEEE 802.3 CRC-32 checksum and uncompressed ISIZE.
+///
+/// # Arguments
+///
+/// * `input` - Slice of raw bytes containing a GZIP stream.
+///
+/// # Returns
+///
+/// On success, returns `Ok((decompressed_bytes, consumed_input_bytes))` where
+/// `consumed_input_bytes` is the exact byte length of the GZIP member consumed
+/// from `input` (including header, DEFLATE payload, and footer).
+/// On failure (magic mismatch, corrupted stream, CRC error), returns a `DFDLError`.
+pub fn gzip_decompress(input: &[u8]) -> crate::error::DFDLResult<(alloc::vec::Vec<u8>, usize)> {
+    use crate::error::{DFDLError, DFDLErrorKind};
+
+    if input.len() < 18 {
+        return Err(DFDLError::new(
+            DFDLErrorKind::Parse,
+            "Parse Error: Insufficient data for GZIP stream (minimum 18 bytes required)",
+        ));
+    }
+    if input.first().copied() != Some(0x1f)
+        || input.get(1).copied() != Some(0x8b)
+        || input.get(2).copied() != Some(0x08)
+    {
+        return Err(DFDLError::new(
+            DFDLErrorKind::Parse,
+            "Parse Error: GZIP header magic mismatch (expected 0x1F, 0x8B, 0x08)",
+        ));
+    }
+    let flg = input.get(3).copied().unwrap_or(0);
+    let mut offset = 10usize;
+
+    // FEXTRA: 2-byte length prefix followed by extra bytes
+    if flg & 0x04 != 0 {
+        if input.len() < offset.saturating_add(2) {
+            return Err(DFDLError::new(
+                DFDLErrorKind::Parse,
+                "Parse Error: Truncated GZIP FEXTRA header",
+            ));
+        }
+        let b0 = input.get(offset).copied().unwrap_or(0);
+        let b1 = input.get(offset.saturating_add(1)).copied().unwrap_or(0);
+        let xlen = u16::from_le_bytes([b0, b1]) as usize;
+        offset = offset.saturating_add(2).saturating_add(xlen);
+    }
+    // FNAME: zero-terminated string
+    if flg & 0x08 != 0 {
+        while offset < input.len() && input.get(offset).copied() != Some(0) {
+            offset = offset.saturating_add(1);
+        }
+        offset = offset.saturating_add(1);
+    }
+    // FCOMMENT: zero-terminated string
+    if flg & 0x10 != 0 {
+        while offset < input.len() && input.get(offset).copied() != Some(0) {
+            offset = offset.saturating_add(1);
+        }
+        offset = offset.saturating_add(1);
+    }
+    // FHCRC: 2-byte header checksum
+    if flg & 0x02 != 0 {
+        offset = offset.saturating_add(2);
+    }
+
+    if offset > input.len().saturating_sub(8) {
+        return Err(DFDLError::new(
+            DFDLErrorKind::Parse,
+            "Parse Error: Corrupted or truncated GZIP header",
+        ));
+    }
+
+    let mut decomp = alloc::boxed::Box::<miniz_oxide::inflate::core::DecompressorOxide>::default();
+    let mut decompressed = alloc::vec::Vec::with_capacity(input.len().saturating_mul(2));
+    let mut in_pos = offset;
+    let mut out_pos = 0usize;
+    let flags = miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+
+    loop {
+        if decompressed.len() == out_pos {
+            decompressed.resize(decompressed.len().saturating_mul(2).max(128), 0);
+        }
+        let in_slice = input.get(in_pos..).unwrap_or(&[]);
+        let (status, in_consumed, out_consumed) = miniz_oxide::inflate::core::decompress(
+            &mut decomp,
+            in_slice,
+            &mut decompressed,
+            out_pos,
+            flags,
+        );
+        in_pos = in_pos.saturating_add(in_consumed);
+        out_pos = out_pos.saturating_add(out_consumed);
+
+        match status {
+            miniz_oxide::inflate::TINFLStatus::Done => {
+                decompressed.truncate(out_pos);
+                break;
+            }
+            miniz_oxide::inflate::TINFLStatus::NeedsMoreInput => {
+                return Err(DFDLError::new(
+                    DFDLErrorKind::Parse,
+                    "Parse Error: Truncated GZIP DEFLATE payload (unexpected EOF)",
+                ));
+            }
+            miniz_oxide::inflate::TINFLStatus::HasMoreOutput => {
+                continue;
+            }
+            _ => {
+                return Err(DFDLError::new(
+                    DFDLErrorKind::Parse,
+                    &alloc::format!("Parse Error: GZIP DEFLATE decompression failed: {:?}", status),
+                ));
+            }
+        }
+    }
+
+    let footer_start = in_pos;
+    if input.len() < footer_start.saturating_add(8) {
+        return Err(DFDLError::new(
+            DFDLErrorKind::Parse,
+            "Parse Error: Truncated GZIP footer",
+        ));
+    }
+
+    let b0 = input.get(footer_start).copied().unwrap_or(0);
+    let b1 = input.get(footer_start.saturating_add(1)).copied().unwrap_or(0);
+    let b2 = input.get(footer_start.saturating_add(2)).copied().unwrap_or(0);
+    let b3 = input.get(footer_start.saturating_add(3)).copied().unwrap_or(0);
+    let expected_crc = u32::from_le_bytes([b0, b1, b2, b3]);
+    let actual_crc = compute_crc32(&decompressed);
+    if expected_crc != actual_crc {
+        return Err(DFDLError::new(
+            DFDLErrorKind::Parse,
+            &alloc::format!(
+                "Parse Error: GZIP CRC-32 mismatch: expected 0x{:08x}, got 0x{:08x}",
+                expected_crc, actual_crc
+            ),
+        ));
+    }
+
+    let b4 = input.get(footer_start.saturating_add(4)).copied().unwrap_or(0);
+    let b5 = input.get(footer_start.saturating_add(5)).copied().unwrap_or(0);
+    let b6 = input.get(footer_start.saturating_add(6)).copied().unwrap_or(0);
+    let b7 = input.get(footer_start.saturating_add(7)).copied().unwrap_or(0);
+    let expected_isize = u32::from_le_bytes([b4, b5, b6, b7]);
+    let actual_isize = decompressed.len() as u32;
+    if expected_isize != actual_isize {
+        return Err(DFDLError::new(
+            DFDLErrorKind::Parse,
+            &alloc::format!(
+                "Parse Error: GZIP ISIZE mismatch: expected {}, got {}",
+                expected_isize, actual_isize
+            ),
+        ));
+    }
+
+    let total_consumed = footer_start.saturating_add(8);
+    Ok((decompressed, total_consumed))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,5 +541,65 @@ mod tests {
         let b64_with_ws = b"TG9yZW0gaXBzdW0g\r\nZG9sb3Igc2l0IGFt\r\nZXQsIGNvbnNlY3Rl\r\ndHVyIGFkaXBpc2Np\r\nbmcgZWxpdC4=";
         let decoded_ws = decode_base64_mime(b64_with_ws);
         assert_eq!(decoded_ws.as_slice(), plain.as_slice());
+    }
+
+    #[test]
+    fn test_crc32_canonical_vector() {
+        // Standard IEEE 802.3 test vector "123456789" -> 0xCBF43926.
+        let data = b"123456789";
+        let crc = compute_crc32(data);
+        assert_eq!(crc, 0xcbf43926);
+    }
+
+    #[test]
+    fn test_swap_two_bytes() {
+        let mut buf = [0x12u8, 0x34, 0x56, 0x78, 0x9a];
+        swap_two_bytes(&mut buf);
+        assert_eq!(buf, [0x34, 0x12, 0x78, 0x56, 0x9a]);
+    }
+
+    #[test]
+    fn test_gzip_compress_decompress_roundtrip() {
+        let plain = b"The quick brown fox jumps over the lazy dog. 1234567890! Repeat: The quick brown fox jumps over the lazy dog.";
+        let compressed = gzip_compress(plain, 6);
+        assert!(compressed.len() >= 18);
+        assert_eq!(compressed.first().copied(), Some(0x1f));
+        assert_eq!(compressed.get(1).copied(), Some(0x8b));
+        assert_eq!(compressed.get(2).copied(), Some(0x08));
+
+        let res = gzip_decompress(&compressed);
+        assert!(res.is_ok());
+        if let Ok((decompressed, consumed)) = res {
+            assert_eq!(decompressed.as_slice(), plain.as_slice());
+            assert_eq!(consumed, compressed.len());
+        }
+    }
+
+    #[test]
+    fn test_gzip_daffodil_test_vector_match() {
+        // CSV data from Daffodil test TestGzipFoldB64.tdml
+        let csv_text = b"last,first,middle,DOB\r\nsmith,robert,brandon,1988-03-24\r\njohnson,john,henry,1986-01-23\r\njones,arya,cat,1986-02-19\r\n";
+        let compressed = gzip_compress(csv_text, 9);
+        assert_eq!(compressed.len(), 115);
+        let res = gzip_decompress(&compressed);
+        assert!(res.is_ok());
+        if let Ok((decompressed, consumed)) = res {
+            assert_eq!(decompressed.as_slice(), csv_text.as_slice());
+            assert_eq!(consumed, 115);
+        }
+    }
+
+    #[test]
+    fn test_gzip_invalid_magic_fails() {
+        let bad = [0x00u8; 20];
+        let res = gzip_decompress(&bad);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_gzip_truncated_fails() {
+        let short = [0x1fu8, 0x8b, 0x08, 0x00];
+        let res = gzip_decompress(&short);
+        assert!(res.is_err());
     }
 }

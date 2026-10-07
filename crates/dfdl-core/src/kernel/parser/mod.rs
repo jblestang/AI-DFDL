@@ -547,6 +547,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         Some("linefolded_imf")
                     } else if clean.eq_ignore_ascii_case("base64_mime") {
                         Some("base64_mime")
+                    } else if clean.eq_ignore_ascii_case("gzip") {
+                        Some("gzip")
                     } else {
                         None
                     }
@@ -580,6 +582,26 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 .copied()
                                 .unwrap_or(raw_bytes.len());
                             self.reader.skip_bits(orig_consumed_bytes.saturating_mul(8))?;
+                        }
+                        res
+                    } else if stream_layer == "gzip" {
+                        let (decompressed, consumed_compressed) = crate::kernel::layer::gzip_decompress(&raw_bytes)?;
+                        let sub_source = crate::io::SliceByteSource::new(&decompressed);
+                        let mut sub_reader = crate::io::BitReader::new(
+                            sub_source,
+                            self.reader.bit_order(),
+                            term.properties.byte_order,
+                        );
+                        let res = self.run_sub_engine(&mut sub_reader, |sub| {
+                            sub.parse_sequence_members(term, seq, builder, sep_opt, sep_pos)
+                        });
+                        if res.is_ok() {
+                            let skip_bytes = if self.reader.bit_limit().is_some() {
+                                raw_bytes.len()
+                            } else {
+                                consumed_compressed
+                            };
+                            self.reader.skip_bits(skip_bytes.saturating_mul(8))?;
                         }
                         res
                     } else {
@@ -1185,6 +1207,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         let builder_cp = builder.checkpoint();
                         let vmap_cp = self.variable_map.clone();
                         let val_err_cp = self.validation_errors.len();
+                        let delims_cp = self.in_scope_delimiters.clone();
+                        let terms_cp = self.in_scope_terminators.clone();
 
                         let branch_term = match self.schema.get_term(branch_id) {
                             Some(t) => t,
@@ -1218,6 +1242,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                         self.reader.rollback(reader_cp)?;
                                         builder.rollback(builder_cp);
                                         self.variable_map = vmap_cp;
+                                        self.in_scope_delimiters = delims_cp;
+                                        self.in_scope_terminators = terms_cp;
                                         last_choice_error = Some(DFDLError::new(
                                             DFDLErrorKind::Parse,
                                             "Parse Error: Branch consumed data exceeding explicit choiceLength",
@@ -1242,6 +1268,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     builder.rollback(builder_cp);
                                     self.variable_map = vmap_cp;
                                     self.validation_errors.truncate(val_err_cp);
+                                    self.in_scope_delimiters = delims_cp;
+                                    self.in_scope_terminators = terms_cp;
                                     let msg = alloc::format!(
                                         "Parse Error: All Choice Alternatives Failed: {}",
                                         e
@@ -1253,6 +1281,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 builder.rollback(builder_cp);
                                 self.variable_map = vmap_cp;
                                 self.validation_errors.truncate(val_err_cp);
+                                self.in_scope_delimiters = delims_cp;
+                                self.in_scope_terminators = terms_cp;
                             }
                         }
                     }
@@ -1408,12 +1438,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         sep_pos: crate::schema::ir::SeparatorPosition,
     ) -> DFDLResult<()> {
         self.evaluate_pattern_asserts(term, None, builder)?;
-        if term.properties.discriminator.is_some() {
-            if term.properties.discriminator_test_kind == crate::schema::ir::TestKind::Pattern {
-                self.evaluate_discriminator(term, None, builder)?;
-            } else {
-                let _ = self.evaluate_discriminator(term, None, builder);
-            }
+        if term.properties.discriminator.is_some()
+            && term.properties.discriminator_test_kind == crate::schema::ir::TestKind::Pattern
+        {
+            self.evaluate_discriminator(term, None, builder)?;
         }
         if term.properties.sequence_kind == crate::schema::ir::SequenceKind::Unordered {
             return self.parse_unordered_sequence(
@@ -1436,16 +1464,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             })?;
             let has_rep = self.schema.term_has_representation(member_id);
             let is_last_member = member_idx == seq.members.len().saturating_sub(1);
-
-            // DFDL v1.0 §12.3.2: If the component is the last component in a sequence with
-            // separatorPosition="infix", the separator of that sequence is NOT in-scope for that component,
-            // UNLESS the component is an array or optional element.
             let is_scalar_required = match &member_term.kind {
                 TermKind::Element(e) => e.min_occurs == 1 && e.max_occurs == Some(1),
-                _ => true,
+                _ => false,
             };
             let mut removed_sep_entry = None;
-            if is_last_member
+            if seq.members.len() > 1
+                && is_last_member
                 && is_scalar_required
                 && sep_pos == crate::schema::ir::SeparatorPosition::Infix
             {
@@ -1456,9 +1481,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
             }
 
-            match &member_term.kind {
+            let member_res = match &member_term.kind {
                 TermKind::Element(elem) => {
-                    let occurrences_parsed = self.parse_element_with_separators(
+                    self.parse_element_with_separators(
                         member_term,
                         elem,
                         builder,
@@ -1469,11 +1494,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         represented_members_seen,
                         is_last_member,
                         term.properties.initiated_content,
-                    )?;
-                    total_element_count =
-                        total_element_count.saturating_add(occurrences_parsed);
+                    ).map(|occurrences_parsed| {
+                        total_element_count =
+                            total_element_count.saturating_add(occurrences_parsed);
+                    })
                 }
-                _ => {
+                _ => (|| -> DFDLResult<()> {
                     let mut sep_matched = false;
                     if has_rep {
                         if let Some(sep) = sep_opt {
@@ -1566,12 +1592,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             total_element_count = total_element_count.saturating_add(1);
                         }
                     }
-                }
-            }
+                    Ok(())
+                })(),
+            };
 
             if let Some(entry) = removed_sep_entry {
                 let _ = crate::util::try_push(&mut self.in_scope_delimiters, entry);
             }
+            member_res?;
+
             if has_rep {
                 represented_members_seen = represented_members_seen.saturating_add(1);
             }

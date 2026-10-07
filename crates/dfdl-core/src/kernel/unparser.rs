@@ -83,6 +83,8 @@ pub struct UnparserEngine<'a, S: ByteSink> {
     current_occurs_index: usize,
     child_cursor: usize,
     active_delimiters: Vec<String>,
+    current_namespaces: &'a [(alloc::string::String, alloc::string::String)],
+    ovc_values: alloc::collections::BTreeMap<alloc::string::String, DfdlValue>,
 }
 
 impl<'a, S: ByteSink> UnparserEngine<'a, S> {
@@ -103,6 +105,8 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             current_occurs_index: 1,
             child_cursor: 0,
             active_delimiters: Vec::new(),
+            current_namespaces: &[],
+            ovc_values: alloc::collections::BTreeMap::new(),
         }
     }
 
@@ -157,12 +161,23 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
         }
 
+        if !root_term.properties.in_scope_namespaces.is_empty() {
+            self.current_namespaces = &root_term.properties.in_scope_namespaces;
+        }
+
         self.unparse_element(root_term_id, root_elem)?;
         self.writer.flush()?;
         Ok(())
     }
 
     fn unparse_term(&mut self, term_id: NodeId, parent_elem: &InfosetElement) -> DFDLResult<()> {
+        let prev_ns = self.current_namespaces;
+        let res = self.unparse_term_internal(term_id, parent_elem);
+        self.current_namespaces = prev_ns;
+        res
+    }
+
+    fn unparse_term_internal(&mut self, term_id: NodeId, parent_elem: &InfosetElement) -> DFDLResult<()> {
         self.budget.consume(1)?;
 
         let term = self.schema.get_term(term_id).ok_or_else(|| {
@@ -171,6 +186,10 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 "Term NodeId missing from compiled schema graph",
             )
         })?;
+
+        if !term.properties.in_scope_namespaces.is_empty() {
+            self.current_namespaces = &term.properties.in_scope_namespaces;
+        }
 
         let is_element = matches!(term.kind, TermKind::Element(_));
 
@@ -181,18 +200,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
 
         if !is_element {
             self.execute_set_variables(term)?;
-            // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
-            if term.properties.leading_skip > 0 {
-                let skip_bits = match term.properties.alignment_units {
-                    crate::schema::ir::AlignmentUnits::Bytes => {
-                        term.properties.leading_skip.saturating_mul(8)
-                    }
-                    crate::schema::ir::AlignmentUnits::Bits => term.properties.leading_skip,
-                };
-                let fill = fill_byte_value(&term.properties)?;
-                write_fill_padding(self.writer, fill, skip_bits)?;
-            }
-
+            // Left framing per DFDL §12 grammar: LeftFraming = AlignmentFill LeadingSkip.
             let align_bits = match term.properties.alignment_units {
                 crate::schema::ir::AlignmentUnits::Bytes => {
                     term.properties.alignment.saturating_mul(8)
@@ -209,6 +217,17 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     let fill = fill_byte_value(&term.properties)?;
                     write_fill_padding(self.writer, fill, pad)?;
                 }
+            }
+
+            if term.properties.leading_skip > 0 {
+                let skip_bits = match term.properties.alignment_units {
+                    crate::schema::ir::AlignmentUnits::Bytes => {
+                        term.properties.leading_skip.saturating_mul(8)
+                    }
+                    crate::schema::ir::AlignmentUnits::Bits => term.properties.leading_skip,
+                };
+                let fill = fill_byte_value(&term.properties)?;
+                write_fill_padding(self.writer, fill, skip_bits)?;
             }
 
             // Enforce bitOrder change only on byte boundary (§11.2)
@@ -370,11 +389,15 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                             }
                         }
                     }
-                    if clean_layer == "IPv4Checksum"
+                    let is_layer_sequence = clean_layer == "IPv4Checksum"
                         || clean_layer == "checkDigit"
                         || clean_layer.eq_ignore_ascii_case("twobyteswap")
                         || clean_layer.eq_ignore_ascii_case("twoByteSwap")
-                    {
+                        || clean_layer.eq_ignore_ascii_case("gzip")
+                        || clean_layer.eq_ignore_ascii_case("base64_mime")
+                        || clean_layer == "boundaryMark";
+
+                    if is_layer_sequence {
                         let sink = VecByteSink::new();
                         let mut sub_writer = crate::io::bitstream::BitWriter::new(
                             sink,
@@ -421,6 +444,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                     "Unparse Error: not a multiple of 2 for twoByteSwap layer",
                                 ));
                             }
+                            crate::kernel::layer::swap_two_bytes(&mut buf);
                         } else if clean_layer == "IPv4Checksum" {
                             if buf.len() >= 20 {
                                 let chk = crate::kernel::layer::compute_ipv4_checksum(buf.get(..20).unwrap_or(&[]));
@@ -452,6 +476,32 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                 crate::infoset::value::DfdlValue::UnsignedShort(cd),
                                 false,
                             )?;
+                        } else if clean_layer.eq_ignore_ascii_case("gzip") {
+                            let level = self
+                                .variable_map
+                                .get_variable("compressionLevel")
+                                .and_then(|v| match v {
+                                    crate::infoset::value::DfdlValue::Int(i) if *i >= 0 && *i <= 9 => Some(*i as u8),
+                                    crate::infoset::value::DfdlValue::Short(s) if *s >= 0 && *s <= 9 => Some(*s as u8),
+                                    crate::infoset::value::DfdlValue::Long(l) if *l >= 0 && *l <= 9 => Some(*l as u8),
+                                    crate::infoset::value::DfdlValue::UnsignedInt(i) if *i <= 9 => Some(*i as u8),
+                                    crate::infoset::value::DfdlValue::UnsignedShort(s) if *s <= 9 => Some(*s as u8),
+                                    _ => None,
+                                })
+                                .unwrap_or(6);
+                            buf = crate::kernel::layer::gzip_compress(&buf, level);
+                        } else if clean_layer.eq_ignore_ascii_case("base64_mime") {
+                            buf = crate::kernel::layer::encode_base64_mime(&buf);
+                        } else if clean_layer == "boundaryMark" {
+                            let boundary_mark = self
+                                .variable_map
+                                .get_variable("boundaryMark")
+                                .and_then(|v| match v {
+                                    crate::infoset::value::DfdlValue::String(s) => Some(s.clone()),
+                                    _ => None,
+                                })
+                                .unwrap_or_else(|| alloc::string::String::from("//"));
+                            buf.extend_from_slice(boundary_mark.as_bytes());
                         }
 
                         for &b in &buf {
@@ -470,7 +520,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     let term_tokens = self.extract_delimiter_tokens(term_str, &term.properties);
                     self.active_delimiters.extend(term_tokens);
                 }
-                let sep_opt = term.properties.separator.as_deref();
+                let sep_opt = term.properties.separator.as_deref().filter(|s| !s.is_empty());
                 let sep_pos = term.properties.separator_position;
                 let mut total_element_count: usize = 0;
 
@@ -647,6 +697,16 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                     || (sep_pos == crate::schema::ir::SeparatorPosition::Infix
                                         && total_element_count > 0)
                                 {
+                                    let mta_bits = crate::encoding::encoding_unit_bits(&term.properties.encoding).max(1);
+                                    if mta_bits > 1 {
+                                        let current_pos = self.writer.position().0;
+                                        let rem = current_pos % mta_bits;
+                                        if rem > 0 {
+                                            let pad = mta_bits - rem;
+                                            let fill = fill_byte_value(&term.properties)?;
+                                            write_fill_padding(self.writer, fill, pad)?;
+                                        }
+                                    }
                                     self.write_evaluated_delimiter(sep, &term.properties)?;
                                 }
                             }
@@ -666,6 +726,16 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                             }
                                         };
                                     if !suppress_postfix {
+                                        let mta_bits = crate::encoding::encoding_unit_bits(&term.properties.encoding).max(1);
+                                        if mta_bits > 1 {
+                                            let current_pos = self.writer.position().0;
+                                            let rem = current_pos % mta_bits;
+                                            if rem > 0 {
+                                                let pad = mta_bits - rem;
+                                                let fill = fill_byte_value(&term.properties)?;
+                                                write_fill_padding(self.writer, fill, pad)?;
+                                            }
+                                        }
                                         self.write_evaluated_delimiter(sep, &term.properties)?;
                                     }
                                 }
@@ -900,6 +970,8 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         )
         .with_schema(self.schema)
         .with_occurs_index(self.current_occurs_index)
+        .with_namespaces(self.current_namespaces)
+        .with_ovc_values(Some(&self.ovc_values))
         .for_unparsing()
     }
 
@@ -1246,6 +1318,17 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             }
             return term.properties.nil_kind == crate::schema::ir::NilKind::LiteralValue;
         }
+
+        // Per DFDL §14.2.3: "if padding or filling is output, the element does not have empty representation."
+        let will_pad = term.properties.text_output_min_length > 0
+            || (term.properties.length_kind == crate::schema::ir::LengthKind::Explicit
+                && term.properties.length.is_some_and(|l| l > 0)
+                && (term.properties.text_pad_kind == crate::schema::ir::TextPadKind::PadChar
+                    || term.properties.fill_byte_defined));
+        if will_pad {
+            return false;
+        }
+
         match &elem.state {
             ElementState::Empty => !has_initiator && !has_terminator,
             ElementState::NoValue => {
@@ -1277,12 +1360,28 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         elem: &InfosetElement,
         path_seg: Option<&str>,
     ) -> DFDLResult<()> {
+        let prev_ns = self.current_namespaces;
+        let res = self.unparse_element_with_seg_internal(term_id, elem, path_seg);
+        self.current_namespaces = prev_ns;
+        res
+    }
+
+    fn unparse_element_with_seg_internal(
+        &mut self,
+        term_id: NodeId,
+        elem: &InfosetElement,
+        path_seg: Option<&str>,
+    ) -> DFDLResult<()> {
         let term = self.schema.get_term(term_id).ok_or_else(|| {
             DFDLError::new_static(
                 DFDLErrorKind::SchemaDefinition,
                 "Term NodeId missing from compiled schema graph",
             )
         })?;
+
+        if !term.properties.in_scope_namespaces.is_empty() {
+            self.current_namespaces = &term.properties.in_scope_namespaces;
+        }
 
         let seg = path_seg.unwrap_or(&elem.name.local_name);
         let _ = self.current_path.try_push(seg);
@@ -1432,18 +1531,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 }
             }
 
-            // Left framing per DFDL §12 grammar: LeadingAlignment = LeadingSkip AlignmentFill.
-            if props.leading_skip > 0 {
-                let skip_bits = match props.alignment_units {
-                    crate::schema::ir::AlignmentUnits::Bytes => {
-                        props.leading_skip.saturating_mul(8)
-                    }
-                    crate::schema::ir::AlignmentUnits::Bits => props.leading_skip,
-                };
-                let fill = fill_byte_value(props)?;
-                write_fill_padding(self.writer, fill, skip_bits)?;
-            }
-
+            // Left framing per DFDL §12 grammar: LeftFraming = AlignmentFill LeadingSkip.
             let align_bits = match props.alignment_units {
                 crate::schema::ir::AlignmentUnits::Bytes => {
                     props.alignment.saturating_mul(8)
@@ -1460,6 +1548,17 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     let fill = fill_byte_value(props)?;
                     write_fill_padding(self.writer, fill, pad)?;
                 }
+            }
+
+            if props.leading_skip > 0 {
+                let skip_bits = match props.alignment_units {
+                    crate::schema::ir::AlignmentUnits::Bytes => {
+                        props.leading_skip.saturating_mul(8)
+                    }
+                    crate::schema::ir::AlignmentUnits::Bits => props.leading_skip,
+                };
+                let fill = fill_byte_value(props)?;
+                write_fill_padding(self.writer, fill, skip_bits)?;
             }
 
             // Enforce bitOrder change only on byte boundary (§11.2)
@@ -1517,6 +1616,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     },
                     _ => val,
                 };
+                self.ovc_values.insert(alloc::format!("{}", self.current_path), val.clone());
                 self.unparse_simple_value(&val, props)?;
             } else {
                 match &elem.state {
@@ -2810,8 +2910,12 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
                 .unwrap_or(props.text_pad_char.as_str()),
             _ => props.text_pad_char.as_str(),
         };
-        let pad_ch = pad_str.chars().next().unwrap_or(' ');
-        let pad_byte = pad_str.as_bytes().first().copied().unwrap_or(b' ');
+        let mut pad_ch = pad_str.chars().next().unwrap_or(' ');
+        let mut pad_byte = pad_str.as_bytes().first().copied().unwrap_or(b' ');
+        if props.text_pad_kind == crate::schema::ir::TextPadKind::None && props.fill_byte_defined {
+            pad_byte = props.fill_byte;
+            pad_ch = props.fill_byte as char;
+        }
 
         let is_chars = props.length_units == crate::schema::ir::LengthUnits::Characters;
         let justification = props.text_justification_for_value(val);
@@ -2914,16 +3018,6 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
                 if is_chars {
                     let char_count = s.chars().count();
                     if char_count < target_len {
-                        if props.text_pad_kind == crate::schema::ir::TextPadKind::None {
-                            return Err(DFDLError::new(
-                                DFDLErrorKind::Unparse,
-                                &alloc::format!(
-                                    "Unparse Error: Data length {} doesn't match expected output data length {} and textPadKind is 'none'",
-                                    char_count,
-                                    target_len
-                                ),
-                            ));
-                        }
                         let pad_count = target_len - char_count;
                         let mut padded = String::with_capacity(s.len() + pad_count * 4);
                         match justification {
@@ -3008,16 +3102,6 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
                         _ => target_len,
                     };
                     if encoded.len() < target_bytes {
-                        if props.text_pad_kind == crate::schema::ir::TextPadKind::None {
-                            return Err(DFDLError::new(
-                                DFDLErrorKind::Unparse,
-                                &alloc::format!(
-                                    "Unparse Error: Data length {} doesn't match expected output data length {} and textPadKind is 'none'",
-                                    encoded.len(),
-                                    target_bytes
-                                ),
-                            ));
-                        }
                         let pad_count = target_bytes - encoded.len();
                         match justification {
                             crate::schema::ir::TextJustification::Right => {

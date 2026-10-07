@@ -9,8 +9,8 @@
             <xs:element name="Record">
                 <xs:complexType>
                     <xs:sequence dfdl:representation="text" dfdl:separator=",">
-                        <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:assert="{ 10 gt 5 }"/>
-                        <xs:element name="Val" type="xs:int" dfdl:length="2"/>
+                        <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit" dfdl:assert="{ 10 gt 5 }"/>
+                        <xs:element name="Val" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit"/>
                     </xs:sequence>
                 </xs:complexType>
             </xs:element>
@@ -22,8 +22,8 @@
             <xs:element name="Record">
                 <xs:complexType>
                     <xs:sequence dfdl:representation="text" dfdl:separator=",">
-                        <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:assert="{ 1 gt 5 }"/>
-                        <xs:element name="Val" type="xs:int" dfdl:length="2"/>
+                        <xs:element name="Tag" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit" dfdl:assert="{ 1 gt 5 }"/>
+                        <xs:element name="Val" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit"/>
                     </xs:sequence>
                 </xs:complexType>
             </xs:element>
@@ -34,14 +34,14 @@
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
             <xs:group name="HeaderGroup">
                 <xs:sequence>
-                    <xs:element name="Header" type="xs:int" dfdl:length="2" dfdl:outputValueCalc="{ 99 }"/>
+                    <xs:element name="Header" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit" dfdl:outputValueCalc="{ 99 }"/>
                 </xs:sequence>
             </xs:group>
             <xs:element name="SecretRecord">
                 <xs:complexType>
                     <xs:sequence dfdl:representation="text">
                         <xs:sequence dfdl:hiddenGroupRef="HeaderGroup" dfdl:representation="text"/>
-                        <xs:element name="Payload" type="xs:int" dfdl:length="2"/>
+                        <xs:element name="Payload" type="xs:int" dfdl:length="2" dfdl:lengthKind="explicit"/>
                     </xs:sequence>
                 </xs:complexType>
             </xs:element>

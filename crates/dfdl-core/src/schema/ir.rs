@@ -1407,7 +1407,14 @@ impl CompiledSchema {
             TermKind::Element(elem) => match &elem.type_ir {
                 CompiledType::Simple(_) => true,
                 CompiledType::Complex(child_id) => {
-                    self.term_has_representation_impl(*child_id, visited)
+                    if matches!(
+                        term.properties.length_kind,
+                        LengthKind::Explicit | LengthKind::Prefixed | LengthKind::Pattern
+                    ) {
+                        true
+                    } else {
+                        self.term_has_representation_impl(*child_id, visited)
+                    }
                 }
             },
             TermKind::Sequence(seq) => {

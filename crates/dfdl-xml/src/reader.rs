@@ -18,6 +18,20 @@ use xmlparser::{ElementEnd, Token, Tokenizer};
 use crate::event::{Attribute, XmlEvent};
 use crate::limits::XmlReaderLimits;
 
+fn format_num_commas(n: usize) -> String {
+    let s = alloc::format!("{}", n);
+    let mut out = String::new();
+    let bytes = s.as_bytes();
+    let rem = bytes.len() % 3;
+    for (i, &b) in bytes.iter().enumerate() {
+        if i > 0 && (i % 3 == rem || (rem == 0 && i % 3 == 0)) {
+            out.push(',');
+        }
+        out.push(b as char);
+    }
+    out
+}
+
 /// Stack frame maintaining namespace prefix bindings for an element scope.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct NamespaceFrame {
@@ -439,6 +453,16 @@ impl<'a> XmlReader<'a> {
                 } => {
                     let loc = SourceLocation::at_offset(span.start());
 
+                    let max_name_len = prefix.as_str().len().max(local.as_str().len());
+                    if max_name_len > self.limits.max_token_length {
+                        let msg = alloc::format!(
+                            "XML parse error: length of entity {} exceeds maximum limit {}",
+                            format_num_commas(max_name_len),
+                            format_num_commas(self.limits.max_token_length)
+                        );
+                        return Err(DFDLError::new(DFDLErrorKind::Parse, &msg).with_location(loc));
+                    }
+
                     let current_depth = self.ns_stack.len().checked_add(1).ok_or_else(|| {
                         DFDLError::new(DFDLErrorKind::ImplementationLimit, "Depth overflow")
                     })?;
@@ -470,6 +494,17 @@ impl<'a> XmlReader<'a> {
                     span,
                 } => {
                     let loc = SourceLocation::at_offset(span.start());
+
+                    let max_attr_len = prefix.as_str().len().max(local.as_str().len());
+                    if max_attr_len > self.limits.max_token_length {
+                        let msg = alloc::format!(
+                            "XML parse error: length of entity {} exceeds maximum limit {}",
+                            format_num_commas(max_attr_len),
+                            format_num_commas(self.limits.max_token_length)
+                        );
+                        return Err(DFDLError::new(DFDLErrorKind::Parse, &msg).with_location(loc));
+                    }
+
                     let decoded = self.decode_entities(value.as_str())?;
 
                     let state = self.pending_start.as_mut().ok_or_else(|| {

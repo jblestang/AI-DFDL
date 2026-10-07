@@ -6,10 +6,15 @@
     use super::element::*;
     use super::numbers::*;
     use crate::infoset::{DfdlSimpleType, DfdlValue};
+    use crate::infoset::tree::InfosetNode;
     use crate::io::source::SliceByteSource;
     use crate::io::traits::{BitOrder, ByteOrder};
     use crate::schema::builder::SchemaBuilder;
-    use crate::schema::ir::{CompiledElement, Representation, ResolvedProperties};
+    use crate::schema::ir::{
+        CompiledChoice, CompiledElement, CompiledSequence, CompiledType, LengthKind,
+        OccursCountKind, Representation, ResolvedProperties, TermKind,
+    };
+    use crate::types::QName;
     use alloc::string::ToString;
     use alloc::vec;
 
@@ -1270,4 +1275,303 @@
         let doc = parser.parse_document().unwrap();
         let root = doc.root.unwrap();
         assert_eq!(root.children.len(), 2);
+    }
+
+    /// Tests compliance with DFDL v1.0 §16.1.4: `dfdl:occursCountKind="parsed"`.
+    ///
+    /// # Specification Rationale (DFDL §16.1.4)
+    /// Under `occursCountKind="parsed"`, the number of occurrences of an array element is
+    /// established solely through speculative parsing. The parser does not enforce `minOccurs`
+    /// as a parse-time stopping constraint or fatal parse error; occurrences are parsed until
+    /// speculative parsing cannot match another occurrence (e.g. at EOF or on zero-length
+    /// non-matching text). When zero occurrences are found, the parser successfully yields
+    /// an empty parent sequence, with `minOccurs` checking reserved for validation mode.
+    ///
+    /// # Test Scenario
+    /// A root complex element `LP_01` contains a sequence with a child `num` typed as `xs:int`,
+    /// `dfdl:lengthKind="explicit"`, `dfdl:length="0"`, `dfdl:occursCountKind="parsed"`, and
+    /// `maxOccurs="unbounded"`. With an empty data stream (0 bytes), the parser speculatively
+    /// attempts occurrence 1, discovers EOF/empty representation, terminates the array cleanly,
+    /// and constructs `<LP_01></LP_01>` with zero occurrences of `num`.
+    #[test]
+    fn test_occurs_count_kind_parsed_zero_length() {
+        // Step 1: Initialize schema builder for testing occursCountKind="parsed"
+        let mut builder = SchemaBuilder::new();
+
+        // Step 2: Configure resolved properties for the array member `num`
+        let mut num_props = ResolvedProperties::default();
+        num_props.representation = Representation::Text;
+        num_props.length_kind = LengthKind::Explicit;
+        num_props.length = Some(0); // Zero-length integer representation
+        num_props.occurs_count_kind = OccursCountKind::Parsed;
+
+        // Step 3: Define child element `num` with unbounded maxOccurs
+        let num_elem = CompiledElement {
+            name: QName::local("num"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1, // Default minOccurs in XSD; speculative parsing must not fail on it
+            max_occurs: None, // Unbounded array
+            is_nillable: false,
+            default_value: None,
+        };
+        let num_id = builder
+            .add_term_with_props(QName::local("num"), TermKind::Element(num_elem), num_props)
+            .expect("register num element term");
+
+        // Step 4: Define sequence containing `num`
+        let seq = CompiledSequence {
+            members: alloc::vec![num_id],
+        };
+        let seq_id = builder
+            .add_term(QName::local("seq"), TermKind::Sequence(seq))
+            .expect("register sequence term");
+
+        // Step 5: Define root element `LP_01` containing the sequence
+        let root_elem = CompiledElement {
+            name: QName::local("LP_01"),
+            type_ir: CompiledType::Complex(seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder
+            .add_term(QName::local("LP_01"), TermKind::Element(root_elem))
+            .expect("register root term");
+        builder.set_root(root_id);
+        let schema = builder.build().expect("build schema");
+
+        // Step 6: Execute parser on an empty byte buffer (0 bytes)
+        let data = [];
+        let src = SliceByteSource::new(&data);
+        let mut reader = BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(1000);
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+
+        // Step 7: Verify parse successfully produces empty LP_01 infoset without error
+        let doc = parser.parse_document().expect("parse document with empty parsed array");
+        let root = doc.root.expect("root element present");
+        assert_eq!(root.name.local_name, "LP_01");
+        assert_eq!(root.children.len(), 0);
+    }
+
+    /// Tests compliance with DFDL v1.0 §7.5 and §9.3.2: Nested Choice Multiple Discriminator Resolution.
+    ///
+    /// # Specification Rationale (DFDL §7.5, §9.3.2)
+    /// Points of Uncertainty (PoUs) form a hierarchy corresponding to nested choices and array
+    /// occurrences. A discriminator evaluates against the innermost unresolved PoU. When a
+    /// sequence within an inner choice branch contains multiple sequential discriminators:
+    /// - The first discriminator that evaluates to true resolves the innermost (inner choice) PoU.
+    /// - If a subsequent discriminator in the same branch evaluates to false, it triggers a
+    ///   processing error.
+    /// - Because the inner choice PoU is already resolved (discriminated), the parser CANNOT
+    ///   backtrack to alternate branches of the inner choice.
+    /// - Instead, the error propagates out of the resolved inner choice up to the outer choice
+    ///   PoU (which remains unresolved).
+    /// - The outer choice then successfully backtracks and tries its next alternative branch.
+    ///
+    /// # Test Scenario
+    /// Data stream: "tfa".
+    /// - `discrim1` reads "t".
+    /// - `discrim2` reads "f".
+    /// - Outer choice evaluates branch 1: contains inner choice.
+    /// - Inner choice evaluates branch 1: sequence with two discriminators:
+    ///   - Discriminator 1 checks `discrim1 eq 't'` -> evaluates to true, resolving inner choice PoU.
+    ///   - Discriminator 2 checks `discrim2 eq 't'` -> evaluates to false ("f" != "t"), failing.
+    /// - Backtracks out of inner choice into outer choice.
+    /// - Outer choice evaluates branch 2: reads "a" into `outerBranch2` -> succeeds!
+    #[test]
+    fn test_nested_choice_multiple_discriminators_backtracking() {
+        // Step 1: Initialize schema builder for nested choice discriminator test
+        let mut builder = SchemaBuilder::new();
+
+        // Step 2: Element discrim1 (length 1)
+        let mut d1_props = ResolvedProperties::default();
+        d1_props.representation = Representation::Text;
+        d1_props.length_kind = LengthKind::Explicit;
+        d1_props.length = Some(1);
+        let d1_elem = CompiledElement {
+            name: QName::local("discrim1"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let d1_id = builder
+            .add_term_with_props(QName::local("discrim1"), TermKind::Element(d1_elem), d1_props)
+            .expect("add discrim1");
+
+        // Step 3: Element discrim2 (length 1)
+        let mut d2_props = ResolvedProperties::default();
+        d2_props.representation = Representation::Text;
+        d2_props.length_kind = LengthKind::Explicit;
+        d2_props.length = Some(1);
+        let d2_elem = CompiledElement {
+            name: QName::local("discrim2"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let d2_id = builder
+            .add_term_with_props(QName::local("discrim2"), TermKind::Element(d2_elem), d2_props)
+            .expect("add discrim2");
+
+        // Step 4: Sequence 1 with Discriminator 1: { ../../discrim1 eq 't' }
+        let mut s1_props = ResolvedProperties::default();
+        s1_props.discriminator = Some(alloc::string::ToString::to_string("../../discrim1 eq 't'"));
+        s1_props.discriminator_test_kind = crate::schema::ir::TestKind::Expression;
+        let s1 = CompiledSequence { members: alloc::vec![] };
+        let s1_id = builder
+            .add_term_with_props(QName::local("s1"), TermKind::Sequence(s1), s1_props)
+            .expect("add s1");
+
+        // Step 5: Sequence 2 with Discriminator 2: { ../../discrim2 eq 't' }
+        let mut s2_props = ResolvedProperties::default();
+        s2_props.discriminator = Some(alloc::string::ToString::to_string("../../discrim2 eq 't'"));
+        s2_props.discriminator_test_kind = crate::schema::ir::TestKind::Expression;
+        let s2 = CompiledSequence { members: alloc::vec![] };
+        let s2_id = builder
+            .add_term_with_props(QName::local("s2"), TermKind::Sequence(s2), s2_props)
+            .expect("add s2");
+
+        // Step 6: Element integer in innerBranch1
+        let mut int_props = ResolvedProperties::default();
+        int_props.representation = Representation::Text;
+        int_props.length_kind = LengthKind::Explicit;
+        int_props.length = Some(1);
+        let int_elem = CompiledElement {
+            name: QName::local("integer"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let int_id = builder
+            .add_term_with_props(QName::local("integer"), TermKind::Element(int_elem), int_props)
+            .expect("add integer");
+
+        // Step 7: innerBranch1 sequence: contains s1, s2, integer
+        let inner_seq = CompiledSequence {
+            members: alloc::vec![s1_id, s2_id, int_id],
+        };
+        let inner_seq_id = builder
+            .add_term(QName::local("inner_seq"), TermKind::Sequence(inner_seq))
+            .expect("add inner_seq");
+
+        let inner_b1_elem = CompiledElement {
+            name: QName::local("innerBranch1"),
+            type_ir: CompiledType::Complex(inner_seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let inner_b1_id = builder
+            .add_term(QName::local("innerBranch1"), TermKind::Element(inner_b1_elem))
+            .expect("add innerBranch1");
+
+        // Step 8: innerBranch2 element
+        let mut ib2_props = ResolvedProperties::default();
+        ib2_props.representation = Representation::Text;
+        ib2_props.length_kind = LengthKind::Explicit;
+        ib2_props.length = Some(1);
+        let inner_b2_elem = CompiledElement {
+            name: QName::local("innerBranch2"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let inner_b2_id = builder
+            .add_term_with_props(QName::local("innerBranch2"), TermKind::Element(inner_b2_elem), ib2_props)
+            .expect("add innerBranch2");
+
+        // Step 9: innerChoice: branches [innerBranch1, innerBranch2]
+        let inner_choice = CompiledChoice {
+            branches: alloc::vec![inner_b1_id, inner_b2_id],
+        };
+        let inner_choice_id = builder
+            .add_term(QName::local("inner_choice"), TermKind::Choice(inner_choice))
+            .expect("add inner_choice");
+
+        // Step 10: outerBranch1 element containing innerChoice
+        let outer_b1_elem = CompiledElement {
+            name: QName::local("outerBranch1"),
+            type_ir: CompiledType::Complex(inner_choice_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let outer_b1_id = builder
+            .add_term(QName::local("outerBranch1"), TermKind::Element(outer_b1_elem))
+            .expect("add outerBranch1");
+
+        // Step 11: outerBranch2 element (fallback branch on outer choice)
+        let mut ob2_props = ResolvedProperties::default();
+        ob2_props.representation = Representation::Text;
+        ob2_props.length_kind = LengthKind::Explicit;
+        ob2_props.length = Some(1);
+        let outer_b2_elem = CompiledElement {
+            name: QName::local("outerBranch2"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let outer_b2_id = builder
+            .add_term_with_props(QName::local("outerBranch2"), TermKind::Element(outer_b2_elem), ob2_props)
+            .expect("add outerBranch2");
+
+        // Step 12: outerChoice: branches [outerBranch1, outerBranch2]
+        let outer_choice = CompiledChoice {
+            branches: alloc::vec![outer_b1_id, outer_b2_id],
+        };
+        let outer_choice_id = builder
+            .add_term(QName::local("outer_choice"), TermKind::Choice(outer_choice))
+            .expect("add outer_choice");
+
+        // Step 13: root sequence containing discrim1, discrim2, outerChoice
+        let root_seq = CompiledSequence {
+            members: alloc::vec![d1_id, d2_id, outer_choice_id],
+        };
+        let root_seq_id = builder
+            .add_term(QName::local("root_seq"), TermKind::Sequence(root_seq))
+            .expect("add root_seq");
+
+        let root_elem = CompiledElement {
+            name: QName::local("root"),
+            type_ir: CompiledType::Complex(root_seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder
+            .add_term(QName::local("root"), TermKind::Element(root_elem))
+            .expect("add root");
+        builder.set_root(root_id);
+        let schema = builder.build().expect("build schema");
+
+        // Step 14: Parse input data "tfa"
+        let data = b"tfa";
+        let src = SliceByteSource::new(data);
+        let mut reader = BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(2000);
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+
+        // Step 15: Verify that backtracking from inner choice to outer choice succeeded
+        let doc = parser.parse_document().expect("parse document with multiple discriminators");
+        let root = doc.root.expect("root element");
+        assert_eq!(root.name.local_name, "root");
+        assert_eq!(root.children.len(), 3);
+        assert!(matches!(root.children.first(), Some(InfosetNode::Element(e)) if e.name.local_name == "discrim1"));
+        assert!(matches!(root.children.get(1), Some(InfosetNode::Element(e)) if e.name.local_name == "discrim2"));
+        assert!(matches!(root.children.get(2), Some(InfosetNode::Element(e)) if e.name.local_name == "outerBranch2"));
     }

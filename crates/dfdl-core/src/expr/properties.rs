@@ -595,6 +595,20 @@ impl PropertyStore {
         &self.assert_errors
     }
 
+    /// Returns recorded newVariableInstances declarations on this property store.
+    #[inline]
+    #[must_use]
+    pub fn new_variable_instances(&self) -> &[(crate::types::QName, Option<String>)] {
+        &self.new_variable_instances
+    }
+
+    /// Returns recorded setVariable statements on this property store.
+    #[inline]
+    #[must_use]
+    pub fn set_variables(&self) -> &[(crate::types::QName, String)] {
+        &self.set_variables
+    }
+
     /// Copies all local properties, assertions, and setVariables from `other` into `self`.
     pub fn extend(&mut self, other: &PropertyStore) {
         let self_has_enums = self.bindings.iter().any(|b| b.key == "enumeration");
@@ -672,7 +686,17 @@ impl PropertyStore {
         for err in &other.assert_errors {
             let _ = try_push(&mut self.assert_errors, err.clone());
         }
-        self.add_namespaces(&other.in_scope_namespaces);
+        for (prefix, uri) in &other.in_scope_namespaces {
+            if prefix.is_empty() {
+                if !self.in_scope_namespaces.iter().any(|(p, _)| p.is_empty()) {
+                    let _ = try_push(&mut self.in_scope_namespaces, (String::new(), uri.clone()));
+                }
+            } else if let Some(existing) = self.in_scope_namespaces.iter_mut().find(|(p, _)| p == prefix) {
+                existing.1 = uri.clone();
+            } else {
+                let _ = try_push(&mut self.in_scope_namespaces, (prefix.clone(), uri.clone()));
+            }
+        }
         self.discriminator_count = self
             .discriminator_count
             .saturating_add(other.discriminator_count);
@@ -772,7 +796,6 @@ impl PropertyStore {
                 || binding.key == "layerLengthUnits"
                 || binding.key == "layerBoundaryMark"
                 || binding.key == "repType"
-                || binding.key == "ignoreCase"
                 //|| binding.key == "dfdlx:repType"
                 || binding.key == "repValues"
                 //|| binding.key == "dfdlx:repValues"

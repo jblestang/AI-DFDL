@@ -719,7 +719,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         };
 
         if term.properties.input_value_calc.is_some()
-            || (!self.schema.term_has_representation(term.id) && sep_opt.is_none())
+            || !self.schema.term_has_representation(term.id)
         {
             let target_occurs = match term.properties.occurs_count_kind {
                 OccursCountKind::Expression => max_occurs,
@@ -760,10 +760,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             return Ok(0);
         }
 
-        // Per DFDL v1.0 §16.1.4: "When dfdl:occursCountKind is 'parsed', the number of
-        // occurrences is determined by parsing occurrences until a Processing Error occurs.
-        // It is a Processing Error if fewer than minOccurs occurrences are found."
-        let min_occurs = elem.min_occurs;
+        // Per DFDL v1.0 §16.1.4: When dfdl:occursCountKind is 'parsed', the number of occurrences
+        // is determined solely through speculative parsing. There is no reliance on xs:minOccurs
+        // to control the parsing loop. minOccurs/maxOccurs are checked as schema validation errors
+        // after parsing when validation is enabled.
+        let is_parsed = term.properties.occurs_count_kind == OccursCountKind::Parsed
+            && !(elem.min_occurs == 1 && elem.max_occurs == Some(1));
+        let min_occurs = if is_parsed { 0 } else { elem.min_occurs };
         let mut count = 0;
         let mut slots_processed: usize = 0;
 
@@ -793,6 +796,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             let vmap_cp = self.variable_map.clone();
             let val_err_cp = self.validation_errors.len();
             let bo_cp = self.reader.bit_order();
+            let delims_cp = self.in_scope_delimiters.clone();
+            let terms_cp = self.in_scope_terminators.clone();
             let is_occurrence_pou = count >= min_occurs;
             if is_occurrence_pou {
                 self.pou_stack.push(PointOfUncertainty {
@@ -1085,7 +1090,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             ));
                         }
 
-                        if term.properties.occurs_count_kind == OccursCountKind::Implicit
+                        if elem_consumed_zero
+                            && term.properties.occurs_count_kind == OccursCountKind::Implicit
                             && elem.max_occurs.is_some_and(|m| slots_processed < m)
                             && sep_opt.is_some_and(|sep| self.peek_literal_delimiter(sep))
                         {
@@ -1114,6 +1120,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             self.variable_map = vmap_cp;
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
+                            self.in_scope_delimiters = delims_cp.clone();
+                            self.in_scope_terminators = terms_cp.clone();
                             slots_processed = slots_processed.saturating_add(1);
                             self.current_occurs_index = 1;
                             break;
@@ -1123,6 +1131,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             self.variable_map = vmap_cp;
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
+                            self.in_scope_delimiters = delims_cp.clone();
+                            self.in_scope_terminators = terms_cp.clone();
                             self.current_occurs_index = 1;
                             break;
                         }
@@ -1132,6 +1142,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     builder.rollback(builder_cp);
                     self.variable_map = vmap_cp;
                     self.validation_errors.truncate(val_err_cp);
+                    self.in_scope_delimiters = delims_cp;
+                    self.in_scope_terminators = terms_cp;
                     self.current_occurs_index = 1;
                     if count >= min_occurs {
                         if count == 0 && elem.min_occurs == 0 && elem.max_occurs == Some(1) {
@@ -1159,7 +1171,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
         self.current_occurs_index = 1;
 
-        if count < min_occurs {
+        if !is_parsed && count < elem.min_occurs {
             return Err(DFDLError::new_static(
                 DFDLErrorKind::Parse,
                 "Array occurrences failed to meet minOccurs constraint",

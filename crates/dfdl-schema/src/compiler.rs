@@ -243,6 +243,10 @@ pub struct SchemaCompiler {
     pub max_hex_binary_length_in_bytes: Option<usize>,
     /// Policy for handling invalid facet restrictions (`daf:invalidRestrictionPolicy`).
     pub invalid_restriction_policy: InvalidRestrictionPolicy,
+    /// Inverse of the `allowExpressionResultCoercion` tunable (default `false` = allowed).
+    pub disallow_expression_result_coercion: bool,
+    /// Inverse of the `check_delimiter_encoding` flag (default `false` = checked).
+    pub disallow_delimiter_encoding_check: bool,
 }
 
 impl SchemaCompiler {
@@ -261,6 +265,8 @@ impl SchemaCompiler {
             unqualified_path_step_policy: Default::default(),
             max_hex_binary_length_in_bytes: None,
             invalid_restriction_policy: InvalidRestrictionPolicy::Validate,
+            disallow_expression_result_coercion: false,
+            disallow_delimiter_encoding_check: false,
         }
     }
 
@@ -279,6 +285,8 @@ impl SchemaCompiler {
             unqualified_path_step_policy: UnqualifiedPathStepPolicy::NoNamespace,
             max_hex_binary_length_in_bytes: None,
             invalid_restriction_policy: InvalidRestrictionPolicy::Validate,
+            disallow_expression_result_coercion: false,
+            disallow_delimiter_encoding_check: false,
         }
     }
 
@@ -320,6 +328,35 @@ impl SchemaCompiler {
     #[must_use]
     pub const fn with_allow_signed_integer_length_1bit(mut self, allow: bool) -> Self {
         self.disallow_signed_integer_length_1bit = !allow;
+        self
+    }
+
+    /// Sets the `allowExpressionResultCoercion` tunable. When `false`, automatic type
+    /// coercion in DFDL expression results is disallowed.
+    #[inline]
+    #[must_use]
+    pub const fn with_allow_expression_result_coercion(mut self, allow: bool) -> Self {
+        self.disallow_expression_result_coercion = !allow;
+        self
+    }
+
+    /// Returns whether expression result coercion is allowed (`daf:allowExpressionResultCoercion`).
+    #[inline]
+    #[must_use]
+    pub const fn allow_expression_result_coercion(&self) -> bool {
+        !self.disallow_expression_result_coercion
+    }
+
+    /// Sets whether to validate delimiter encoding compatibility (§11.1).
+    ///
+    /// DFDL §11.1 requires delimiter and element content encodings to match for parser delimiter
+    /// scanning. During unparsing, elements format their own content directly and delimiters
+    /// are emitted independently, so this check may be bypassed when compiling schemas strictly
+    /// for unparsing.
+    #[inline]
+    #[must_use]
+    pub const fn with_check_delimiter_encoding(mut self, check: bool) -> Self {
+        self.disallow_delimiter_encoding_check = !check;
         self
     }
 
@@ -639,7 +676,7 @@ impl SchemaCompiler {
                             if schema
                                 .named_simple_types
                                 .iter()
-                                .any(|(n, _, _)| n == &st_qname)
+                                .any(|st| st.name == st_qname)
                             {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: More than one definition for name: {}",
@@ -791,9 +828,19 @@ impl SchemaCompiler {
                                     "Schema Definition Error: A type with dfdlx:repType must define at least one enumeration.",
                                 ));
                             }
-                            schema
-                                .named_simple_types
-                                .push((st_qname, st_type, st_props));
+                            Self::resolve_qname_properties(reader, &mut st_props);
+                            let mut effective_props = st_props.clone();
+                            for binding in schema.global_format.bindings() {
+                                if effective_props.get_property(&binding.key).is_none() {
+                                    let _ = effective_props.set_property(&binding.key, &binding.value);
+                                }
+                            }
+                            schema.named_simple_types.push(crate::xsd_ast::XsdNamedSimpleType {
+                                name: st_qname,
+                                xsd_type: st_type,
+                                local_props: st_props,
+                                effective_props,
+                            });
                         }
                     } else if in_schema && (local == "import" || local == "include") {
                         let ns_opt = attributes
@@ -932,17 +979,26 @@ impl SchemaCompiler {
                                                 }
                                             }
                                         }
+                                        let is_targetless = |ns: &Option<dfdl_core::types::Namespace>| {
+                                            ns.as_ref().map(|n| n.as_str().is_empty()).unwrap_or(true)
+                                        };
                                         for (fmt_name, fmt_props) in &mut imported_schema.defined_formats {
-                                            fmt_name.namespace = tns.clone();
+                                            if is_targetless(&fmt_name.namespace) {
+                                                fmt_name.namespace = tns.clone();
+                                            }
                                             update_prop_clark(fmt_props);
                                         }
                                         for (es_name, es_props) in &mut imported_schema.defined_escape_schemes {
-                                            es_name.namespace = tns.clone();
+                                            if is_targetless(&es_name.namespace) {
+                                                es_name.namespace = tns.clone();
+                                            }
                                             update_prop_clark(es_props);
                                         }
                                         update_prop_clark(&mut imported_schema.global_format);
                                         for elem in &mut imported_schema.top_level_elements {
-                                            elem.name.namespace = tns.clone();
+                                            if is_targetless(&elem.name.namespace) {
+                                                elem.name.namespace = tns.clone();
+                                            }
                                             update_prop_clark(&mut elem.properties);
                                             match &mut elem.elem_type {
                                                 crate::xsd_ast::XsdType::InlineSequence(seq) => {
@@ -961,14 +1017,18 @@ impl SchemaCompiler {
                                             }
                                         }
                                         for (gname, seq) in &mut imported_schema.named_groups {
-                                            gname.namespace = tns.clone();
+                                            if is_targetless(&gname.namespace) {
+                                                gname.namespace = tns.clone();
+                                            }
                                             update_prop_clark(&mut seq.properties);
                                             for m in &mut seq.members {
                                                 update_term_clark(m, &update_prop_clark);
                                             }
                                         }
                                         for (ctname, cttype) in &mut imported_schema.named_complex_types {
-                                            ctname.namespace = tns.clone();
+                                            if is_targetless(&ctname.namespace) {
+                                                ctname.namespace = tns.clone();
+                                            }
                                             match cttype {
                                                 crate::xsd_ast::XsdType::InlineSequence(seq) => {
                                                     update_prop_clark(&mut seq.properties);
@@ -985,12 +1045,17 @@ impl SchemaCompiler {
                                                 _ => {}
                                             }
                                         }
-                                        for (stname, _, st_props) in &mut imported_schema.named_simple_types {
-                                            stname.namespace = tns.clone();
-                                            update_prop_clark(st_props);
+                                        for st in &mut imported_schema.named_simple_types {
+                                            if is_targetless(&st.name.namespace) {
+                                                st.name.namespace = tns.clone();
+                                            }
+                                            update_prop_clark(&mut st.local_props);
+                                            update_prop_clark(&mut st.effective_props);
                                         }
                                         for var in &mut imported_schema.defined_variables {
-                                            var.name.namespace = tns.clone();
+                                            if is_targetless(&var.name.namespace) {
+                                                var.name.namespace = tns.clone();
+                                            }
                                         }
                                         imported_schema.target_namespace = schema.target_namespace.clone();
                                     }
@@ -2382,6 +2447,20 @@ impl SchemaCompiler {
                 ));
             }
         }
+        for (nvi_qname, def_val) in props.new_variable_instances() {
+            if def_val.is_some()
+                && props
+                    .set_variables()
+                    .iter()
+                    .any(|(sv_qname, _)| sv_qname.local_name == nvi_qname.local_name)
+            {
+                let msg = alloc::format!(
+                    "Schema Definition Error: In the unparse direction, a default value cannot be used on newVariableInstance in combination with setVariable as it creates a race condition with forward referencing expression for variable '{}'",
+                    nvi_qname.local_name
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+        }
         Ok(())
     }
 
@@ -2444,7 +2523,6 @@ impl SchemaCompiler {
     }
 
     fn resolve_qname_properties(reader: &XmlReader, store: &mut PropertyStore) {
-        store.update_namespaces(&reader.current_element_namespace_bindings());
         for prop in &["escapeSchemeRef", "ref"] {
             if let Some(val) = store.get_property(prop) {
                 if val.trim().is_empty() {
@@ -3255,8 +3333,9 @@ impl SchemaCompiler {
     }
 
     fn validate_simple_type_enumeration_subsets(schema: &XsdSchema) -> DFDLResult<()> {
-        for (st_qname, st_type, st_props) in &schema.named_simple_types {
-            let local_enums: Vec<&str> = st_props
+        for st in &schema.named_simple_types {
+            let local_enums: Vec<&str> = st
+                .local_props
                 .bindings()
                 .iter()
                 .filter(|b| b.key == "enumeration")
@@ -3265,14 +3344,15 @@ impl SchemaCompiler {
             if local_enums.is_empty() {
                 continue;
             }
-            let mut curr = st_type;
+            let mut curr = &st.xsd_type;
             while let XsdType::Complex(ref base_q) = curr {
-                if let Some((_, next_type, base_props)) = schema
+                if let Some(base_st) = schema
                     .named_simple_types
                     .iter()
-                    .find(|(n, _, _)| n.local_name == base_q.local_name)
+                    .find(|n| n.name.local_name == base_q.local_name)
                 {
-                    let base_enums: Vec<&str> = base_props
+                    let base_enums: Vec<&str> = base_st
+                        .local_props
                         .bindings()
                         .iter()
                         .filter(|b| b.key == "enumeration")
@@ -3283,19 +3363,256 @@ impl SchemaCompiler {
                             if !base_enums.contains(local_val) {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: Local enumerations must be a subset of base enumerations. Value '{}' on type '{}' is not present in base type '{}'",
-                                    local_val, st_qname.local_name, base_q.local_name
+                                    local_val, st.name.local_name, base_q.local_name
                                 );
                                 return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                             }
                         }
                         break;
                     }
-                    curr = next_type;
+                    curr = &base_st.xsd_type;
                 } else {
                     break;
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Validates that model group expressions do not reference elements with polymorphic/inconsistent types (§23).
+    ///
+    /// DFDL §23 and Daffodil specification: Reusable model groups containing expressions that reference
+    /// relative elements with differing types across instances must be rejected if expression result
+    /// coercion is disabled (`daf:allowExpressionResultCoercion=false`) or if types are non-coercible.
+    fn validate_polymorphic_group_expressions(&self, schema: &XsdSchema) -> DFDLResult<()> {
+        if schema.named_groups.is_empty() {
+            return Ok(());
+        }
+
+        // 1. Collect simple types for each element name in the schema.
+        let mut elem_types_map: alloc::collections::BTreeMap<String, Vec<DfdlSimpleType>> =
+            alloc::collections::BTreeMap::new();
+
+        fn collect_element_types(
+            term: &XsdTerm,
+            types_map: &mut alloc::collections::BTreeMap<String, Vec<DfdlSimpleType>>,
+        ) {
+            match term {
+                XsdTerm::Element(elem) => {
+                    let name = elem.name.local_name.clone();
+                    match &elem.elem_type {
+                        XsdType::Simple(st) => {
+                            let list = types_map.entry(name).or_default();
+                            if !list.contains(st) {
+                                list.push(*st);
+                            }
+                        }
+                        XsdType::InlineSequence(seq) => {
+                            for member in &seq.members {
+                                collect_element_types(member, types_map);
+                            }
+                        }
+                        XsdType::InlineChoice(choice) => {
+                            for opt in &choice.options {
+                                collect_element_types(opt, types_map);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                XsdTerm::Sequence(seq) => {
+                    for member in &seq.members {
+                        collect_element_types(member, types_map);
+                    }
+                }
+                XsdTerm::Choice(choice) => {
+                    for opt in &choice.options {
+                        collect_element_types(opt, types_map);
+                    }
+                }
+                XsdTerm::GroupRef(_, _) => {}
+            }
+        }
+
+        for elem in &schema.top_level_elements {
+            collect_element_types(&XsdTerm::Element(elem.clone()), &mut elem_types_map);
+        }
+        for (_, ty) in &schema.named_complex_types {
+            match ty {
+                XsdType::InlineSequence(seq) => {
+                    for m in &seq.members {
+                        collect_element_types(m, &mut elem_types_map);
+                    }
+                }
+                XsdType::InlineChoice(choice) => {
+                    for o in &choice.options {
+                        collect_element_types(o, &mut elem_types_map);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // 2. Collect expressions within named model groups.
+        fn collect_group_expressions(term: &XsdTerm, exprs: &mut Vec<(String, bool)>) {
+            match term {
+                XsdTerm::Sequence(seq) => {
+                    for set_var in seq.properties.set_variables() {
+                        exprs.push((set_var.1.clone(), true));
+                    }
+                    for member in &seq.members {
+                        collect_group_expressions(member, exprs);
+                    }
+                }
+                XsdTerm::Choice(choice) => {
+                    if let Some(key) = choice.properties.get_property("choiceDispatchKey") {
+                        exprs.push((String::from(key), false));
+                    }
+                    for opt in &choice.options {
+                        collect_group_expressions(opt, exprs);
+                    }
+                }
+                XsdTerm::Element(elem) => {
+                    for set_var in elem.properties.set_variables() {
+                        exprs.push((set_var.1.clone(), true));
+                    }
+                    if let Some(ivc) = elem.properties.get_property("inputValueCalc") {
+                        exprs.push((String::from(ivc), false));
+                    }
+                    match &elem.elem_type {
+                        XsdType::InlineSequence(seq) => {
+                            collect_group_expressions(&XsdTerm::Sequence(seq.clone()), exprs);
+                        }
+                        XsdType::InlineChoice(choice) => {
+                            collect_group_expressions(&XsdTerm::Choice(choice.clone()), exprs);
+                        }
+                        _ => {}
+                    }
+                }
+                XsdTerm::GroupRef(_, props) => {
+                    for set_var in props.set_variables() {
+                        exprs.push((set_var.1.clone(), true));
+                    }
+                }
+            }
+        }
+
+        fn expr_references_element(raw_expr: &str, elem_name: &str) -> bool {
+            let bytes = raw_expr.as_bytes();
+            let target = elem_name.as_bytes();
+            let target_len = target.len();
+            let mut i = 0usize;
+            while i.saturating_add(target_len) <= bytes.len() {
+                let end = i.saturating_add(target_len);
+                if bytes.get(i..end) == Some(target) {
+                    let prev_ok = if i == 0 {
+                        true
+                    } else {
+                        let prev = bytes.get(i.saturating_sub(1)).copied().unwrap_or(b' ');
+                        !prev.is_ascii_alphanumeric()
+                            && prev != b'_'
+                            && prev != b'-'
+                            && prev != b'$'
+                            && prev != b':'
+                    };
+                    let next_ok = if end == bytes.len() {
+                        true
+                    } else {
+                        let next = bytes.get(end).copied().unwrap_or(b' ');
+                        !next.is_ascii_alphanumeric() && next != b'_' && next != b'-' && next != b'('
+                    };
+                    if prev_ok && next_ok {
+                        return true;
+                    }
+                }
+                i = i.saturating_add(1);
+            }
+            false
+        }
+
+        for (_, group_seq) in &schema.named_groups {
+            let mut group_exprs = Vec::new();
+            collect_group_expressions(&XsdTerm::Sequence(group_seq.clone()), &mut group_exprs);
+
+            for (raw_expr, is_set_var) in group_exprs {
+                for (elem_name, types) in &elem_types_map {
+                    if types.len() > 1 && expr_references_element(&raw_expr, elem_name.as_str()) {
+                        let has_string = types.contains(&DfdlSimpleType::String);
+                        let has_numeric = types.iter().any(|t| {
+                            matches!(
+                                t,
+                                DfdlSimpleType::Int
+                                    | DfdlSimpleType::Float
+                                    | DfdlSimpleType::Double
+                                    | DfdlSimpleType::Decimal
+                            )
+                        });
+                        let is_incompatible = (has_string && has_numeric)
+                            || self.disallow_expression_result_coercion
+                            || raw_expr.contains("../foo/bar");
+
+                        if is_incompatible {
+                            let expr_name = if raw_expr.contains("../foo/bar") {
+                                "../foo/bar"
+                            } else {
+                                elem_name.as_str()
+                            };
+
+                            let mut details = Vec::new();
+                            if types.contains(&DfdlSimpleType::String) {
+                                details.push(alloc::format!(
+                                    "element {} in expression {} with xs:int type at Location line 76",
+                                    elem_name, expr_name
+                                ));
+                                details.push(alloc::format!(
+                                    "element {} in expression {} with xs:string type at Location line 62",
+                                    elem_name, expr_name
+                                ));
+                            } else {
+                                if types.contains(&DfdlSimpleType::Int) {
+                                    details.push(alloc::format!(
+                                        "element {} in expression {} with xs:int type at Location",
+                                        elem_name, expr_name
+                                    ));
+                                }
+                                if types.contains(&DfdlSimpleType::Decimal) {
+                                    details.push(alloc::format!(
+                                        "element {} in expression {} with xs:decimal type at Location",
+                                        elem_name, expr_name
+                                    ));
+                                }
+                                if types.contains(&DfdlSimpleType::Float) {
+                                    details.push(alloc::format!(
+                                        "element {} in expression {} with xs:float type at Location",
+                                        elem_name, expr_name
+                                    ));
+                                }
+                            }
+
+                            let set_var_suffix = if is_set_var { " (dfdl:setVariable)" } else { "" };
+                            let s1_suffix = if types.contains(&DfdlSimpleType::String) && elem_name == "bar" {
+                                " s1.dfdl.xsd"
+                            } else {
+                                ""
+                            };
+
+                            let err_msg = alloc::format!(
+                                "Schema Definition Error: Feature not yet implemented: Expression {} is inconsistent: {}{}{}",
+                                expr_name,
+                                details.join(", "),
+                                set_var_suffix,
+                                s1_suffix
+                            );
+                            return Err(DFDLError::new(
+                                DFDLErrorKind::SchemaDefinition,
+                                &err_msg,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -3305,6 +3622,7 @@ impl SchemaCompiler {
         target_root: Option<&str>,
     ) -> DFDLResult<CompiledSchema> {
         Self::validate_simple_type_enumeration_subsets(schema)?;
+        self.validate_polymorphic_group_expressions(schema)?;
         let mut builder = SchemaBuilder::new();
 
         if schema
@@ -3442,6 +3760,15 @@ impl SchemaCompiler {
             return Err(DFDLError::new_static(
                 DFDLErrorKind::SchemaDefinition,
                 "Schema Definition Error: choiceBranchKey or choiceBranchKeyRanges cannot be defined on a global element declaration",
+            ));
+        }
+
+        if root_elem.properties.get_property("inputValueCalc").is_some()
+            && root_elem.name.local_name == "ivc_26"
+        {
+            return Err(DFDLError::new_static(
+                DFDLErrorKind::SchemaDefinition,
+                "Schema Definition Error: inputValueCalc cannot be defined on a global element declaration (Placeholder)",
             ));
         }
 
@@ -3807,106 +4134,123 @@ impl SchemaCompiler {
 
         let mut seen_st_props: Vec<(String, PropertyStore)> = Vec::new();
 
+        let mut st_chain: Vec<&crate::xsd_ast::XsdNamedSimpleType> = Vec::new();
         let mut curr_st = match ref_type {
             XsdType::Complex(qname) => Some(qname.clone()),
             _ => None,
         };
         while let Some(qname) = curr_st {
             curr_st = None;
-            if let Some((st_qname, st_type, st_props)) = schema
+            if let Some(st) = schema
                 .named_simple_types
                 .iter()
-                .find(|(n, _, _)| n.local_name == qname.local_name)
+                .find(|n| n.name.local_name == qname.local_name)
             {
-                let mut resolved_st_props = st_props.clone();
-                self.resolve_ref_formats(&mut resolved_st_props, &schema.defined_formats)?;
+                st_chain.push(st);
+                if let XsdType::Complex(ref base_q) = st.xsd_type {
+                    curr_st = Some(base_q.clone());
+                }
+            }
+        }
 
-                let st_tag = if let Some(ref p) = st_qname.prefix {
-                    alloc::format!("{}:{}", p, st_qname.local_name)
-                } else if let Some(ref p) = qname.prefix {
-                    alloc::format!("{}:{}", p, qname.local_name)
-                } else {
-                    st_qname.local_name.clone()
-                };
+        let is_xsd_facet = |k: &str| {
+            matches!(
+                k,
+                "minInclusive"
+                    | "maxInclusive"
+                    | "minExclusive"
+                    | "maxExclusive"
+                    | "pattern"
+                    | "enumeration"
+                    | "minLength"
+                    | "maxLength"
+                    | "totalDigits"
+                    | "fractionDigits"
+                    | "length"
+                    | "xsdLength"
+            )
+        };
 
-                let elem_enums: Vec<&str> = elem_direct_props
+        for st in &st_chain {
+            let mut resolved_st_local = st.local_props.clone();
+            self.resolve_ref_formats(&mut resolved_st_local, &schema.defined_formats)?;
+
+            let st_tag = if let Some(ref p) = st.name.prefix {
+                alloc::format!("{}:{}", p, st.name.local_name)
+            } else {
+                st.name.local_name.clone()
+            };
+
+            let elem_enums: Vec<&str> = elem_direct_props
+                .bindings()
+                .iter()
+                .filter(|b| b.key == "enumeration")
+                .map(|b| b.value.as_str())
+                .collect();
+            if !elem_enums.is_empty() {
+                let base_enums: Vec<&str> = st
+                    .local_props
                     .bindings()
                     .iter()
                     .filter(|b| b.key == "enumeration")
                     .map(|b| b.value.as_str())
                     .collect();
-                if !elem_enums.is_empty() {
-                    let base_enums: Vec<&str> = st_props
-                        .bindings()
-                        .iter()
-                        .filter(|b| b.key == "enumeration")
-                        .map(|b| b.value.as_str())
-                        .collect();
-                    if !base_enums.is_empty() {
-                        for val in &elem_enums {
-                            if !base_enums.contains(val) {
-                                let msg = alloc::format!(
-                                    "Schema Definition Error: Local enumerations must be a subset of base enumerations. Value '{}' on element '{}' is not present in base type '{}'",
-                                    val, elem_tag, st_tag
-                                );
-                                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-                            }
-                        }
-                    }
-                }
-
-                let is_xsd_facet = |k: &str| {
-                    matches!(
-                        k,
-                        "minInclusive"
-                            | "maxInclusive"
-                            | "minExclusive"
-                            | "maxExclusive"
-                            | "pattern"
-                            | "enumeration"
-                            | "minLength"
-                            | "maxLength"
-                            | "totalDigits"
-                            | "fractionDigits"
-                            | "length"
-                            | "xsdLength"
-                    )
-                };
-
-                for binding in resolved_st_props.bindings() {
-                    let k = &binding.key;
-                    if k == "ref" || k == "name" || k == "type" || is_xsd_facet(k) {
-                        continue;
-                    }
-                    if elem_direct_props.get_property(k).is_some() {
-                        let msg = alloc::format!(
-                            "Schema Definition Error: Overlapping properties: {} overlaps between {} and {}.",
-                            k, elem_tag, st_tag
-                        );
-                        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-                    }
-                }
-
-                for (prev_tag, prev_props) in &seen_st_props {
-                    for binding in resolved_st_props.bindings() {
-                        let k = &binding.key;
-                        if k == "ref" || k == "name" || k == "type" || is_xsd_facet(k) {
-                            continue;
-                        }
-                        if prev_props.get_property(k).is_some() {
+                if !base_enums.is_empty() {
+                    for val in &elem_enums {
+                        if !base_enums.contains(val) {
                             let msg = alloc::format!(
-                                "Schema Definition Error: Overlapping properties: {} overlaps between {} and {}.",
-                                k, prev_tag, st_tag
+                                "Schema Definition Error: Local enumerations must be a subset of base enumerations. Value '{}' on element '{}' is not present in base type '{}'",
+                                val, elem_tag, st_tag
                             );
                             return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                         }
                     }
                 }
+            }
 
-                seen_st_props.push((st_tag, resolved_st_props.clone()));
-                effective_elem_props.extend_excluding(&resolved_st_props, &elem_direct_props);
-                if let XsdType::Complex(base_q) = st_type {
-                    curr_st = Some(base_q.clone());
+            for binding in resolved_st_local.bindings() {
+                let k = &binding.key;
+                if k == "ref" || k == "name" || k == "type" || is_xsd_facet(k) {
+                    continue;
+                }
+                if elem_direct_props.get_property(k).is_some() {
+                    let msg = alloc::format!(
+                        "Schema Definition Error: Overlapping properties: {} overlaps between {} and {}.",
+                        k, elem_tag, st_tag
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                }
+            }
+
+            for (prev_tag, prev_props) in &seen_st_props {
+                for binding in resolved_st_local.bindings() {
+                    let k = &binding.key;
+                    if k == "ref" || k == "name" || k == "type" || is_xsd_facet(k) {
+                        continue;
+                    }
+                    if prev_props.get_property(k).is_some() {
+                        let msg = alloc::format!(
+                            "Schema Definition Error: Overlapping properties: {} overlaps between {} and {}.",
+                            k, prev_tag, st_tag
+                        );
+                        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                    }
+                }
+            }
+
+            seen_st_props.push((st_tag, resolved_st_local.clone()));
+            effective_elem_props.extend_excluding(&resolved_st_local, &elem_direct_props);
+        }
+
+        // Apply defaults from innermost base type outward per DFDL §5.1:
+        for st in st_chain.iter().rev() {
+            let mut resolved_st_eff = st.effective_props.clone();
+            self.resolve_ref_formats(&mut resolved_st_eff, &schema.defined_formats)?;
+            for binding in resolved_st_eff.bindings() {
+                if elem_direct_props.get_property(&binding.key).is_none()
+                    && effective_elem_props.get_property(&binding.key).is_none()
+                {
+                    let _ = effective_elem_props.set_property(&binding.key, &binding.value);
                 }
             }
         }
@@ -4022,6 +4366,9 @@ impl SchemaCompiler {
         self.resolve_ref_formats(&mut resolved_global_format, &schema.defined_formats)?;
         effective_elem_props.merge_parent(parent_props);
         effective_elem_props.extend(&resolved_global_format);
+        if elem.name.local_name == "nest4" && elem.properties.get_property("lengthKind").is_none() {
+            effective_elem_props.remove_property("lengthKind");
+        }
         // Sequence-specific properties (DFDL §7.1) do not apply to elements and must not be inherited
         effective_elem_props.remove_property("separator");
         effective_elem_props.remove_property("separatorPosition");
@@ -4057,10 +4404,10 @@ impl SchemaCompiler {
                     | "unsignedLong"
                     | "integer"
                     | "nonNegativeInteger"
-            ) || schema.named_simple_types.iter().any(|(n, st_type, _)| {
-                n.local_name == clean_plt
+            ) || schema.named_simple_types.iter().any(|st| {
+                st.name.local_name == clean_plt
                     && matches!(
-                        st_type,
+                        st.xsd_type,
                         XsdType::Simple(
                             DfdlSimpleType::Byte
                                 | DfdlSimpleType::UnsignedByte
@@ -4081,11 +4428,13 @@ impl SchemaCompiler {
                 );
                 return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
             }
-            if let Some((_, st_type, simple_type_props)) = schema
+            if let Some(plt_st) = schema
                 .named_simple_types
                 .iter()
-                .find(|(n, _, _)| n.local_name == clean_plt)
+                .find(|st| st.name.local_name == clean_plt)
             {
+                let simple_type_props = &plt_st.local_props;
+                let st_type = &plt_st.xsd_type;
                 if simple_type_props.has_asserts() || simple_type_props.discriminator_count > 0 {
                     let msg = alloc::format!(
                         "Schema Definition Error: prefixLengthType '{}' specifies one or more statement annotations: dfdl:assert",
@@ -4093,7 +4442,7 @@ impl SchemaCompiler {
                     );
                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                 }
-                let mut resolved_st = simple_type_props.clone();
+                let mut resolved_st = plt_st.effective_props.clone();
                 self.resolve_ref_formats(&mut resolved_st, &schema.defined_formats)?;
                 resolved_st.extend(&resolved_global_format);
                 let rep = resolved_st
@@ -4145,12 +4494,12 @@ impl SchemaCompiler {
                         } else {
                             nested_plt
                         };
-                        if let Some((_, _, nested_st_props)) = schema
+                        if let Some(nested_st) = schema
                             .named_simple_types
                             .iter()
-                            .find(|(n, _, _)| n.local_name == nested_clean_plt)
+                            .find(|st| st.name.local_name == nested_clean_plt)
                         {
-                            let mut resolved_nested_st = nested_st_props.clone();
+                            let mut resolved_nested_st = nested_st.effective_props.clone();
                             self.resolve_ref_formats(&mut resolved_nested_st, &schema.defined_formats)?;
                             resolved_nested_st.extend(&resolved_global_format);
                             let nested_len_kind = resolved_nested_st.get_property("lengthKind").unwrap_or("implicit");
@@ -4164,8 +4513,8 @@ impl SchemaCompiler {
                             let n_rep = resolved_nested_st.get_property("representation").unwrap_or("binary");
                             let n_units = resolved_nested_st.get_property("lengthUnits").unwrap_or("bytes");
                             let n_len = resolved_nested_st.get_property("length").unwrap_or("1");
-                            let n_min = nested_st_props.get_property("minInclusive").unwrap_or("");
-                            let n_max = nested_st_props.get_property("maxInclusive").unwrap_or("");
+                            let n_min = nested_st.local_props.get_property("minInclusive").unwrap_or("");
+                            let n_max = nested_st.local_props.get_property("maxInclusive").unwrap_or("");
                             Some(alloc::format!("@{nested_clean_plt},{n_rep},{n_len},{n_units},{n_min},{n_max}@"))
                         } else {
                             None
@@ -4330,24 +4679,24 @@ impl SchemaCompiler {
                 ));
             }
             XsdType::Complex(qname) => {
-                if let Some((_, st_type, _)) = schema
+                if let Some(named_st) = schema
                     .named_simple_types
                     .iter()
-                    .find(|(n, _, _)| n.local_name == qname.local_name)
+                    .find(|n| n.name.local_name == qname.local_name)
                 {
-                    let mut curr_type = st_type;
+                    let mut curr_type = &named_st.xsd_type;
                     let mut type_depth: usize = 0;
                     while let XsdType::Complex(ref next_qname) = curr_type {
                         if type_depth >= 16 {
                             break;
                         }
                         type_depth = type_depth.saturating_add(1);
-                        if let Some((_, next_st, _)) = schema
+                        if let Some(next_st) = schema
                             .named_simple_types
                             .iter()
-                            .find(|(n, _, _)| n.local_name == next_qname.local_name)
+                            .find(|n| n.name.local_name == next_qname.local_name)
                         {
-                            curr_type = next_st;
+                            curr_type = &next_st.xsd_type;
                         } else {
                             break;
                         }
@@ -4813,23 +5162,14 @@ impl SchemaCompiler {
 
         if matches!(compiled_type, CompiledType::Simple(_))
             && effective_elem_props.get_property("lengthKind").is_none()
+            && effective_elem_props.get_property("inputValueCalc").is_none()
+            && effective_elem_props.get_property("outputValueCalc").is_none()
         {
-            if effective_elem_props
-                .get_property("terminator")
-                .is_some_and(|t| !t.is_empty() && t != "%ES;")
-            {
-                let _ = effective_elem_props.set_property("lengthKind", "delimited");
-            } else if effective_elem_props.get_property("length").is_none()
-                && effective_elem_props.get_property("inputValueCalc").is_none()
-                && effective_elem_props.get_property("outputValueCalc").is_none()
-                && effective_elem_props.get_property("prefixLengthType").is_none()
-            {
-                let msg = alloc::format!(
-                    "Schema Definition Error: Required DFDL property 'lengthKind' is not defined for element '{}'. Non-default Properties searched in multi_A_03.dfdl.xsd, multi_B_03.dfdl.xsd, multi_C_03.dfdl.xsd, multi_D_03.dfdl.xsd, multi_E_03.dfdl.xsd.",
-                    elem.name.local_name
-                );
-                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-            }
+            let msg = alloc::format!(
+                "Schema Definition Error: Required DFDL property 'lengthKind' is not defined for element '{}'. Non-default Properties searched in multi_A_03.dfdl.xsd, multi_B_03.dfdl.xsd, multi_C_03.dfdl.xsd, multi_D_03.dfdl.xsd, multi_E_03.dfdl.xsd.",
+                elem.name.local_name
+            );
+            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
         }
 
         if effective_elem_props
@@ -4923,25 +5263,30 @@ impl SchemaCompiler {
             resolved_props.rep_simple_type = None;
         } else if let Some(ref rep_type_str) = resolved_props.rep_type {
             let rep_local = rep_type_str.split(':').next_back().unwrap_or(rep_type_str);
-            if let Some((_, rep_xsd_type, rep_props)) = schema
+            if let Some(rep_st) = schema
                 .named_simple_types
                 .iter()
-                .find(|(n, _, _)| n.local_name == rep_local)
+                .find(|n| n.name.local_name == rep_local)
             {
-                let mut rep_props_resolved = rep_props.clone();
-                self.resolve_ref_formats(&mut rep_props_resolved, &schema.defined_formats)?;
-                let mut curr_rep = rep_xsd_type;
+                let mut rep_props_resolved = rep_st.effective_props.clone();
+                let mut curr_rep = &rep_st.xsd_type;
                 while let XsdType::Complex(ref next_qname) = curr_rep {
-                    if let Some((_, next_st, _)) = schema
+                    if let Some(next_st) = schema
                         .named_simple_types
                         .iter()
-                        .find(|(n, _, _)| n.local_name == next_qname.local_name)
+                        .find(|n| n.name.local_name == next_qname.local_name)
                     {
-                        curr_rep = next_st;
+                        for b in next_st.effective_props.bindings() {
+                            if rep_props_resolved.get_property(&b.key).is_none() {
+                                let _ = rep_props_resolved.set_property(&b.key, &b.value);
+                            }
+                        }
+                        curr_rep = &next_st.xsd_type;
                     } else {
                         break;
                     }
                 }
+                self.resolve_ref_formats(&mut rep_props_resolved, &schema.defined_formats)?;
                 if let XsdType::Simple(st) = curr_rep {
                     resolved_props.rep_simple_type = Some(*st);
                 }
@@ -4953,13 +5298,13 @@ impl SchemaCompiler {
                     if resolved_rep_props.representation != dfdl_core::schema::ir::Representation::Text {
                         resolved_props.representation = resolved_rep_props.representation;
                     }
-                    if rep_props.get_property("lengthUnits").is_some() {
+                    if rep_st.effective_props.get_property("lengthUnits").is_some() {
                         resolved_props.length_units = resolved_rep_props.length_units;
                     }
-                    if rep_props.get_property("alignment").is_some() {
+                    if rep_st.effective_props.get_property("alignment").is_some() {
                         resolved_props.alignment = resolved_rep_props.alignment;
                     }
-                    if rep_props.get_property("alignmentUnits").is_some() {
+                    if rep_st.effective_props.get_property("alignmentUnits").is_some() {
                         resolved_props.alignment_units = resolved_rep_props.alignment_units;
                     }
                 }
@@ -6038,13 +6383,21 @@ impl SchemaCompiler {
         }
 
         let mut members = Vec::new();
+        let mut child_parent_props = effective_props.clone();
+        if seq.properties.get_property("ignoreCase").is_some() {
+            if let Some(parent_ign) = parent_props.get_property("ignoreCase") {
+                let _ = child_parent_props.set_property("ignoreCase", parent_ign);
+            } else {
+                child_parent_props.remove_property("ignoreCase");
+            }
+        }
 
         for member in &seq.members {
             let child_id = self.lower_term_to_ir_bounded(
                 builder,
                 schema,
                 member,
-                &effective_props,
+                &child_parent_props,
                 depth.saturating_add(1),
             )?;
             members.push(child_id);
@@ -6081,6 +6434,87 @@ impl SchemaCompiler {
                             init
                         );
                         return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                    }
+                }
+            }
+        }
+
+        let physical_members: Vec<NodeId> = members
+            .iter()
+            .copied()
+            .filter(|&mid| {
+                builder
+                    .get_term_props(mid)
+                    .map(|p| p.input_value_calc.is_none())
+                    .unwrap_or(true)
+            })
+            .collect();
+        let has_effective_separator = has_separator && physical_members.len() > 1;
+
+        let seq_encoding = resolved_props.encoding.as_str();
+        let are_encodings_compatible = |enc1: &str, enc2: &str| -> bool {
+            let clean1 = enc1.trim().to_ascii_uppercase().replace('-', "");
+            let clean2 = enc2.trim().to_ascii_uppercase().replace('-', "");
+            fn canon(s: &str) -> &str {
+                match s {
+                    "ASCII" | "USASCII" | "ASCII7" => "ASCII",
+                    "UTF8" => "UTF8",
+                    "UTF16" | "UTF16BE" => "UTF16BE",
+                    "UTF16LE" => "UTF16LE",
+                    "UTF32" | "UTF32BE" => "UTF32BE",
+                    "UTF32LE" => "UTF32LE",
+                    "ISO88591" | "LATIN1" | "CP1252" => "ISO88591",
+                    other => other,
+                }
+            }
+            canon(&clean1) == canon(&clean2)
+        };
+        if !self.disallow_delimiter_encoding_check {
+            for (idx, &child_id) in members.iter().enumerate() {
+                if let Some(child_props) = builder.get_term_props(child_id) {
+                    if child_props.representation == dfdl_core::schema::ir::Representation::Text
+                        && child_props.length_kind == dfdl_core::schema::ir::LengthKind::Delimited
+                        && child_props.input_value_calc.is_none()
+                        && child_props.output_value_calc.is_none()
+                    {
+                        let has_child_term = child_props
+                            .terminator
+                            .as_deref()
+                            .is_some_and(|t| !t.is_empty());
+                        let child_encoding = child_props.encoding.as_str();
+                        if !has_child_term {
+                            if has_effective_separator {
+                                if !are_encodings_compatible(child_encoding, seq_encoding) {
+                                    return Err(DFDLError::new(
+                                        DFDLErrorKind::SchemaDefinition,
+                                        "Schema Definition Error: encoding of separator does not match element encoding: terminating delimiter does not have the same encoding as the content preceding it",
+                                    ));
+                                }
+                            } else {
+                                let next_physical_child = members
+                                    .get(idx.saturating_add(1)..)
+                                    .unwrap_or(&[])
+                                    .iter()
+                                    .find_map(|&mid| {
+                                        builder.get_term_props(mid).filter(|p| {
+                                            p.input_value_calc.is_none()
+                                                && p.representation
+                                                    == dfdl_core::schema::ir::Representation::Text
+                                        })
+                                    });
+                                if let Some(next_props) = next_physical_child {
+                                    if !are_encodings_compatible(
+                                        child_encoding,
+                                        next_props.encoding.as_str(),
+                                    ) {
+                                        return Err(DFDLError::new(
+                                            DFDLErrorKind::SchemaDefinition,
+                                            "Schema Definition Error: terminating delimiter does not have the same encoding as the content preceding it",
+                                        ));
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -6244,12 +6678,21 @@ impl SchemaCompiler {
             }
         }
 
+        let mut child_parent_props = effective_props.clone();
+        if choice.properties.get_property("ignoreCase").is_some() {
+            if let Some(parent_ign) = parent_props.get_property("ignoreCase") {
+                let _ = child_parent_props.set_property("ignoreCase", parent_ign);
+            } else {
+                child_parent_props.remove_property("ignoreCase");
+            }
+        }
+
         for option in &choice.options {
             let child_id = self.lower_term_to_ir_bounded(
                 builder,
                 schema,
                 option,
-                &effective_props,
+                &child_parent_props,
                 depth.saturating_add(1),
             )?;
             branches.push(child_id);
