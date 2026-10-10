@@ -64,16 +64,26 @@ mod tests {
     #[test]
     fn test_infoset_event_construction() {
         let qn = QName::local("root");
-        let ev = InfosetEvent::StartElement {
+        let ev1 = InfosetEvent::StartDocument;
+        let ev2 = InfosetEvent::EndDocument;
+        let ev3 = InfosetEvent::StartElement {
             name: qn.clone(),
             is_nil: false,
         };
+        let ev4 = InfosetEvent::EndElement { name: qn.clone() };
+        let ev5 = InfosetEvent::SimpleValue {
+            name: qn.clone(),
+            value: DfdlValue::Long(42),
+        };
+        let ev6 = InfosetEvent::EmptyValue { name: qn.clone() };
+        let ev7 = InfosetEvent::NilValue { name: qn };
 
-        if let InfosetEvent::StartElement { name, is_nil } = ev {
-            assert_eq!(name.local_name, "root");
-            assert!(!is_nil);
-        } else {
-            panic!("Expected StartElement");
-        }
+        assert_eq!(ev1, InfosetEvent::StartDocument);
+        assert_eq!(ev2, InfosetEvent::EndDocument);
+        assert!(matches!(ev3, InfosetEvent::StartElement { is_nil: false, .. }));
+        assert!(matches!(ev4, InfosetEvent::EndElement { .. }));
+        assert!(matches!(ev5, InfosetEvent::SimpleValue { .. }));
+        assert!(matches!(ev6, InfosetEvent::EmptyValue { .. }));
+        assert!(matches!(ev7, InfosetEvent::NilValue { .. }));
     }
 }

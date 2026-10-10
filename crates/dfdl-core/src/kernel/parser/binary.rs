@@ -33,65 +33,97 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         if bits == 0 {
             return Ok(0);
         }
-        if bits <= 64 {
-            if self.reader.is_eof() {
-                return Err(DFDLError::new_static(
-                    DFDLErrorKind::Parse,
-                    "Insufficient binary data for primitive scalar",
-                ));
-            }
-            self.reader.read_bits(bits).map_err(|_| {
-                DFDLError::new_static(
-                    DFDLErrorKind::Parse,
-                    "Insufficient binary data for primitive scalar",
-                )
-            })
-        } else {
-            let mut val = 0u64;
-            let mut remaining = bits;
-            while remaining > 0 {
-                let chunk = remaining.min(64);
-                if self.reader.is_eof() {
-                    return Err(DFDLError::new_static(
-                        DFDLErrorKind::Parse,
-                        "Insufficient binary data for primitive scalar",
-                    ));
+        self.reader.read_bits(bits.min(64)).map_err(|_| {
+            DFDLError::new_static(
+                DFDLErrorKind::Parse,
+                "Insufficient binary data for primitive scalar",
+            )
+        })
+    }
+
+    /// Converts an unsigned big-endian byte slice into a base-10 decimal string.
+    pub(crate) fn bytes_to_decimal_string(bytes: &[u8]) -> String {
+        let start = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
+        let sig_bytes = bytes.get(start..).unwrap_or(&[]);
+        if sig_bytes.is_empty() {
+            return String::from("0");
+        }
+
+        let mut limbs: Vec<u32> = Vec::new();
+        let mut rem_bytes = sig_bytes;
+        while !rem_bytes.is_empty() {
+            let chunk_len = rem_bytes.len().min(4);
+            let split_idx = rem_bytes.len().saturating_sub(chunk_len);
+            let mut limb = 0u32;
+            if let Some(chunk) = rem_bytes.get(split_idx..) {
+                for &b in chunk {
+                    limb = (limb << 8) | (b as u32);
                 }
-                let chunk_val = self.reader.read_bits(chunk).map_err(|_| {
-                    DFDLError::new_static(
-                        DFDLErrorKind::Parse,
-                        "Insufficient binary data for primitive scalar",
-                    )
-                })?;
-                val = if chunk >= 64 {
-                    chunk_val
-                } else {
-                    (val << chunk) | chunk_val
-                };
-                remaining = remaining.saturating_sub(chunk);
             }
-            Ok(val)
+            limbs.push(limb);
+            rem_bytes = rem_bytes.get(..split_idx).unwrap_or(&[]);
+        }
+
+        let mut dec_chunks: Vec<u32> = Vec::new();
+        while !limbs.is_empty() {
+            let mut rem = 0u64;
+            for limb in limbs.iter_mut().rev() {
+                let cur = (rem << 32) | (*limb as u64);
+                *limb = (cur / 1_000_000_000) as u32;
+                rem = cur % 1_000_000_000;
+            }
+            dec_chunks.push(rem as u32);
+            while limbs.last() == Some(&0) {
+                limbs.pop();
+            }
+        }
+
+        let mut s = String::new();
+        if let Some(&highest) = dec_chunks.last() {
+            s.push_str(&alloc::format!("{}", highest));
+        }
+        for &chunk in dec_chunks.iter().rev().skip(1) {
+            s.push_str(&alloc::format!("{:09}", chunk));
+        }
+        if s.is_empty() {
+            String::from("0")
+        } else {
+            s
         }
     }
 
     pub(crate) fn format_virtual_decimal(val: i64, scale: i32) -> String {
-        if scale <= 0 {
-            return alloc::format!("{}", val);
+        Self::format_virtual_decimal_str(&alloc::format!("{}", val), scale)
+    }
+
+    pub(crate) fn format_virtual_decimal_str(val_str: &str, scale: i32) -> String {
+        if scale == 0 {
+            return alloc::string::ToString::to_string(val_str);
         }
-        let is_neg = val < 0;
-        let abs_val = val.unsigned_abs();
-        let s = alloc::format!("{}", abs_val);
-        let scale_usize = scale as usize;
-        let formatted = if s.len() <= scale_usize {
-            let mut out = String::from("0.");
-            for _ in 0..(scale_usize - s.len()) {
+        let is_neg = val_str.starts_with('-');
+        let digits = val_str.strip_prefix('-').unwrap_or(val_str);
+        if scale < 0 {
+            let mut out = String::with_capacity(val_str.len().saturating_add((-scale) as usize));
+            if is_neg {
+                out.push('-');
+            }
+            out.push_str(digits);
+            for _ in 0..(-scale) {
                 out.push('0');
             }
-            out.push_str(&s);
+            return out;
+        }
+        let scale_usize = scale as usize;
+        let formatted = if digits.len() <= scale_usize {
+            let mut out = String::from("0.");
+            for _ in 0..(scale_usize - digits.len()) {
+                out.push('0');
+            }
+            out.push_str(digits);
             out
         } else {
-            let split_pos = s.len() - scale_usize;
-            alloc::format!("{}.{}", &s[..split_pos], &s[split_pos..])
+            let split_pos = digits.len() - scale_usize;
+            alloc::format!("{}.{}", &digits[..split_pos], &digits[split_pos..])
         };
         if is_neg {
             alloc::format!("-{}", formatted)
@@ -187,7 +219,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         try_push(&mut bytes, b)?;
                     }
                 } else {
-                    while !self.reader.is_eof() {
+                    loop {
                         let mut matched_in_scope = false;
                         if let Some(ref term) = props.terminator {
                             if !term.is_empty() && self.peek_literal_delimiter(term) {
@@ -200,11 +232,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         if matched_in_scope {
                             break;
                         }
-                        if let Ok(b) = self.read_binary_bits(8) {
-                            try_push(&mut bytes, b as u8)?;
-                        } else {
+                        let Ok(b) = self.read_binary_bits(8) else {
                             break;
-                        }
+                        };
+                        try_push(&mut bytes, b as u8)?;
                     }
                 }
                 let val_i64 = match props.binary_number_rep {
@@ -308,16 +339,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         try_push(&mut bytes, b)?;
                     }
                 } else {
-                    while !self.reader.is_eof() {
-                        let matched_in_scope = self.peek_any_in_scope_delimiter();
-                        if matched_in_scope {
-                            break;
-                        }
-                        if let Ok(b) = self.read_binary_bits(8) {
-                            try_push(&mut bytes, b as u8)?;
-                        } else {
-                            break;
-                        }
+                    while !self.reader.is_eof() && !self.peek_any_in_scope_delimiter() {
+                        let Ok(b) = self.read_binary_bits(8) else { break };
+                        try_push(&mut bytes, b as u8)?;
                     }
                 }
                 let mut val: u64 = 0;
@@ -546,12 +570,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             bits_left = bits_left.saturating_sub(chunk);
                         }
                     } else {
-                        while !self.reader.is_eof() {
-                            if let Ok(b) = self.read_binary_bits(8) {
-                                try_push(&mut bytes, b as u8)?;
-                            } else {
-                                break;
-                            }
+                        while let Ok(b) = self.read_binary_bits(8) {
+                            try_push(&mut bytes, b as u8)?;
                         }
                     }
                 } else if let Some(len) = dynamic_len {
@@ -560,16 +580,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         try_push(&mut bytes, b)?;
                     }
                 } else {
-                    while !self.reader.is_eof() {
-                        let matched_in_scope = self.peek_any_in_scope_delimiter();
-                        if matched_in_scope {
-                            break;
-                        }
-                        if let Ok(b) = self.read_binary_bits(8) {
-                            try_push(&mut bytes, b as u8)?;
-                        } else {
-                            break;
-                        }
+                    while !self.reader.is_eof() && !self.peek_any_in_scope_delimiter() {
+                        let Ok(b) = self.read_binary_bits(8) else { break };
+                        try_push(&mut bytes, b as u8)?;
                     }
                 }
                 if let Some(max_len) = self.schema.max_hex_binary_length_in_bytes {
@@ -629,16 +642,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         for _ in 0..explicit_len {
                             let lead = self.read_binary_bits(8)? as u8;
                             try_push(&mut bytes, lead)?;
-                            let extra = if lead & 0x80 == 0 {
-                                0
-                            } else if lead & 0xE0 == 0xC0 {
-                                1
-                            } else if lead & 0xF0 == 0xE0 {
-                                2
-                            } else if lead & 0xF8 == 0xF0 {
-                                3
-                            } else {
-                                0
+                            let extra = match lead {
+                                0x00..=0x7F => 0,
+                                0xC0..=0xDF => 1,
+                                0xE0..=0xEF => 2,
+                                0xF0..=0xF7 => 3,
+                                _ => 0,
                             };
                             for _ in 0..extra {
                                 let b = self.read_binary_bits(8)? as u8;
@@ -672,30 +681,96 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
             DfdlSimpleType::Decimal => {
                 let bits = calc_bits(32);
-                let val_u64 = self.read_binary_bits(bits)?;
-                let ordered = match props.byte_order {
-                    ByteOrder::BigEndian => val_u64,
-                    ByteOrder::LittleEndian => match bits {
-                        16 => (val_u64 as u16).swap_bytes() as u64,
-                        24 => {
-                            let b0 = val_u64 & 0xFF;
-                            let b1 = (val_u64 >> 8) & 0xFF;
-                            let b2 = (val_u64 >> 16) & 0xFF;
-                            (b0 << 16) | (b1 << 8) | b2
-                        }
-                        32 => (val_u64 as u32).swap_bytes() as u64,
-                        64 => val_u64.swap_bytes(),
-                        _ => val_u64,
-                    },
-                };
-                let val_i64 = if props.decimal_signed {
-                    sign_extend(ordered, bits)
+                if bits <= 64 {
+                    let val_u64 = self.read_binary_bits(bits)?;
+                    let ordered = match props.byte_order {
+                        ByteOrder::BigEndian => val_u64,
+                        ByteOrder::LittleEndian => match bits {
+                            16 => (val_u64 as u16).swap_bytes() as u64,
+                            24 => {
+                                let b0 = val_u64 & 0xFF;
+                                let b1 = (val_u64 >> 8) & 0xFF;
+                                let b2 = (val_u64 >> 16) & 0xFF;
+                                (b0 << 16) | (b1 << 8) | b2
+                            }
+                            32 => (val_u64 as u32).swap_bytes() as u64,
+                            64 => val_u64.swap_bytes(),
+                            _ => val_u64,
+                        },
+                    };
+                    let val_str = if props.decimal_signed {
+                        alloc::format!("{}", sign_extend(ordered, bits))
+                    } else {
+                        alloc::format!("{}", ordered)
+                    };
+                    let formatted = Self::format_virtual_decimal_str(
+                        &val_str,
+                        props.binary_decimal_virtual_point,
+                    );
+                    Ok(DfdlValue::Decimal(formatted))
                 } else {
-                    ordered as i64
-                };
-                let formatted =
-                    Self::format_virtual_decimal(val_i64, props.binary_decimal_virtual_point);
-                Ok(DfdlValue::Decimal(formatted))
+                    let total_bytes = (bits.saturating_add(7)) / 8;
+                    let leading_bits = if bits % 8 == 0 { 8 } else { bits % 8 };
+                    let mut raw_bytes = Vec::with_capacity(total_bytes);
+                    if leading_bits < 8 {
+                        let b = self.read_binary_bits(leading_bits)? as u8;
+                        try_push(&mut raw_bytes, b)?;
+                    }
+                    let remaining_bits = if leading_bits < 8 {
+                        bits.saturating_sub(leading_bits)
+                    } else {
+                        bits
+                    };
+                    let full_bytes = remaining_bits / 8;
+                    for _ in 0..full_bytes {
+                        let b = self.read_binary_bits(8)? as u8;
+                        try_push(&mut raw_bytes, b)?;
+                    }
+
+                    if props.byte_order == ByteOrder::LittleEndian {
+                        raw_bytes.reverse();
+                    }
+
+                    let first_byte = raw_bytes.first().copied().unwrap_or(0);
+                    let is_neg = if props.decimal_signed {
+                        if leading_bits < 8 {
+                            (first_byte & (1 << (leading_bits.saturating_sub(1)))) != 0
+                        } else {
+                            (first_byte & 0x80) != 0
+                        }
+                    } else {
+                        false
+                    };
+
+                    if is_neg {
+                        for (i, b) in raw_bytes.iter_mut().enumerate() {
+                            if i == 0 && leading_bits < 8 {
+                                let mask = (1u8 << leading_bits) - 1;
+                                *b = (!*b) & mask;
+                            } else {
+                                *b = !*b;
+                            }
+                        }
+                        let mut carry = 1u16;
+                        for b in raw_bytes.iter_mut().rev() {
+                            let sum = (*b as u16) + carry;
+                            *b = sum as u8;
+                            carry = sum >> 8;
+                        }
+                    }
+
+                    let dec_str = Self::bytes_to_decimal_string(&raw_bytes);
+                    let val_str = if is_neg {
+                        alloc::format!("-{}", dec_str)
+                    } else {
+                        dec_str
+                    };
+                    let formatted = Self::format_virtual_decimal_str(
+                        &val_str,
+                        props.binary_decimal_virtual_point,
+                    );
+                    Ok(DfdlValue::Decimal(formatted))
+                }
             }
             DfdlSimpleType::DateTime | DfdlSimpleType::Date | DfdlSimpleType::Time => {
                 let mut bytes = Vec::new();
@@ -709,7 +784,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         try_push(&mut bytes, b)?;
                     }
                 } else {
-                    while !self.reader.is_eof() {
+                    loop {
                         let mut matched_in_scope = false;
                         if let Some(ref term) = props.terminator {
                             if !term.is_empty() && self.peek_literal_delimiter(term) {
@@ -722,11 +797,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         if matched_in_scope {
                             break;
                         }
-                        if let Ok(b) = self.read_binary_bits(8) {
-                            try_push(&mut bytes, b as u8)?;
-                        } else {
+                        let Ok(b) = self.read_binary_bits(8) else {
                             break;
-                        }
+                        };
+                        try_push(&mut bytes, b as u8)?;
                     }
                 }
                 let s = match props.binary_calendar_rep {
@@ -740,8 +814,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     let type_name = match simple_type {
                                         DfdlSimpleType::DateTime => "xs:dateTime",
                                         DfdlSimpleType::Date => "xs:date",
-                                        DfdlSimpleType::Time => "xs:time",
-                                        _ => "calendar",
+                                        _ => "xs:time",
                                     };
                                     let msg = alloc::format!(
                                         "Parse Error: Unable to parse {} from negative packed number",
@@ -750,20 +823,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                                 }
                                 if high <= 9 {
-                                    digits.push(
-                                        core::char::from_digit(high as u32, 10).unwrap_or('0'),
-                                    );
+                                    digits.push((b'0' + high) as char);
                                 }
                             } else {
                                 if high <= 9 {
-                                    digits.push(
-                                        core::char::from_digit(high as u32, 10).unwrap_or('0'),
-                                    );
+                                    digits.push((b'0' + high) as char);
                                 }
                                 if low <= 9 {
-                                    digits.push(
-                                        core::char::from_digit(low as u32, 10).unwrap_or('0'),
-                                    );
+                                    digits.push((b'0' + low) as char);
                                 }
                             }
                         }

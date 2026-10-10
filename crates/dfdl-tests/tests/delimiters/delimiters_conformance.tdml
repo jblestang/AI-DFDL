@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Conformance TDML Test Suite for DFDL Delimiter Properties and Tokenization.
+  Testing delimiters, character class entities (%NL;, %SP;, %HT;, %WSP+;), character references (%#x...;),
+  alternative delimiters, and initiator/terminator pairs.
+-->
+<tdml:testSuite xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+                xmlns:dfdl="http://www.dfdl.org/7793"
+                xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                suiteName="DelimitersConformanceSuite">
+
+    <!-- Schema 1: Sequence with comma separator -->
+    <tdml:defineSchema name="CommaDelimitedSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator=",">
+                        <xs:element name="Field1" type="xs:string" dfdl:lengthKind="delimited"/>
+                        <xs:element name="Field2" type="xs:string" dfdl:lengthKind="delimited"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Schema 2: Multi-character delimiter (::) -->
+    <tdml:defineSchema name="MultiCharDelimSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator="::">
+                        <xs:element name="PartA" type="xs:string" dfdl:lengthKind="delimited"/>
+                        <xs:element name="PartB" type="xs:string" dfdl:lengthKind="delimited"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Schema 3: Delimiter alternatives (separator="; | ,") -->
+    <tdml:defineSchema name="AlternativeDelimSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator="; | ,">
+                        <xs:element name="Item1" type="xs:string" dfdl:lengthKind="delimited"/>
+                        <xs:element name="Item2" type="xs:string" dfdl:lengthKind="delimited"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Schema 4: DFDL Character Class Entity %NL; (Newline) -->
+    <tdml:defineSchema name="NewlineDelimSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator="%NL;">
+                        <xs:element name="Line1" type="xs:string" dfdl:lengthKind="delimited"/>
+                        <xs:element name="Line2" type="xs:string" dfdl:lengthKind="delimited"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Schema 5: DFDL Character Reference %#x2C; (Hex Comma) and %SP; -->
+    <tdml:defineSchema name="CharRefDelimSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="Record">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:separator="%#x2C;">
+                        <xs:element name="Val1" type="xs:int" dfdl:lengthKind="delimited"/>
+                        <xs:element name="Val2" type="xs:int" dfdl:lengthKind="delimited"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Schema 6: Initiator and Terminator ([ ... ]) -->
+    <tdml:defineSchema name="BracketedSchema">
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+            <xs:element name="BracketedRecord">
+                <xs:complexType>
+                    <xs:sequence dfdl:representation="text" dfdl:initiator="[" dfdl:terminator="]" dfdl:separator=",">
+                        <xs:element name="Left" type="xs:string" dfdl:lengthKind="delimited"/>
+                        <xs:element name="Right" type="xs:string" dfdl:lengthKind="delimited"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </tdml:defineSchema>
+
+    <!-- Test 1: Simple Comma Delimited Parse -->
+    <tdml:parserTestCase name="test_comma_delimited_parse" root="Record" model="CommaDelimitedSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">alpha,beta</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Field1>alpha</Field1>
+                    <Field2>beta</Field2>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 2: Simple Comma Delimited Unparse -->
+    <tdml:unparserTestCase name="test_comma_delimited_unparse" root="Record" model="CommaDelimitedSchema">
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Field1>alpha</Field1>
+                    <Field2>beta</Field2>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+        <tdml:document>
+            <tdml:documentPart type="text">alpha,beta</tdml:documentPart>
+        </tdml:document>
+    </tdml:unparserTestCase>
+
+    <!-- Test 3: Multi-character Delimiter (::) Parse -->
+    <tdml:parserTestCase name="test_multichar_delim_parse" root="Record" model="MultiCharDelimSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">namespace::identifier</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <PartA>namespace</PartA>
+                    <PartB>identifier</PartB>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 4: Alternative Delimiter (pipe match) -->
+    <tdml:parserTestCase name="test_alt_delim_pipe_parse" root="Record" model="AlternativeDelimSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">first|second</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Item1>first</Item1>
+                    <Item2>second</Item2>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 5: Alternative Delimiter (semicolon match) -->
+    <tdml:parserTestCase name="test_alt_delim_semicolon_parse" root="Record" model="AlternativeDelimSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">first;second</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Item1>first</Item1>
+                    <Item2>second</Item2>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 6: Newline Entity (%NL;) Delimited Parse -->
+    <tdml:parserTestCase name="test_newline_entity_delim_parse" root="Record" model="NewlineDelimSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">lineOne
+lineTwo</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Line1>lineOne</Line1>
+                    <Line2>lineTwo</Line2>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 7: Character Reference Entity (%#x2C;) Parse -->
+    <tdml:parserTestCase name="test_char_ref_delim_parse" root="Record" model="CharRefDelimSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">123,456</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <Record>
+                    <Val1>123</Val1>
+                    <Val2>456</Val2>
+                </Record>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 8: Bracketed Initiator and Terminator Parse -->
+    <tdml:parserTestCase name="test_bracketed_initiator_terminator_parse" root="BracketedRecord" model="BracketedSchema">
+        <tdml:document>
+            <tdml:documentPart type="text">[foo,bar]</tdml:documentPart>
+        </tdml:document>
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <BracketedRecord>
+                    <Left>foo</Left>
+                    <Right>bar</Right>
+                </BracketedRecord>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+    </tdml:parserTestCase>
+
+    <!-- Test 9: Bracketed Initiator and Terminator Unparse -->
+    <tdml:unparserTestCase name="test_bracketed_initiator_terminator_unparse" root="BracketedRecord" model="BracketedSchema">
+        <tdml:infoset>
+            <tdml:dfdlInfoset>
+                <BracketedRecord>
+                    <Left>foo</Left>
+                    <Right>bar</Right>
+                </BracketedRecord>
+            </tdml:dfdlInfoset>
+        </tdml:infoset>
+        <tdml:document>
+            <tdml:documentPart type="text">[foo,bar]</tdml:documentPart>
+        </tdml:document>
+    </tdml:unparserTestCase>
+
+</tdml:testSuite>

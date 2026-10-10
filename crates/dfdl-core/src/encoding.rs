@@ -801,5 +801,152 @@ mod tests {
 
         let bytes_utf16be = [0x00, 0x41, 0x00, 0x42]; // "AB" in UTF-16BE
         assert_eq!(decode_text_bytes(&bytes_utf16be, "UTF-16BE").unwrap(), "AB");
+
+        // UTF-16LE
+        let bytes_utf16le = [0x41, 0x00, 0x42, 0x00];
+        assert_eq!(decode_text_bytes(&bytes_utf16le, "UTF-16LE").unwrap(), "AB");
+        assert_eq!(encode_text_string("AB", "UTF-16LE"), bytes_utf16le);
+        assert_eq!(encode_text_string("AB", "UTF-16BE"), bytes_utf16be);
+
+        // UTF-32BE & UTF-32LE
+        let bytes_utf32be = [0x00, 0x00, 0x00, 0x41];
+        let bytes_utf32le = [0x41, 0x00, 0x00, 0x00];
+        assert_eq!(decode_text_bytes(&bytes_utf32be, "UTF-32BE").unwrap(), "A");
+        assert_eq!(decode_text_bytes(&bytes_utf32le, "UTF-32LE").unwrap(), "A");
+        assert_eq!(encode_text_string("A", "UTF-32BE"), bytes_utf32be);
+        assert_eq!(encode_text_string("A", "UTF-32LE"), bytes_utf32le);
+
+        // ASCII with byte > 127
+        assert_eq!(decode_text_bytes(&[0x41, 0xFF], "ASCII").unwrap(), "A?");
+
+        // ISO-8859-1 & CP1252
+        assert_eq!(decode_text_bytes(&[0x41, 0xDF], "ISO-8859-1").unwrap(), "Aß");
+        assert_eq!(encode_text_string("Aß", "ISO-8859-1"), [0x41, 0xDF]);
+
+        // 8-BIT-PACKED-LSB-FIRST-REVERSE
+        let rev_bytes = [0x00, 0xFF];
+        assert_eq!(decode_text_bytes(&rev_bytes, "8-BIT-PACKED-LSB-FIRST-REVERSE").unwrap(), "\u{FF}\u{00}");
+        assert_eq!(encode_text_string("\u{FF}\u{00}", "8-BIT-PACKED-LSB-FIRST-REVERSE"), rev_bytes);
+
+        // Fallback unknown encoding (UTF-8 valid and raw byte fallback)
+        assert_eq!(decode_text_bytes(b"hello", "CUSTOM-UNKNOWN").unwrap(), "hello");
+        assert_eq!(decode_text_bytes(&[0xFF], "CUSTOM-UNKNOWN").unwrap(), "\u{FF}");
+
+        // decode_text_bytes_with_offsets
+        let (txt, offs) = decode_text_bytes_with_offsets(&bytes_utf16be, "UTF-16BE");
+        assert_eq!(txt, "AB");
+        assert_eq!(offs, [0, 2, 4]);
+
+        let (txt_le, offs_le) = decode_text_bytes_with_offsets(&bytes_utf16le, "UTF-16LE");
+        assert_eq!(txt_le, "AB");
+        assert_eq!(offs_le, [0, 2, 4]);
+
+        let (txt_asc, offs_asc) = decode_text_bytes_with_offsets(b"ABC", "US-ASCII");
+        assert_eq!(txt_asc, "ABC");
+        assert_eq!(offs_asc, [0, 1, 2, 3]);
+
+        let (txt_iso, offs_iso) = decode_text_bytes_with_offsets(b"ABC", "ISO-8859-1");
+        assert_eq!(txt_iso, "ABC");
+        assert_eq!(offs_iso, [0, 1, 2, 3]);
+
+        let (txt_ebc, offs_ebc) = decode_text_bytes_with_offsets(&bytes_ebcdic, "IBM037");
+        assert_eq!(txt_ebc, "HELLO");
+        assert_eq!(offs_ebc, [0, 1, 2, 3, 4, 5]);
+
+        let (txt_other, offs_other) = decode_text_bytes_with_offsets(b"ABC", "OTHER");
+        assert_eq!(txt_other, "ABC");
+        assert_eq!(offs_other, [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_sub_byte_and_metadata_coverage() {
+        // encoding_char_bits
+        assert_eq!(encoding_char_bits("X-DFDL-BITS"), Some(1));
+        assert_eq!(encoding_char_bits("X-DFDL-BASE4"), Some(2));
+        assert_eq!(encoding_char_bits("X-DFDL-OCTAL"), Some(3));
+        assert_eq!(encoding_char_bits("X-DFDL-HEX"), Some(4));
+        assert_eq!(encoding_char_bits("X-DFDL-5-BIT-PACKED"), Some(5));
+        assert_eq!(encoding_char_bits("X-DFDL-US-ASCII-6-BIT-PACKED"), Some(6));
+        assert_eq!(encoding_char_bits("X-DFDL-US-ASCII-7-BIT-PACKED"), Some(7));
+        assert_eq!(encoding_char_bits("X-DFDL-ISO-88591-8-BIT-PACKED"), Some(8));
+        assert_eq!(encoding_char_bits("UTF-8"), None);
+        assert_eq!(encoding_char_bits("X-DFDL-UNKNOWN"), None);
+
+        // encoding_unit_bits & encoding_mandatory_alignment_bits
+        assert_eq!(encoding_unit_bits("UTF-8"), 8);
+        assert_eq!(encoding_unit_bits("UTF-16"), 16);
+        assert_eq!(encoding_unit_bits("UTF-32"), 32);
+        assert_eq!(encoding_unit_bits("X-DFDL-BITS"), 1);
+        assert_eq!(encoding_unit_bits("X-DFDL-5-BIT-PACKED"), 1);
+        assert_eq!(encoding_mandatory_alignment_bits("UTF-16"), 8);
+        assert_eq!(encoding_mandatory_alignment_bits("UTF-32"), 8);
+        assert_eq!(encoding_mandatory_alignment_bits("X-DFDL-BITS"), 1);
+
+        // BITS, BASE4, HEX, DFI-746
+        assert_eq!(decode_sub_byte_char(0, "X-DFDL-BITS"), '0');
+        assert_eq!(decode_sub_byte_char(1, "X-DFDL-BITS"), '1');
+        assert_eq!(strict_sub_byte_code('0', "X-DFDL-BITS"), Some(0));
+        assert_eq!(strict_sub_byte_code('1', "X-DFDL-BITS"), Some(1));
+
+        assert_eq!(decode_sub_byte_char(2, "X-DFDL-BASE4"), '2');
+        assert_eq!(strict_sub_byte_code('3', "X-DFDL-BASE4"), Some(3));
+
+        assert_eq!(decode_sub_byte_char(10, "X-DFDL-HEX"), 'A');
+        assert_eq!(strict_sub_byte_code('F', "X-DFDL-HEX"), Some(15));
+
+        assert_eq!(decode_sub_byte_char(2, "X-DFDL-DFI-746"), 'C');
+
+        // DFI-264-DUI-001
+        let dfi264 = "X-DFDL-DFI-264-DUI-001";
+        assert_eq!(decode_sub_byte_char(0, dfi264), '0');
+        assert_eq!(decode_sub_byte_char(9, dfi264), '9');
+        assert_eq!(decode_sub_byte_char(10, dfi264), ' ');
+        assert_eq!(decode_sub_byte_char(11, dfi264), 'A');
+        assert_eq!(decode_sub_byte_char(36, dfi264), 'Z');
+        assert_eq!(decode_sub_byte_char(99, dfi264), '?');
+
+        // DFI-1661-DUI-001
+        let dfi1661 = "X-DFDL-DFI-1661-DUI-001";
+        assert_eq!(decode_sub_byte_char(0, dfi1661), '\u{00A0}');
+        assert_eq!(decode_sub_byte_char(1, dfi1661), 'A');
+        assert_eq!(decode_sub_byte_char(26, dfi1661), 'Z');
+        assert_eq!(decode_sub_byte_char(99, dfi1661), '\u{FFFD}');
+
+        // 8-BIT-PACKED and REVERSE
+        let packed8_rev = "X-DFDL-8-BIT-PACKED-REVERSE";
+        assert_eq!(decode_sub_byte_char(0xFF, packed8_rev), '\u{00}');
+        assert_eq!(strict_sub_byte_code('\u{00}', packed8_rev), Some(0xFF));
+        let packed8 = "X-DFDL-8-BIT-PACKED";
+        assert_eq!(decode_sub_byte_char(0x41, packed8), 'A');
+        assert_eq!(strict_sub_byte_code('A', packed8), Some(0x41));
+
+        // is_variable_width_encoding
+        assert!(is_variable_width_encoding("UTF-8"));
+        assert!(is_variable_width_encoding("GB18030"));
+        assert!(is_variable_width_encoding("Shift_JIS"));
+        assert!(is_variable_width_encoding("EUC-JP"));
+        assert!(!is_variable_width_encoding("UTF-16"));
+        assert!(!is_variable_width_encoding("ASCII"));
+
+        // UTF-32BE and UTF-32LE with offsets
+        let utf32_be = [0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x42];
+        let (s32_be, off32_be) = decode_text_bytes_with_offsets(&utf32_be, "UTF-32BE");
+        assert_eq!(s32_be, "AB");
+        assert_eq!(off32_be, alloc::vec![0, 4, 8]);
+
+        let utf32_le = [0x41, 0x00, 0x00, 0x00, 0x42, 0x00, 0x00, 0x00];
+        let (s32_le, off32_le) = decode_text_bytes_with_offsets(&utf32_le, "UTF-32LE");
+        assert_eq!(s32_le, "AB");
+        assert_eq!(off32_le, alloc::vec![0, 4, 8]);
+
+        // find_unmappable_char for 8-BIT-PACKED-LSB-FIRST-REVERSE
+        assert_eq!(
+            find_unmappable_char("abc\u{0100}", "X-DFDL-8-BIT-PACKED-LSB-FIRST-REVERSE"),
+            Some('\u{0100}')
+        );
+        assert_eq!(
+            find_unmappable_char("abc\u{00FF}", "X-DFDL-8-BIT-PACKED-LSB-FIRST-REVERSE"),
+            None
+        );
     }
 }

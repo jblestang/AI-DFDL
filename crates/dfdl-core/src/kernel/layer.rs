@@ -493,6 +493,12 @@ pub fn gzip_decompress(input: &[u8]) -> crate::error::DFDLResult<(alloc::vec::Ve
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::arithmetic_side_effects
+)]
 mod tests {
     use super::*;
 
@@ -567,12 +573,9 @@ mod tests {
         assert_eq!(compressed.get(1).copied(), Some(0x8b));
         assert_eq!(compressed.get(2).copied(), Some(0x08));
 
-        let res = gzip_decompress(&compressed);
-        assert!(res.is_ok());
-        if let Ok((decompressed, consumed)) = res {
-            assert_eq!(decompressed.as_slice(), plain.as_slice());
-            assert_eq!(consumed, compressed.len());
-        }
+        let (decompressed, consumed) = gzip_decompress(&compressed).unwrap();
+        assert_eq!(decompressed.as_slice(), plain.as_slice());
+        assert_eq!(consumed, compressed.len());
     }
 
     #[test]
@@ -581,12 +584,9 @@ mod tests {
         let csv_text = b"last,first,middle,DOB\r\nsmith,robert,brandon,1988-03-24\r\njohnson,john,henry,1986-01-23\r\njones,arya,cat,1986-02-19\r\n";
         let compressed = gzip_compress(csv_text, 9);
         assert_eq!(compressed.len(), 115);
-        let res = gzip_decompress(&compressed);
-        assert!(res.is_ok());
-        if let Ok((decompressed, consumed)) = res {
-            assert_eq!(decompressed.as_slice(), csv_text.as_slice());
-            assert_eq!(consumed, 115);
-        }
+        let (decompressed, consumed) = gzip_decompress(&compressed).unwrap();
+        assert_eq!(decompressed.as_slice(), csv_text.as_slice());
+        assert_eq!(consumed, 115);
     }
 
     #[test]
@@ -601,5 +601,150 @@ mod tests {
         let short = [0x1fu8, 0x8b, 0x08, 0x00];
         let res = gzip_decompress(&short);
         assert!(res.is_err());
+    }
+
+    /// Verifies bare CR and LF unfolding in IMF headers per RFC 2822.
+    #[test]
+    fn test_unfold_imf_bare_cr_and_lf() {
+        // Bare CR followed by space
+        let with_cr = b"Field:\r continuation";
+        let (unfolded_cr, _) = unfold_imf(with_cr);
+        assert_eq!(unfolded_cr.as_slice(), b"Field: continuation");
+
+        // Bare LF followed by space
+        let with_lf = b"Field:\n continuation";
+        let (unfolded_lf, _) = unfold_imf(with_lf);
+        assert_eq!(unfolded_lf.as_slice(), b"Field: continuation");
+    }
+
+    /// Verifies base64 padding for 1-byte, 2-byte inputs and 76-character column wrapping.
+    #[test]
+    fn test_base64_padding_and_column_wrapping() {
+        // 1-byte input produces 2 '=' padding characters
+        let enc1 = encode_base64_mime(b"a");
+        assert_eq!(enc1.as_slice(), b"YQ==");
+        assert_eq!(decode_base64_mime(&enc1).as_slice(), b"a");
+
+        // 2-byte input produces 1 '=' padding character
+        let enc2 = encode_base64_mime(b"ab");
+        assert_eq!(enc2.as_slice(), b"YWI=");
+        assert_eq!(decode_base64_mime(&enc2).as_slice(), b"ab");
+
+        // Long input exceeding 76 characters triggers line break wrapping
+        let long_input = [b'X'; 120];
+        let enc_long = encode_base64_mime(&long_input);
+        assert!(enc_long.windows(2).any(|w| w == b"\r\n"));
+        let dec_long = decode_base64_mime(&enc_long);
+        assert_eq!(dec_long.as_slice(), &long_input);
+    }
+
+    /// Verifies GZIP optional headers (FEXTRA, FNAME, FCOMMENT, FHCRC) and footer error checking.
+    #[test]
+    fn test_gzip_optional_headers_and_footer_errors() {
+        let raw = b"test payload for gzip headers";
+        let gz = gzip_compress(raw, 6);
+
+        // CRC-32 mismatch error
+        let mut gz_bad_crc = gz.clone();
+        let footer_idx = gz_bad_crc.len().saturating_sub(8);
+        if let Some(slot) = gz_bad_crc.get_mut(footer_idx) {
+            *slot ^= 0xFF;
+        }
+        assert!(gzip_decompress(&gz_bad_crc).is_err());
+
+        // ISIZE mismatch error
+        let mut gz_bad_isize = gz.clone();
+        let isize_idx = gz_bad_isize.len().saturating_sub(4);
+        if let Some(slot) = gz_bad_isize.get_mut(isize_idx) {
+            *slot ^= 0xFF;
+        }
+        assert!(gzip_decompress(&gz_bad_isize).is_err());
+
+        // Truncated footer error
+        let gz_trunc_footer = &gz[..gz.len().saturating_sub(4)];
+        assert!(gzip_decompress(gz_trunc_footer).is_err());
+
+        // Synthesize GZIP member with FEXTRA, FNAME, FCOMMENT, FHCRC
+        let mut custom_gz = alloc::vec::Vec::new();
+        // ID1, ID2, CM, FLG = 0x1F (FTEXT | FHCRC | FEXTRA | FNAME | FCOMMENT)
+        custom_gz.extend_from_slice(&[0x1f, 0x8b, 0x08, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]);
+        // FEXTRA: 2 bytes length (0x0002) + 2 extra bytes
+        custom_gz.extend_from_slice(&[0x02, 0x00, 0xAA, 0xBB]);
+        // FNAME: zero-terminated string "file.txt\0"
+        custom_gz.extend_from_slice(b"file.txt\0");
+        // FCOMMENT: zero-terminated string "comment\0"
+        custom_gz.extend_from_slice(b"comment\0");
+        // FHCRC: 2 bytes
+        custom_gz.extend_from_slice(&[0x12, 0x34]);
+        // Append DEFLATE payload and footer from standard gz
+        custom_gz.extend_from_slice(&gz[10..]);
+
+        let (decomp, _) = gzip_decompress(&custom_gz).unwrap();
+        assert_eq!(decomp.as_slice(), raw);
+
+        // Corrupted deflate payload after valid 10-byte header
+        let mut corrupt_deflate = alloc::vec![0x1fu8, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF];
+        corrupt_deflate.extend_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF]);
+        assert!(gzip_decompress(&corrupt_deflate).is_err());
+
+        // Truncated DEFLATE stream (needs more input)
+        assert!(gzip_decompress(&gz[..15]).is_err());
+
+        // Truncated FEXTRA header (< offset + 2)
+        let trunc_fextra = [0x1fu8, 0x8b, 0x08, 0x04, 0, 0, 0, 0, 0, 0, 0x01];
+        assert!(gzip_decompress(&trunc_fextra).is_err());
+
+        // Unterminated FNAME string exceeding header boundary
+        let unterminated_fname = [0x1fu8, 0x8b, 0x08, 0x08, 0, 0, 0, 0, 0, 0, b'a', b'b', b'c'];
+        assert!(gzip_decompress(&unterminated_fname).is_err());
+
+        // Bare CR and bare LF folding in unfold_imf
+        let (unfolded_bare, _) = unfold_imf(b"line1\r line2\n\tline3");
+        assert_eq!(unfolded_bare.as_slice(), b"line1 line2\tline3");
+
+        // Base64 with '+' and '/' symbols, and remainders 1 and 2
+        let raw_bits = [0xFB, 0xFF, 0xBF];
+        let enc = encode_base64_mime(&raw_bits);
+        assert!(enc.contains(&b'+') || enc.contains(&b'/'));
+        let dec = decode_base64_mime(&enc);
+        assert_eq!(dec.as_slice(), &raw_bits);
+
+        let rem1 = [0x42];
+        let enc1 = encode_base64_mime(&rem1);
+        assert_eq!(decode_base64_mime(&enc1).as_slice(), &rem1);
+
+        let rem2 = [0x42, 0x43];
+        let enc2 = encode_base64_mime(&rem2);
+        assert_eq!(decode_base64_mime(&enc2).as_slice(), &rem2);
+
+        // GZIP with FCOMMENT (0x10) and FHCRC (0x02)
+        let mut gz_comment = alloc::vec![0x1fu8, 0x8b, 0x08, 0x12, 0, 0, 0, 0, 0, 0];
+        gz_comment.extend_from_slice(b"mycomment\0"); // FCOMMENT
+        gz_comment.extend_from_slice(&[0x55, 0xAA]);   // FHCRC
+        if gz.len() > 10 {
+            gz_comment.extend_from_slice(&gz[10..]);
+            let decomp = gzip_decompress(&gz_comment);
+            assert!(decomp.is_ok());
+        }
+
+        // Corrupted/truncated GZIP header exceeding bounds
+        let trunc_hdr = [0x1fu8, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0, 0, 1, 2];
+        assert!(gzip_decompress(&trunc_hdr).is_err());
+
+        // Verifies unfold_imf handling of bare CR followed by whitespace (RFC 2045 unfolding).
+        let (unfolded_cr, offsets_cr) = unfold_imf(b"Header:\r value\r\tcontinued");
+        assert_eq!(unfolded_cr.as_slice(), b"Header: value\tcontinued");
+        assert!(!offsets_cr.is_empty());
+
+        // Verifies rejection of truncated GZIP FEXTRA header where length bytes are truncated.
+        let trunc_fextra = [0x1fu8, 0x8b, 0x08, 0x04, 0, 0, 0, 0, 0, 0, 0x01];
+        assert!(gzip_decompress(&trunc_fextra).is_err());
+
+        // Verifies rejection of corrupted DEFLATE compressed payload stream with invalid block headers.
+        let bad_deflate = [
+            0x1fu8, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0, 0,
+            0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        assert!(gzip_decompress(&bad_deflate).is_err());
     }
 }

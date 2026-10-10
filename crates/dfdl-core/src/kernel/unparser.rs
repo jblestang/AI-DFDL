@@ -849,16 +849,38 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         raw_delim: &str,
         props: &ResolvedProperties,
     ) -> DFDLResult<String> {
-        let trimmed = raw_delim.trim();
-        let eval_str = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-            let ast = crate::expr::parse_expr(trimmed)?;
-            let mut ctx = self.make_expr_context();
-            let val = crate::expr::eval_expr(&ast, &mut ctx)?;
-            alloc::format!("{}", val)
-        } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-            alloc::format!("{{{stripped}")
+        let matching_prop = if props.initiator.as_deref() == Some(raw_delim) {
+            props.initiator_prop.as_ref()
+        } else if props.terminator.as_deref() == Some(raw_delim) {
+            props.terminator_prop.as_ref()
+        } else if props.separator.as_deref() == Some(raw_delim) {
+            props.separator_prop.as_ref()
+        } else if props.nil_value.as_deref() == Some(raw_delim) {
+            props.nil_value_prop.as_ref()
         } else {
-            String::from(raw_delim)
+            None
+        };
+
+        let eval_str = match matching_prop {
+            Some(crate::schema::ir::DfdlProp::Constant(c)) => c.clone(),
+            Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
+                let mut ctx = self.make_expr_context();
+                let val = crate::expr::eval_expr(ast, &mut ctx)?;
+                alloc::format!("{}", val)
+            }
+            None => {
+                let trimmed = raw_delim.trim();
+                if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
+                    let ast = crate::expr::parse_expr(trimmed)?;
+                    let mut ctx = self.make_expr_context();
+                    let val = crate::expr::eval_expr(&ast, &mut ctx)?;
+                    alloc::format!("{}", val)
+                } else if let Some(stripped) = trimmed.strip_prefix("{{") {
+                    alloc::format!("{{{stripped}")
+                } else {
+                    String::from(raw_delim)
+                }
+            }
         };
 
         // If delimiter contains alternatives, choose the first alternative for unparsing (DFDL §12.3)
@@ -873,26 +895,38 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
 
     /// Resolves the target newline string from `dfdl:outputNewLine`, evaluating dynamic expressions if present.
     fn resolve_output_new_line(&mut self, props: &ResolvedProperties) -> String {
-        let raw = match props.output_new_line.as_deref() {
-            Some(r) => r,
-            None => return String::from("\n"),
-        };
-        let trimmed = raw.trim();
-        let eval_str = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-            if let Ok(ast) = crate::expr::parse_expr(trimmed) {
+        let eval_str = match props.output_new_line_prop.as_ref() {
+            Some(crate::schema::ir::DfdlProp::Constant(c)) => c.clone(),
+            Some(crate::schema::ir::DfdlProp::Expression { ast, raw }) => {
                 let mut ctx = self.make_expr_context();
-                if let Ok(val) = crate::expr::eval_expr(&ast, &mut ctx) {
+                if let Ok(val) = crate::expr::eval_expr(ast, &mut ctx) {
                     alloc::format!("{}", val)
                 } else {
-                    String::from(raw)
+                    raw.clone()
                 }
-            } else {
-                String::from(raw)
             }
-        } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-            alloc::format!("{{{stripped}")
-        } else {
-            String::from(raw)
+            None => match props.output_new_line.as_deref() {
+                Some(r) => {
+                    let trimmed = r.trim();
+                    if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
+                        if let Ok(ast) = crate::expr::parse_expr(trimmed) {
+                            let mut ctx = self.make_expr_context();
+                            if let Ok(val) = crate::expr::eval_expr(&ast, &mut ctx) {
+                                alloc::format!("{}", val)
+                            } else {
+                                String::from(r)
+                            }
+                        } else {
+                            String::from(r)
+                        }
+                    } else if let Some(stripped) = trimmed.strip_prefix("{{") {
+                        alloc::format!("{{{stripped}")
+                    } else {
+                        String::from(r)
+                    }
+                }
+                None => return String::from("\n"),
+            },
         };
 
         match eval_str.as_str() {
@@ -928,22 +962,47 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         raw_delim: &str,
         props: &ResolvedProperties,
     ) -> Vec<String> {
-        let trimmed = raw_delim.trim();
-        let eval_str = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-            if let Ok(ast) = crate::expr::parse_expr(trimmed) {
+        let matching_prop = if props.initiator.as_deref() == Some(raw_delim) {
+            props.initiator_prop.as_ref()
+        } else if props.terminator.as_deref() == Some(raw_delim) {
+            props.terminator_prop.as_ref()
+        } else if props.separator.as_deref() == Some(raw_delim) {
+            props.separator_prop.as_ref()
+        } else if props.nil_value.as_deref() == Some(raw_delim) {
+            props.nil_value_prop.as_ref()
+        } else {
+            None
+        };
+
+        let eval_str = match matching_prop {
+            Some(crate::schema::ir::DfdlProp::Constant(c)) => c.clone(),
+            Some(crate::schema::ir::DfdlProp::Expression { ast, raw }) => {
                 let mut ctx = self.make_expr_context();
-                if let Ok(val) = crate::expr::eval_expr(&ast, &mut ctx) {
+                if let Ok(val) = crate::expr::eval_expr(ast, &mut ctx) {
                     alloc::format!("{}", val)
+                } else {
+                    raw.clone()
+                }
+            }
+            None => {
+                let trimmed = raw_delim.trim();
+                if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
+                    if let Ok(ast) = crate::expr::parse_expr(trimmed) {
+                        let mut ctx = self.make_expr_context();
+                        if let Ok(val) = crate::expr::eval_expr(&ast, &mut ctx) {
+                            alloc::format!("{}", val)
+                        } else {
+                            String::from(raw_delim)
+                        }
+                    } else {
+                        String::from(raw_delim)
+                    }
+                } else if let Some(stripped) = trimmed.strip_prefix("{{") {
+                    alloc::format!("{{{stripped}")
                 } else {
                     String::from(raw_delim)
                 }
-            } else {
-                String::from(raw_delim)
             }
-        } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-            alloc::format!("{{{stripped}")
-        } else {
-            String::from(raw_delim)
         };
 
         let nl_replacement = self.resolve_output_new_line(props);
@@ -1058,19 +1117,26 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         }
     }
 
-    fn eval_runtime_prop_str(&mut self, raw: &str) -> String {
-        let trimmed = raw.trim();
-        if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-            if let Ok(ast) = crate::expr::parse_expr(trimmed) {
+    fn eval_runtime_prop(&mut self, prop: &crate::schema::ir::DfdlProp<String>) -> String {
+        match prop {
+            crate::schema::ir::DfdlProp::Constant(s) => s.clone(),
+            crate::schema::ir::DfdlProp::Expression { ast, raw } => {
                 let mut ctx = self.make_expr_context();
-                if let Ok(val) = crate::expr::eval_expr(&ast, &mut ctx) {
-                    return alloc::format!("{}", val);
+                if let Ok(val) = crate::expr::eval_expr(ast, &mut ctx) {
+                    alloc::format!("{}", val)
+                } else {
+                    raw.clone()
                 }
             }
-        } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-            return alloc::format!("{{{stripped}");
         }
-        String::from(raw)
+    }
+
+    fn eval_runtime_prop_str(&mut self, raw: &str) -> String {
+        if let Ok(prop) = crate::schema::ir::DfdlProp::parse_str(raw) {
+            self.eval_runtime_prop(&prop)
+        } else {
+            String::from(raw)
+        }
     }
 
     fn apply_escape_scheme(
@@ -1437,13 +1503,9 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             }
             let mut local_props;
             let mut has_local = false;
-            if term.properties.encoding.starts_with('{')
-                && term.properties.encoding.ends_with('}')
-            {
-                let enc_expr = &term.properties.encoding[1..term.properties.encoding.len().saturating_sub(1)].trim();
-                let ast = crate::expr::parse_expr(enc_expr)?;
+            if let Some(ast) = term.properties.encoding_prop.expr_ast() {
                 let mut ctx = self.make_expr_context();
-                let val = crate::expr::eval_expr(&ast, &mut ctx)?;
+                let val = crate::expr::eval_expr(ast, &mut ctx)?;
                 let dyn_encoding = match val {
                     DfdlValue::String(s) => s,
                     other => alloc::format!("{}", other),
@@ -1491,11 +1553,9 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             } else {
                 local_props = term.properties.clone();
             }
-            if let Some(ref bo_expr) = term.properties.byte_order_expr {
-                let expr_clean = bo_expr.trim().strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or(bo_expr).trim();
-                let ast = crate::expr::parse_expr(expr_clean)?;
+            if let Some(ast) = term.properties.byte_order_prop.expr_ast() {
                 let mut ctx = self.make_expr_context();
-                if let Ok(val) = crate::expr::eval_expr(&ast, &mut ctx) {
+                if let Ok(val) = crate::expr::eval_expr(ast, &mut ctx) {
                     local_props.byte_order =
                         crate::expr::properties::parse_byte_order(&alloc::format!("{}", val))?;
                     has_local = true;
@@ -1886,53 +1946,20 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         val_len: usize,
         props: &ResolvedProperties,
     ) -> DFDLResult<()> {
-        let ptype = props
+        let desc = props
             .prefix_length_type
-            .as_deref()
-            .unwrap_or("xs:unsignedShort");
-        if ptype.contains('@') {
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| crate::schema::ir::PrefixLengthDescriptor::from_legacy_desc("xs:unsignedShort"));
+        if desc.nested.is_some() {
             let msg = alloc::format!(
                 "Unparse Error: Nested dfdl:lengthKind='prefixed' is not supported (prefixLengthType '{}')",
-                ptype
+                desc.name
             );
             return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
         }
-        let parts: Vec<&str> = ptype.split(':').collect();
-        let (is_text, prefix_bits) = if parts.len() >= 4 {
-            let rep = parts.get(1).copied().unwrap_or("binary");
-            let units = parts.get(3).copied().unwrap_or("bytes");
-            let is_txt = rep.eq_ignore_ascii_case("text");
-            let num_len: usize = parts
-                .get(2)
-                .filter(|s| !s.is_empty())
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(|| {
-                    let clean_ptype = parts.first().copied().unwrap_or(ptype);
-                    match clean_ptype {
-                        "byte" | "unsignedByte" => 1,
-                        "short" | "unsignedShort" => 2,
-                        "int" | "unsignedInt" => 4,
-                        "long" | "unsignedLong" | "integer" | "nonNegativeInteger" => 8,
-                        _ => 2,
-                    }
-                });
-            let bits = if units.eq_ignore_ascii_case("bits") {
-                num_len
-            } else {
-                num_len.saturating_mul(8)
-            };
-            (is_txt, bits)
-        } else {
-            let clean_ptype = parts.last().copied().unwrap_or(ptype);
-            let bits = match clean_ptype {
-                "byte" | "unsignedByte" => 8,
-                "short" | "unsignedShort" => 16,
-                "int" | "unsignedInt" => 32,
-                "long" | "unsignedLong" | "integer" | "nonNegativeInteger" => 64,
-                _ => 16,
-            };
-            (false, bits)
-        };
+        let is_text = desc.is_text();
+        let prefix_bits = desc.prefix_bits();
         let prefix_units = match props.length_units {
             crate::schema::ir::LengthUnits::Bits => prefix_bits,
             crate::schema::ir::LengthUnits::Bytes
@@ -1943,44 +1970,39 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         } else {
             val_len as u64
         };
-        let min_inc = parts.get(4).copied().unwrap_or("");
-        let max_inc = parts.get(5).copied().unwrap_or("");
-        if !max_inc.is_empty() {
-            if let Ok(max) = max_inc.parse::<u64>() {
-                if raw_val > max {
-                    let name = self
-                        .current_path
-                        .segments()
-                        .last()
-                        .map(|s| s.as_str())
-                        .unwrap_or("element");
-                    let msg = alloc::format!("Unparse Error: failed check {name} ({raw_val}) facet maxInclusive ({max})");
-                    return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
-                }
+        if let Some(max) = desc.max_inclusive {
+            if (raw_val as i64) > max {
+                let name = self
+                    .current_path
+                    .segments()
+                    .last()
+                    .map(|s| s.as_str())
+                    .unwrap_or("element");
+                let msg = alloc::format!("Unparse Error: failed check {name} ({raw_val}) facet maxInclusive ({max})");
+                return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
             }
         }
-        if !min_inc.is_empty() {
-            if let Ok(min) = min_inc.parse::<u64>() {
-                if raw_val < min {
-                    let name = self
-                        .current_path
-                        .segments()
-                        .last()
-                        .map(|s| s.as_str())
-                        .unwrap_or("element");
-                    let msg = alloc::format!("Unparse Error: failed check {name} ({raw_val}) facet minInclusive ({min})");
-                    return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
-                }
+        if let Some(min) = desc.min_inclusive {
+            if (raw_val as i64) < min {
+                let name = self
+                    .current_path
+                    .segments()
+                    .last()
+                    .map(|s| s.as_str())
+                    .unwrap_or("element");
+                let msg = alloc::format!("Unparse Error: failed check {name} ({raw_val}) facet minInclusive ({min})");
+                return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
             }
         }
         if is_text {
             let s = alloc::format!("{}", raw_val);
             let target_bytes = prefix_bits.div_ceil(8);
+            let pad_c = desc.pad_char.unwrap_or(' ');
             let out = if s.len() < target_bytes {
                 let pad_len = target_bytes - s.len();
                 let mut padded = String::with_capacity(target_bytes);
                 for _ in 0..pad_len {
-                    padded.push(' ');
+                    padded.push(pad_c);
                 }
                 padded.push_str(&s);
                 padded
@@ -2119,10 +2141,32 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
     }
 
     fn resolve_explicit_length(&mut self, props: &ResolvedProperties) -> DFDLResult<Option<usize>> {
-        if let Some(l) = props.length {
+        if let Some(ref prop) = props.length_prop {
+            match prop {
+                crate::schema::ir::DfdlProp::Constant(l) => return Ok(Some(*l)),
+                crate::schema::ir::DfdlProp::Expression { ast, .. } => {
+                    let mut ctx = self.make_expr_context();
+                    let val = crate::expr::eval_expr(ast, &mut ctx)?;
+                    let len_opt = match val {
+                        DfdlValue::Int(v) if v >= 0 => Some(v as usize),
+                        DfdlValue::Long(v) if v >= 0 => Some(v as usize),
+                        DfdlValue::UnsignedInt(v) => Some(v as usize),
+                        DfdlValue::UnsignedLong(v) => Some(v as usize),
+                        DfdlValue::UnsignedShort(v) => Some(v as usize),
+                        DfdlValue::UnsignedByte(v) => Some(v as usize),
+                        DfdlValue::Short(v) if v >= 0 => Some(v as usize),
+                        DfdlValue::Byte(v) if v >= 0 => Some(v as usize),
+                        DfdlValue::String(s) => s.trim().parse::<usize>().ok(),
+                        _ => None,
+                    };
+                    if len_opt.is_some() {
+                        return Ok(len_opt);
+                    }
+                }
+            }
+        } else if let Some(l) = props.length {
             return Ok(Some(l));
-        }
-        if let Some(ref expr_str) = props.length_expr {
+        } else if let Some(ref expr_str) = props.length_expr {
             if let Ok(ast) = crate::expr::parse_expr(expr_str) {
                 let mut ctx = self.make_expr_context();
                 let val = crate::expr::eval_expr(&ast, &mut ctx)?;
@@ -2741,23 +2785,26 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
     ) -> DFDLResult<()> {
         let mut s = match val {
             DfdlValue::Boolean(b) => {
-                let rep_opt = if *b {
-                    props.text_boolean_true_rep.as_deref()
+                let eval_rep_opt = if *b {
+                    match props.text_boolean_true_rep_prop.as_ref() {
+                        Some(crate::schema::ir::DfdlProp::Constant(c)) => Some(c.clone()),
+                        Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
+                            let mut ctx = self.make_expr_context();
+                            crate::expr::eval_expr(ast, &mut ctx).ok().map(|v| alloc::format!("{}", v))
+                        }
+                        None => props.text_boolean_true_rep.clone(),
+                    }
                 } else {
-                    props.text_boolean_false_rep.as_deref()
+                    match props.text_boolean_false_rep_prop.as_ref() {
+                        Some(crate::schema::ir::DfdlProp::Constant(c)) => Some(c.clone()),
+                        Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
+                            let mut ctx = self.make_expr_context();
+                            crate::expr::eval_expr(ast, &mut ctx).ok().map(|v| alloc::format!("{}", v))
+                        }
+                        None => props.text_boolean_false_rep.clone(),
+                    }
                 };
-                if let Some(raw_rep) = rep_opt {
-                    let trimmed = raw_rep.trim();
-                    let eval_rep = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-                        let ast = crate::expr::parse_expr(trimmed)?;
-                        let mut ctx = self.make_expr_context();
-                        let v = crate::expr::eval_expr(&ast, &mut ctx)?;
-                        alloc::format!("{}", v)
-                    } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-                        alloc::format!("{{{stripped}")
-                    } else {
-                        String::from(raw_rep)
-                    };
+                if let Some(eval_rep) = eval_rep_opt {
                     let first_alt = eval_rep.split_whitespace().next().unwrap_or("").to_string();
                     crate::expr::properties::decode_dfdl_character_entities(&first_alt)
                 } else {
@@ -2855,38 +2902,33 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
             DfdlValue::DateTime(s_val) | DfdlValue::Date(s_val) | DfdlValue::Time(s_val) => {
                 if let Some(ref pat) = props.calendar_pattern {
                     if !pat.is_empty() {
-                        let lang = if let Some(ref raw_lang) = props.calendar_language {
-                            let trimmed = raw_lang.trim();
-                            let eval_lang = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-                                let ast = crate::expr::parse_expr(trimmed)?;
+                        let lang = match props.calendar_language_prop.as_ref() {
+                            Some(crate::schema::ir::DfdlProp::Constant(c)) => {
+                                crate::kernel::parser::calendar::validate_calendar_language_syntax(c)?;
+                                Some(c.clone())
+                            }
+                            Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
                                 let mut ctx = self.make_expr_context();
-                                let v = crate::expr::eval_expr(&ast, &mut ctx)?;
-                                alloc::format!("{}", v)
-                            } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-                                alloc::format!("{{{stripped}")
+                                let v = crate::expr::eval_expr(ast, &mut ctx)?;
+                                let s = alloc::format!("{}", v);
+                                crate::kernel::parser::calendar::validate_calendar_language_syntax(&s)?;
+                                Some(s)
+                            }
+                            None => if let Some(ref raw_lang) = props.calendar_language {
+                                crate::kernel::parser::calendar::validate_calendar_language_syntax(raw_lang)?;
+                                Some(raw_lang.clone())
                             } else {
-                                String::from(raw_lang)
-                            };
-                            crate::kernel::parser::calendar::validate_calendar_language_syntax(&eval_lang)?;
-                            Some(eval_lang)
-                        } else {
-                            None
+                                None
+                            },
                         };
-                        let tz = if let Some(ref raw_tz) = props.calendar_time_zone {
-                            let trimmed = raw_tz.trim();
-                            let eval_tz = if trimmed.starts_with('{') && !trimmed.starts_with("{{") {
-                                let ast = crate::expr::parse_expr(trimmed)?;
+                        let tz = match props.calendar_time_zone_prop.as_ref() {
+                            Some(crate::schema::ir::DfdlProp::Constant(c)) => Some(c.clone()),
+                            Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
                                 let mut ctx = self.make_expr_context();
-                                let v = crate::expr::eval_expr(&ast, &mut ctx)?;
-                                alloc::format!("{}", v)
-                            } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-                                alloc::format!("{{{stripped}")
-                            } else {
-                                String::from(raw_tz)
-                            };
-                            Some(eval_tz)
-                        } else {
-                            None
+                                let v = crate::expr::eval_expr(ast, &mut ctx)?;
+                                Some(alloc::format!("{}", v))
+                            }
+                            None => props.calendar_time_zone.clone(),
                         };
                         crate::kernel::parser::calendar::format_calendar_with_pattern(
                             s_val,
@@ -5003,5 +5045,779 @@ mod tests {
         let text = core::str::from_utf8(&bytes).unwrap();
         assert_eq!(text, "110");
     }
+
+    /// Verifies delimiter entity substitution during unparsing per DFDL §6.3.1.
+    #[test]
+    fn test_decode_unparse_delimiter_all_entities() {
+        // Escaped percent and comma
+        assert_eq!(decode_unparse_delimiter("%% %,", "\n"), "% ,");
+
+        // Newline substitution with specific CRLF target
+        assert_eq!(decode_unparse_delimiter("header%NL;body", "\r\n"), "header\r\nbody");
+
+        // Control entities
+        let input = "%CR;%LF;%NEL;%LS;%FF;%VT;%SP;%HT;%NUL;%ES;";
+        let expected = "\r\n\u{0085}\u{2028}\x0C\x0B \t\0";
+        assert_eq!(decode_unparse_delimiter(input, "\n"), expected);
+
+        // Whitespace entities
+        assert_eq!(decode_unparse_delimiter("%WSP;%WSP+;%WSP*;", "\n"), "  ");
+
+        // Character references in hex and decimal
+        let char_refs = "%#x41;%#r42;%#d67;%#68;";
+        assert_eq!(decode_unparse_delimiter(char_refs, "\n"), "ABCD");
+
+        // Unrecognized %# fallback
+        assert_eq!(decode_unparse_delimiter("%#INVALID;", "\n"), "%#INVALID;");
+    }
+
+    /// Verifies fill byte extraction and bitstream padding across byte and sub-byte boundaries.
+    #[test]
+    fn test_fill_byte_value_and_padding_logic() {
+        // When fillByte is not defined, fill_byte_value must return SchemaDefinition error
+        let props_undefined = ResolvedProperties {
+            fill_byte_defined: false,
+            ..Default::default()
+        };
+        assert!(fill_byte_value(&props_undefined).is_err());
+
+        // When defined, returns the byte value
+        let props_defined = ResolvedProperties {
+            fill_byte_defined: true,
+            fill_byte: 0xAA,
+            ..Default::default()
+        };
+        assert_eq!(fill_byte_value(&props_defined).unwrap(), 0xAA);
+
+        // 0-bit padding is a no-op
+        let mut writer1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        assert!(write_fill_padding(&mut writer1, 0xFF, 0).is_ok());
+        writer1.flush().unwrap();
+        assert!(writer1.into_sink().into_vec().is_empty());
+
+        // Full 2 bytes padding with MSBF
+        let mut writer2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        assert!(write_fill_padding(&mut writer2, 0x5A, 16).is_ok());
+        writer2.flush().unwrap();
+        assert_eq!(writer2.into_sink().into_vec(), alloc::vec![0x5A, 0x5A]);
+
+        // Sub-byte padding (3 bits) with MSBF: 0x80 >> (8 - 3) = 0x80 >> 5 = 4
+        let mut writer3 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        assert!(write_fill_padding(&mut writer3, 0b1000_0000, 3).is_ok());
+        // Remaining 5 bits to round to full byte
+        writer3.write_bits(0, 5).unwrap();
+        writer3.flush().unwrap();
+        assert_eq!(writer3.into_sink().into_vec(), alloc::vec![0b1000_0000]);
+
+        // Sub-byte padding (3 bits) with LSBF: 0x05 & 0b111 = 5
+        let mut writer4 = BitWriter::new(VecByteSink::new(), BitOrder::LeastSignificantBitFirst, ByteOrder::BigEndian);
+        assert!(write_fill_padding(&mut writer4, 0b0000_0101, 3).is_ok());
+        writer4.write_bits(0, 5).unwrap();
+        writer4.flush().unwrap();
+        assert_eq!(writer4.into_sink().into_vec(), alloc::vec![0b0000_0101]);
+    }
+
+    /// Verifies that BCD unparsing rejects negative integers, and IBM 4690 rejects invalid non-numeric types.
+    #[test]
+    fn test_unparse_bcd_and_ibm4690_error_branches() {
+        let mut builder = SchemaBuilder::new();
+        let elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("val"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let bcd_props = ResolvedProperties {
+            representation: Representation::Binary,
+            binary_number_rep: crate::schema::ir::BinaryNumberRep::Bcd,
+            length_kind: crate::schema::ir::LengthKind::Implicit,
+            ..Default::default()
+        };
+        let root_id = builder
+            .add_term_with_props(crate::types::QName::local("val"), TermKind::Element(elem), bcd_props)
+            .unwrap();
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+
+        let mut writer = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(1000);
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+
+        // BCD negative int value returns an unparse error
+        let neg_info = InfosetElement::simple(crate::types::QName::local("val"), ElementState::Value(DfdlValue::Int(-42)));
+        let err = unparser.unparse_element(root_id, &neg_info).unwrap_err();
+        assert!(err.message.as_str().contains("bcd only positive, cannot be negative"));
+
+        // Setup IBM 4690 schema with Boolean type to reach packed decimal type mismatch error
+        let mut builder2 = SchemaBuilder::new();
+        let elem2 = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("ibm"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Boolean),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let ibm_props = ResolvedProperties {
+            representation: Representation::Binary,
+            binary_number_rep: crate::schema::ir::BinaryNumberRep::Ibm4690Packed,
+            length_kind: crate::schema::ir::LengthKind::Implicit,
+            ..Default::default()
+        };
+        let root_id2 = builder2
+            .add_term_with_props(crate::types::QName::local("ibm"), TermKind::Element(elem2), ibm_props)
+            .unwrap();
+        builder2.set_root(root_id2);
+        let schema2 = builder2.build().unwrap();
+
+        let mut writer2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget2 = WorkBudget::new(1000);
+        let mut unparser2 = UnparserEngine::new(&schema2, &mut writer2, &mut budget2);
+
+        // IBM4690 non-numeric value returns an unparse error
+        let non_num_info = InfosetElement::simple(crate::types::QName::local("ibm"), ElementState::Value(DfdlValue::Boolean(true)));
+        let err2 = unparser2.unparse_element(root_id2, &non_num_info).unwrap_err();
+        assert!(err2.message.as_str().contains("Cannot unparse Boolean(true) as ibm4690 packed decimal"));
+    }
+
+    /// Verifies xs:hexBinary string facet validation errors (odd length and non-hex characters).
+    #[test]
+    fn test_unparse_hex_binary_facet_validation_errors() {
+        let mut builder = SchemaBuilder::new();
+        let elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("hexElem"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::HexBinary),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let props = ResolvedProperties {
+            representation: Representation::Text,
+            length_kind: crate::schema::ir::LengthKind::Delimited,
+            ..Default::default()
+        };
+        let root_id = builder
+            .add_term_with_props(crate::types::QName::local("hexElem"), TermKind::Element(elem), props)
+            .unwrap();
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+
+        let mut writer = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(1000);
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+
+        // Odd length hex string
+        let odd_info = InfosetElement::simple(
+            crate::types::QName::local("hexElem"),
+            ElementState::Value(DfdlValue::String(alloc::string::String::from("ABC"))),
+        );
+        let err_odd = unparser.unparse_element(root_id, &odd_info).unwrap_err();
+        assert!(err_odd.message.as_str().contains("even number of characters required"));
+
+        // Invalid hex characters
+        let invalid_info = InfosetElement::simple(
+            crate::types::QName::local("hexElem"),
+            ElementState::Value(DfdlValue::String(alloc::string::String::from("ABZZ"))),
+        );
+        let err_inv = unparser.unparse_element(root_id, &invalid_info).unwrap_err();
+        assert!(err_inv.message.as_str().contains("invalid hex digits"));
+    }
+
+    /// Verifies unparsing error paths when document root is missing or has a mismatched QName.
+    #[test]
+    fn test_unparse_document_empty_and_mismatch_errors() {
+        let mut builder = SchemaBuilder::new();
+        let elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("expectedRoot"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder
+            .add_term_with_props(crate::types::QName::local("expectedRoot"), TermKind::Element(elem), ResolvedProperties::default())
+            .unwrap();
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+
+        let mut writer = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(1000);
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+
+        // Empty document with no root element
+        let empty_doc = InfosetDocument { root: None, total_nodes: 0 };
+        let err_empty = unparser.unparse_document(&empty_doc).unwrap_err();
+        assert!(err_empty.message.as_str().contains("Cannot unparse an empty InfosetDocument with no root element"));
+
+        // Mismatched root element name
+        let wrong_root = InfosetElement::simple(
+            crate::types::QName::local("actualRoot"),
+            ElementState::Value(DfdlValue::String(alloc::string::String::from("val"))),
+        );
+        let mismatched_doc = InfosetDocument::with_root(wrong_root);
+        let err_mismatch = unparser.unparse_document(&mismatched_doc).unwrap_err();
+        assert!(err_mismatch.message.as_str().contains("expected element start '{}expectedRoot', received '{}actualRoot'"));
+
+        // External variable setting and warning escalation
+        assert!(unparser.set_external_variable("var1", "100").is_ok());
+        unparser.set_escalate_warnings(true);
+        assert!(unparser.variable_map.escalate_warnings);
+    }
+
+    /// Verifies unparser framing leading skip, bitOrder change byte alignment, and array min/maxOccurs bounds enforcement.
+    #[test]
+    fn test_unparser_framing_and_occurrence_errors() {
+        // 1. BitOrder change on non-byte boundary error (lines 235-246)
+        let mut builder_bo = SchemaBuilder::new();
+        let elem_bo = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("root_bo"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Byte),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let props_lsbf = ResolvedProperties {
+            alignment: 1,
+            alignment_units: crate::schema::ir::AlignmentUnits::Bits,
+            bit_order: BitOrder::LeastSignificantBitFirst,
+            ..Default::default()
+        };
+        let root_bo_id = builder_bo.add_term_with_props(crate::types::QName::local("root_bo"), TermKind::Element(elem_bo), props_lsbf).unwrap();
+        builder_bo.set_root(root_bo_id);
+        let schema_bo = builder_bo.build().unwrap();
+
+        let mut writer_bo = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        // Write unaligned 3 bits
+        writer_bo.write_bits(0b101, 3).unwrap();
+        let mut budget_bo = WorkBudget::new(1000);
+        let mut unparser_bo = UnparserEngine::new(&schema_bo, &mut writer_bo, &mut budget_bo);
+        let elem_info = InfosetElement::simple(crate::types::QName::local("root_bo"), ElementState::Value(DfdlValue::Byte(1)));
+        let doc_bo = InfosetDocument::with_root(elem_info);
+        let res_bo = unparser_bo.unparse_document(&doc_bo);
+        assert!(res_bo.is_err());
+        assert!(res_bo.unwrap_err().message.as_str().contains("Can only change bitOrder on a byte boundary"));
+
+        // 2. Element occurrences below minOccurs and above maxOccurs (lines 303-326)
+        let mut builder_occ = SchemaBuilder::new();
+        let child_elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("item"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Int),
+            min_occurs: 2,
+            max_occurs: Some(3),
+            is_nillable: false,
+            default_value: None,
+        };
+        let child_id = builder_occ.add_term_with_props(crate::types::QName::local("item"), TermKind::Element(child_elem), ResolvedProperties::default()).unwrap();
+        let seq = crate::schema::ir::CompiledSequence { members: alloc::vec![child_id] };
+        let seq_id = builder_occ.add_term_with_props(crate::types::QName::local("seq"), TermKind::Sequence(seq), ResolvedProperties::default()).unwrap();
+        let parent_elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("container"),
+            type_ir: crate::schema::ir::CompiledType::Complex(seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let parent_id = builder_occ.add_term_with_props(crate::types::QName::local("container"), TermKind::Element(parent_elem), ResolvedProperties::default()).unwrap();
+        builder_occ.set_root(parent_id);
+        let schema_occ = builder_occ.build().unwrap();
+
+        // Too few occurrences (1 found, minOccurs is 2)
+        let mut elem_too_few = InfosetElement::complex(crate::types::QName::local("container"));
+        elem_too_few.try_add_child(InfosetNode::Element(InfosetElement::simple(crate::types::QName::local("item"), ElementState::Value(DfdlValue::Int(1))))).unwrap();
+        let doc_too_few = InfosetDocument::with_root(elem_too_few.clone());
+
+        let mut writer1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget1 = WorkBudget::new(1000);
+        let mut unparser1 = UnparserEngine::new(&schema_occ, &mut writer1, &mut budget1);
+        let err_too_few = unparser1.unparse_document(&doc_too_few).unwrap_err();
+        assert!(err_too_few.message.as_str().contains("at least 2 required"));
+
+        // Direct unparse_term for element occurrence lower bound
+        let mut writer_direct1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_direct1 = WorkBudget::new(1000);
+        let mut unparser_direct1 = UnparserEngine::new(&schema_occ, &mut writer_direct1, &mut budget_direct1);
+        let err_direct1 = unparser_direct1.unparse_term(child_id, &elem_too_few).unwrap_err();
+        assert!(err_direct1.message.as_str().contains("Expected at least 2 occurrence(s)"));
+
+        // Too many occurrences (4 found, maxOccurs is 3)
+        let mut elem_too_many = InfosetElement::complex(crate::types::QName::local("container"));
+        for i in 0..4 {
+            elem_too_many.try_add_child(InfosetNode::Element(InfosetElement::simple(crate::types::QName::local("item"), ElementState::Value(DfdlValue::Int(i))))).unwrap();
+        }
+        let doc_too_many = InfosetDocument::with_root(elem_too_many.clone());
+
+        let mut writer2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget2 = WorkBudget::new(1000);
+        let mut unparser2 = UnparserEngine::new(&schema_occ, &mut writer2, &mut budget2);
+        let err_too_many = unparser2.unparse_document(&doc_too_many).unwrap_err();
+        assert!(err_too_many.message.as_str().contains("exceeding maxOccurs 3"));
+
+        // Direct unparse_term for element occurrence upper bound
+        let mut writer_direct2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_direct2 = WorkBudget::new(1000);
+        let mut unparser_direct2 = UnparserEngine::new(&schema_occ, &mut writer_direct2, &mut budget_direct2);
+        let err_direct2 = unparser_direct2.unparse_term(child_id, &elem_too_many).unwrap_err();
+        assert!(err_direct2.message.as_str().contains("exceeding maxOccurs 3"));
+
+        // 3. Non-element sequence leading_skip during unparsing (lines 223-230)
+        let mut builder_skip = SchemaBuilder::new();
+        let skip_props = ResolvedProperties {
+            leading_skip: 1,
+            alignment_units: crate::schema::ir::AlignmentUnits::Bytes,
+            ..Default::default()
+        };
+        let empty_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let skip_seq_id = builder_skip.add_term_with_props(crate::types::QName::local("s"), TermKind::Sequence(empty_seq), skip_props).unwrap();
+        builder_skip.set_root(skip_seq_id);
+        let schema_skip = builder_skip.build().unwrap();
+
+        let mut writer_skip = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_skip = WorkBudget::new(1000);
+        let mut unparser_skip = UnparserEngine::new(&schema_skip, &mut writer_skip, &mut budget_skip);
+        let elem_dummy = InfosetElement::complex(crate::types::QName::local("s"));
+        assert!(unparser_skip.unparse_term(skip_seq_id, &elem_dummy).is_ok());
+
+        // 4. Non-element sequence bitOrder change on non-byte boundary (lines 236-246)
+        let mut builder_bo_seq = SchemaBuilder::new();
+        let bo_props = ResolvedProperties {
+            bit_order: BitOrder::LeastSignificantBitFirst,
+            alignment: 1,
+            alignment_units: crate::schema::ir::AlignmentUnits::Bits,
+            ..Default::default()
+        };
+        let empty_bo_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let bo_seq_id = builder_bo_seq.add_term_with_props(crate::types::QName::local("bo_seq"), TermKind::Sequence(empty_bo_seq), bo_props).unwrap();
+        builder_bo_seq.set_root(bo_seq_id);
+        let schema_bo_seq = builder_bo_seq.build().unwrap();
+
+        let mut writer_bo_seq = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        writer_bo_seq.write_bits(0b11, 2).unwrap(); // non-byte boundary
+        let mut budget_bo_seq = WorkBudget::new(1000);
+        let mut unparser_bo_seq = UnparserEngine::new(&schema_bo_seq, &mut writer_bo_seq, &mut budget_bo_seq);
+        let err_bo_seq = unparser_bo_seq.unparse_term(bo_seq_id, &elem_dummy).unwrap_err();
+        assert!(err_bo_seq.message.as_str().contains("Can only change bitOrder on a byte boundary"));
+
+        // 5. Missing root Term NodeId from compiled schema graph in unparse_document (lines 140-145)
+        let mut schema_missing_root = schema_skip.clone();
+        schema_missing_root.root_element_id = NodeId(999999);
+        let mut writer_miss = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_miss = WorkBudget::new(1000);
+        let mut unparser_miss = UnparserEngine::new(&schema_missing_root, &mut writer_miss, &mut budget_miss);
+        let doc_dummy = InfosetDocument::with_root(elem_dummy.clone());
+        let err_miss = unparser_miss.unparse_document(&doc_dummy).unwrap_err();
+        assert!(err_miss.message.as_str().contains("Term NodeId missing from compiled schema graph"));
+
+        // 6. Missing child Term NodeId in unparse_term (lines 183-188)
+        let err_miss_child = unparser_skip.unparse_term(NodeId(888888), &elem_dummy).unwrap_err();
+        assert!(err_miss_child.message.as_str().contains("Term NodeId missing from compiled schema graph"));
+
+        // 7. Non-element sequence leading_skip with Bits units (line 227)
+        let mut builder_skip_bits = SchemaBuilder::new();
+        let skip_bits_props = ResolvedProperties {
+            leading_skip: 3,
+            alignment_units: crate::schema::ir::AlignmentUnits::Bits,
+            ..Default::default()
+        };
+        let skip_bits_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let skip_bits_id = builder_skip_bits.add_term_with_props(crate::types::QName::local("sb"), TermKind::Sequence(skip_bits_seq), skip_bits_props).unwrap();
+        builder_skip_bits.set_root(skip_bits_id);
+        let schema_skip_bits = builder_skip_bits.build().unwrap();
+
+        let mut writer_sb = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_sb = WorkBudget::new(1000);
+        let mut unparser_sb = UnparserEngine::new(&schema_skip_bits, &mut writer_sb, &mut budget_sb);
+        assert!(unparser_sb.unparse_term(skip_bits_id, &elem_dummy).is_ok());
+        assert_eq!(writer_sb.position().0, 3);
+
+        // 8. twoByteSwap layer odd length error in unparser (lines 441-446)
+        let mut builder_swap = SchemaBuilder::new();
+        let swap_props = ResolvedProperties {
+            layer: Some("twoByteSwap".into()),
+            ..Default::default()
+        };
+        let elem_child = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("b"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::value::DfdlSimpleType::Byte),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let b_props = ResolvedProperties {
+            representation: Representation::Binary,
+            ..Default::default()
+        };
+        let b_id = builder_swap.add_term_with_props(crate::types::QName::local("b"), TermKind::Element(elem_child), b_props).unwrap();
+        let swap_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![b_id] };
+        let swap_id = builder_swap.add_term_with_props(crate::types::QName::local("sw"), TermKind::Sequence(swap_seq), swap_props).unwrap();
+        builder_swap.set_root(swap_id);
+        let schema_swap = builder_swap.build().unwrap();
+
+        let mut writer_swap = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget_swap = WorkBudget::new(1000);
+        let mut unparser_swap = UnparserEngine::new(&schema_swap, &mut writer_swap, &mut budget_swap);
+        unparser_swap.variable_map.define_variable(
+            crate::types::QName::local("requireLengthInWholeWords"),
+            crate::infoset::value::DfdlSimpleType::String,
+            Some(crate::infoset::value::DfdlValue::String("yes".into())),
+        );
+        let mut elem_complex = InfosetElement::complex(crate::types::QName::local("sw"));
+        elem_complex.children.push(crate::infoset::InfosetNode::Element(
+            InfosetElement::simple(crate::types::QName::local("b"), ElementState::Value(DfdlValue::Byte(42)))
+        ));
+        let err_swap = unparser_swap.unparse_term(swap_id, &elem_complex).unwrap_err();
+        assert!(err_swap.message.as_str().contains("not a multiple of 2 for twoByteSwap layer"));
+    }
+
+    #[test]
+    fn test_unparser_layers_extended() {
+        use crate::infoset::value::DfdlSimpleType;
+        use crate::schema::builder::SchemaBuilder;
+
+        // 1. stlBombOutLayer in unparser
+        let mut b_bomb = SchemaBuilder::new();
+        let bomb_props = ResolvedProperties {
+            layer: Some("stlBombOutLayer".into()),
+            ..Default::default()
+        };
+        let bomb_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let bomb_id = b_bomb.add_term_with_props(crate::types::QName::local("bomb"), TermKind::Sequence(bomb_seq), bomb_props).unwrap();
+        b_bomb.set_root(bomb_id);
+        let schema_bomb = b_bomb.build().unwrap();
+
+        // PE bomb
+        let mut w1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b1 = WorkBudget::new(1000);
+        let mut u1 = UnparserEngine::new(&schema_bomb, &mut w1, &mut b1);
+        u1.variable_map.define_variable(
+            crate::types::QName::local("bombWhere"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("write".into())),
+        );
+        u1.variable_map.define_variable(
+            crate::types::QName::local("bombHow"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("PE".into())),
+        );
+        let elem_c = InfosetElement::complex(crate::types::QName::local("bomb"));
+        let err1 = u1.unparse_term(bomb_id, &elem_c).unwrap_err();
+        assert!(err1.message.as_str().contains("Unparse Error: Bombed out at write"));
+
+        // RSDE bomb
+        let mut w2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b2 = WorkBudget::new(1000);
+        let mut u2 = UnparserEngine::new(&schema_bomb, &mut w2, &mut b2);
+        u2.variable_map.define_variable(
+            crate::types::QName::local("bombWhere"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("write".into())),
+        );
+        u2.variable_map.define_variable(
+            crate::types::QName::local("bombHow"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("RSDE".into())),
+        );
+        let err2 = u2.unparse_term(bomb_id, &elem_c).unwrap_err();
+        assert!(err2.message.as_str().contains("Runtime Schema Definition Error: Bombed out at write"));
+
+        // 2. boundaryMark layer in unparser
+        let mut b_bm = SchemaBuilder::new();
+        let bm_props = ResolvedProperties {
+            layer: Some("boundaryMark".into()),
+            ..Default::default()
+        };
+        let bm_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let bm_id = b_bm.add_term_with_props(crate::types::QName::local("bm"), TermKind::Sequence(bm_seq), bm_props).unwrap();
+        b_bm.set_root(bm_id);
+        let schema_bm = b_bm.build().unwrap();
+
+        let mut w_bm = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_bm_work = WorkBudget::new(1000);
+        let mut u_bm = UnparserEngine::new(&schema_bm, &mut w_bm, &mut b_bm_work);
+        u_bm.variable_map.define_variable(
+            crate::types::QName::local("boundaryMark"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("##".into())),
+        );
+        assert!(u_bm.unparse_term(bm_id, &elem_c).is_ok());
+        w_bm.flush().unwrap();
+        assert_eq!(w_bm.into_sink().into_vec(), b"##");
+
+        // 3. gzip and base64_mime layers in unparser
+        let mut b_gz = SchemaBuilder::new();
+        let gz_props = ResolvedProperties {
+            layer: Some("gzip".into()),
+            ..Default::default()
+        };
+        let gz_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let gz_id = b_gz.add_term_with_props(crate::types::QName::local("gz"), TermKind::Sequence(gz_seq), gz_props).unwrap();
+        b_gz.set_root(gz_id);
+        let schema_gz = b_gz.build().unwrap();
+
+        let mut w_gz = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_gz_work = WorkBudget::new(1000);
+        let mut u_gz = UnparserEngine::new(&schema_gz, &mut w_gz, &mut b_gz_work);
+        u_gz.variable_map.define_variable(
+            crate::types::QName::local("compressionLevel"),
+            DfdlSimpleType::Int,
+            Some(DfdlValue::Int(9)),
+        );
+        assert!(u_gz.unparse_term(gz_id, &elem_c).is_ok());
+
+        let mut b_b64 = SchemaBuilder::new();
+        let b64_props = ResolvedProperties {
+            layer: Some("base64_mime".into()),
+            ..Default::default()
+        };
+        let b64_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let b64_id = b_b64.add_term_with_props(crate::types::QName::local("b64"), TermKind::Sequence(b64_seq), b64_props).unwrap();
+        b_b64.set_root(b64_id);
+        let schema_b64 = b_b64.build().unwrap();
+
+        let mut w_b64 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_b64_work = WorkBudget::new(1000);
+        let mut u_b64 = UnparserEngine::new(&schema_b64, &mut w_b64, &mut b_b64_work);
+        assert!(u_b64.unparse_term(b64_id, &elem_c).is_ok());
+
+        // 4. stlBombOutLayer PE and RSDE errors during unparsing (lines 360-390)
+        let mut b_bomb = SchemaBuilder::new();
+        let bomb_props = ResolvedProperties {
+            layer: Some("stlBombOutLayer".into()),
+            ..Default::default()
+        };
+        let bomb_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![] };
+        let bomb_id = b_bomb.add_term_with_props(crate::types::QName::local("bomb"), TermKind::Sequence(bomb_seq), bomb_props).unwrap();
+        b_bomb.set_root(bomb_id);
+        let schema_bomb = b_bomb.build().unwrap();
+
+        let mut w_b1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_b1_work = WorkBudget::new(1000);
+        let mut u_b1 = UnparserEngine::new(&schema_bomb, &mut w_b1, &mut b_b1_work);
+        u_b1.variable_map.define_variable(
+            crate::types::QName::local("bombWhere"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("write".into())),
+        );
+        u_b1.variable_map.define_variable(
+            crate::types::QName::local("bombHow"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("PE".into())),
+        );
+        let err_b1 = u_b1.unparse_term(bomb_id, &elem_c).unwrap_err();
+        assert!(err_b1.message.as_str().contains("Unparse Error: Bombed out at write"));
+
+        let mut w_b2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_b2_work = WorkBudget::new(1000);
+        let mut u_b2 = UnparserEngine::new(&schema_bomb, &mut w_b2, &mut b_b2_work);
+        u_b2.variable_map.define_variable(
+            crate::types::QName::local("bombWhere"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("write".into())),
+        );
+        u_b2.variable_map.define_variable(
+            crate::types::QName::local("bombHow"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("RSDE".into())),
+        );
+        let err_b2 = u_b2.unparse_term(bomb_id, &elem_c).unwrap_err();
+        assert!(err_b2.message.as_str().contains("Runtime Schema Definition Error: Bombed out at write"));
+
+        // 5. twoByteSwap layer requires whole words with odd bytes during unparsing (lines 441-446)
+        let mut b_tbs = SchemaBuilder::new();
+        let tbs_props = ResolvedProperties {
+            layer: Some("twoByteSwap".into()),
+            ..Default::default()
+        };
+        let odd_elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("odd_byte"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Byte),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let odd_id = b_tbs.add_term_with_props(crate::types::QName::local("odd_byte"), TermKind::Element(odd_elem), ResolvedProperties {
+            representation: crate::schema::ir::Representation::Binary,
+            binary_number_rep: crate::schema::ir::BinaryNumberRep::Binary,
+            length_kind: crate::schema::ir::LengthKind::Implicit,
+            ..Default::default()
+        }).unwrap();
+        let tbs_seq = crate::schema::ir::CompiledSequence { members: alloc::vec![odd_id] };
+        let tbs_id = b_tbs.add_term_with_props(crate::types::QName::local("tbs"), TermKind::Sequence(tbs_seq), tbs_props).unwrap();
+        b_tbs.set_root(tbs_id);
+        let schema_tbs = b_tbs.build().unwrap();
+
+        let mut doc_tbs = crate::infoset::InfosetDocument::new();
+        let mut root_elem_tbs = crate::infoset::InfosetElement::complex(crate::types::QName::local("root"));
+        let odd_child = crate::infoset::InfosetElement::simple(
+            crate::types::QName::local("odd_byte"),
+            ElementState::Value(DfdlValue::Byte(42)),
+        );
+        root_elem_tbs.children.push(crate::infoset::tree::InfosetNode::Element(odd_child));
+        doc_tbs.root = Some(root_elem_tbs.clone());
+
+        let mut w_tbs = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_tbs_work = WorkBudget::new(1000);
+        let mut u_tbs = UnparserEngine::new(&schema_tbs, &mut w_tbs, &mut b_tbs_work);
+        u_tbs.doc = Some(&doc_tbs);
+        u_tbs.variable_map.define_variable(
+            crate::types::QName::local("requireLengthInWholeWords"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("yes".into())),
+        );
+        let err_tbs = u_tbs.unparse_term(tbs_id, &root_elem_tbs).unwrap_err();
+        assert!(err_tbs.message.as_str().contains("not a multiple of 2 for twoByteSwap layer"));
+    }
+
+    #[test]
+    fn test_unparser_validation_and_scalar_edge_cases() {
+        use crate::infoset::DfdlSimpleType;
+        let default_props = ResolvedProperties::default();
+
+        // 1. validate_unparse_value negative when decimalSigned is no (lines 3388-3403)
+        let mut props_unsigned = ResolvedProperties {
+            decimal_signed: false,
+            ..Default::default()
+        };
+        assert!(validate_unparse_value(&DfdlValue::Int(-5), &DfdlSimpleType::Int, &props_unsigned, None).is_err());
+        props_unsigned.binary_number_rep = crate::schema::ir::BinaryNumberRep::Packed;
+        assert!(validate_unparse_value(&DfdlValue::Int(-5), &DfdlSimpleType::Int, &props_unsigned, None).is_err());
+
+        // 2. validate_unparse_value negative when textStandardBase != 10 (lines 3405-3417)
+        let props_base16 = ResolvedProperties {
+            representation: crate::schema::ir::Representation::Text,
+            text_standard_base: 16,
+            ..Default::default()
+        };
+        assert!(validate_unparse_value(&DfdlValue::Int(-5), &DfdlSimpleType::Int, &props_base16, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::Int(15), &DfdlSimpleType::Int, &props_base16, None).is_ok());
+
+        // 3. validate_unparse_value integer type bounds checks (lines 3441-3580)
+        // Long
+        let val_huge = DfdlValue::String("9999999999999999999999999999".into());
+        assert!(validate_unparse_value(&val_huge, &DfdlSimpleType::Long, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::Long(42), &DfdlSimpleType::Long, &default_props, None).is_ok());
+
+        // Short
+        let val_bad_short = DfdlValue::String("999999".into());
+        assert!(validate_unparse_value(&val_bad_short, &DfdlSimpleType::Short, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::Short(42), &DfdlSimpleType::Short, &default_props, None).is_ok());
+
+        // Byte
+        let val_bad_byte = DfdlValue::String("999".into());
+        assert!(validate_unparse_value(&val_bad_byte, &DfdlSimpleType::Byte, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::Byte(42), &DfdlSimpleType::Byte, &default_props, None).is_ok());
+
+        // UnsignedLong
+        let val_neg = DfdlValue::String("-1".into());
+        assert!(validate_unparse_value(&val_neg, &DfdlSimpleType::UnsignedLong, &default_props, None).is_err());
+        assert!(validate_unparse_value(&val_huge, &DfdlSimpleType::UnsignedLong, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::UnsignedLong(42), &DfdlSimpleType::UnsignedLong, &default_props, None).is_ok());
+
+        // UnsignedInt
+        assert!(validate_unparse_value(&val_neg, &DfdlSimpleType::UnsignedInt, &default_props, None).is_err());
+        assert!(validate_unparse_value(&val_huge, &DfdlSimpleType::UnsignedInt, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::UnsignedInt(42), &DfdlSimpleType::UnsignedInt, &default_props, None).is_ok());
+
+        // UnsignedShort
+        assert!(validate_unparse_value(&val_neg, &DfdlSimpleType::UnsignedShort, &default_props, None).is_err());
+        assert!(validate_unparse_value(&val_bad_short, &DfdlSimpleType::UnsignedShort, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::UnsignedShort(42), &DfdlSimpleType::UnsignedShort, &default_props, None).is_ok());
+
+        // UnsignedByte
+        assert!(validate_unparse_value(&val_neg, &DfdlSimpleType::UnsignedByte, &default_props, None).is_err());
+        assert!(validate_unparse_value(&val_bad_byte, &DfdlSimpleType::UnsignedByte, &default_props, None).is_err());
+        assert!(validate_unparse_value(&DfdlValue::UnsignedByte(42), &DfdlSimpleType::UnsignedByte, &default_props, None).is_ok());
+
+        // 4. unparse_binary_value String branches (hex, integer, raw) (lines 2638-2679)
+        let mut builder = SchemaBuilder::new();
+        let elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("root"),
+            type_ir: crate::schema::ir::CompiledType::Simple(DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder.add_term_with_props(crate::types::QName::local("root"), TermKind::Element(elem), ResolvedProperties::default()).unwrap();
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+        let mut budget = WorkBudget::new(100);
+
+        // Hex string unparsing
+        let mut w_hex = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        {
+            let mut u_hex = UnparserEngine::new(&schema, &mut w_hex, &mut budget);
+            let mut hex_props = default_props.clone();
+            hex_props.representation = Representation::Binary;
+            u_hex.unparse_binary_value(&DfdlValue::String("ABCD".into()), &hex_props).unwrap();
+        }
+        assert_eq!(w_hex.into_sink().into_vec(), alloc::vec![0xAB, 0xCD]);
+
+        // Integer string binary unparsing
+        let mut w_int = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        {
+            let mut u_int = UnparserEngine::new(&schema, &mut w_int, &mut budget);
+            let mut int_props = default_props.clone();
+            int_props.representation = Representation::Binary;
+            int_props.length = Some(32);
+            int_props.length_units = crate::schema::ir::LengthUnits::Bits;
+            u_int.unparse_binary_value(&DfdlValue::String("305419896".into()), &int_props).unwrap();
+        }
+        assert_eq!(w_int.into_sink().into_vec(), alloc::vec![0x12, 0x34, 0x56, 0x78]);
+
+        // Raw string binary unparsing
+        let mut w_raw = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        {
+            let mut u_raw = UnparserEngine::new(&schema, &mut w_raw, &mut budget);
+            let mut raw_props = default_props.clone();
+            raw_props.representation = Representation::Binary;
+            u_raw.unparse_binary_value(&DfdlValue::String("xyz".into()), &raw_props).unwrap();
+        }
+        assert_eq!(w_raw.into_sink().into_vec(), b"xyz");
+
+        // 5. Delimited text padding with text_output_min_length (lines 2970-3012)
+        let props_pad_r = ResolvedProperties {
+            representation: crate::schema::ir::Representation::Text,
+            length_kind: crate::schema::ir::LengthKind::Delimited,
+            text_pad_kind: crate::schema::ir::TextPadKind::PadChar,
+            text_pad_char: "#".into(),
+            text_output_min_length: 5,
+            text_string_justification: crate::schema::ir::TextJustification::Right,
+            ..Default::default()
+        };
+        let mut w_pr = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        {
+            let mut u_pr = UnparserEngine::new(&schema, &mut w_pr, &mut budget);
+            u_pr.unparse_text_value(&DfdlValue::String("hi".into()), &props_pad_r).unwrap();
+        }
+        assert_eq!(w_pr.into_sink().into_vec(), b"###hi");
+
+        let mut props_pad_c = props_pad_r.clone();
+        props_pad_c.text_string_justification = crate::schema::ir::TextJustification::Center;
+        let mut w_pc = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        {
+            let mut u_pc = UnparserEngine::new(&schema, &mut w_pc, &mut budget);
+            u_pc.unparse_text_value(&DfdlValue::String("hi".into()), &props_pad_c).unwrap();
+        }
+        assert_eq!(w_pc.into_sink().into_vec(), b"##hi#");
+
+        let mut props_pad_l = props_pad_r.clone();
+        props_pad_l.text_string_justification = crate::schema::ir::TextJustification::Left;
+        props_pad_l.text_trim_kind = crate::schema::ir::TextTrimKind::Head;
+        let mut w_pl = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        {
+            let mut u_pl = UnparserEngine::new(&schema, &mut w_pl, &mut budget);
+            u_pl.unparse_text_value(&DfdlValue::String("hi".into()), &props_pad_l).unwrap();
+        }
+        assert_eq!(w_pl.into_sink().into_vec(), b"###hi");
+    }
 }
+
 

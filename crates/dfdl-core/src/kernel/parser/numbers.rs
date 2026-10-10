@@ -658,46 +658,36 @@ pub(crate) fn validate_and_clean_integer_grouping_dual(
     secondary_size: Option<usize>,
 ) -> Option<String> {
     use alloc::string::ToString;
-    let effective_primary = primary_size.or(Some(3));
-    if let Some(prim) = effective_primary {
-        if !grouping_sep.is_empty() && int_part.contains(grouping_sep) {
-            let groups: Vec<&str> = int_part.split(grouping_sep).collect();
-            if groups.len() < 2 {
-                return None;
-            }
-            // Determine effective secondary (default = primary)
-            let sec = secondary_size.unwrap_or(prim);
-            // Last group must equal primary size
-            let last_group = *groups.last()?;
-            if last_group.len() != prim || !last_group.chars().all(|c| c.is_ascii_digit()) {
-                return None;
-            }
-            // First group may be 1..=secondary size
-            let first_grp = *groups.first()?;
-            if first_grp.is_empty()
-                || first_grp.len() > sec
-                || !first_grp.chars().all(|c| c.is_ascii_digit())
-            {
-                return None;
-            }
-            // All intermediate groups must equal secondary size
-            let n = groups.len();
-            for g in groups.iter().take(n.saturating_sub(1)).skip(1) {
-                if g.len() != sec || !g.chars().all(|c| c.is_ascii_digit()) {
-                    return None;
-                }
-            }
-            Some(groups.join(""))
-        } else {
-            if !int_part.chars().all(|c| c.is_ascii_digit()) {
-                return None;
-            }
-            Some(int_part.to_string())
-        }
-    } else {
-        if !grouping_sep.is_empty() && int_part.contains(grouping_sep) {
+    let prim = primary_size.unwrap_or(3);
+    if !grouping_sep.is_empty() && int_part.contains(grouping_sep) {
+        let groups: Vec<&str> = int_part.split(grouping_sep).collect();
+        if groups.len() < 2 {
             return None;
         }
+        // Determine effective secondary (default = primary)
+        let sec = secondary_size.unwrap_or(prim);
+        // Last group must equal primary size
+        let last_group = *groups.last()?;
+        if last_group.len() != prim || !last_group.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        // First group may be 1..=secondary size
+        let first_grp = *groups.first()?;
+        if first_grp.is_empty()
+            || first_grp.len() > sec
+            || !first_grp.chars().all(|c| c.is_ascii_digit())
+        {
+            return None;
+        }
+        // All intermediate groups must equal secondary size
+        let n = groups.len();
+        for g in groups.iter().take(n.saturating_sub(1)).skip(1) {
+            if g.len() != sec || !g.chars().all(|c| c.is_ascii_digit()) {
+                return None;
+            }
+        }
+        Some(groups.join(""))
+    } else {
         if !int_part.chars().all(|c| c.is_ascii_digit()) {
             return None;
         }
@@ -1743,6 +1733,159 @@ mod grouping_tests {
         // Explicit decimal point with V/P must be rejected
         assert!(normalize_text_number("1.23", Some("##0V00"), ".", ",", None, t).is_none());
         assert!(normalize_text_number("1.23", Some("PP000"), ".", ",", None, t).is_none());
+
+        // Flexible i64 and u64 parsing with hex and floats (lines 38, 56, 59-62)
+        assert_eq!(parse_flexible_int_i64("-0x10"), Some(-16));
+        assert_eq!(parse_flexible_uint_u64("0x20"), Some(32));
+        assert_eq!(parse_flexible_uint_u64("42.000"), Some(42));
+        assert_eq!(parse_flexible_uint_u64("42.001"), None);
+
+        // Flexible f64 with +INF, -INF, and positive sign (lines 114-115, 121, 131)
+        assert_eq!(parse_flexible_f64_with_props("+INF", ".", ",", Some("INF"), None, None, false), Some(f64::INFINITY));
+        assert_eq!(parse_flexible_f64_with_props("-INF", ".", ",", Some("INF"), None, None, false), Some(f64::NEG_INFINITY));
+        assert_eq!(parse_flexible_f64_with_props("+42.5", ".", ",", None, None, None, false), Some(42.5));
+
+        // Grouping separator removal and exponential notation normalization (lines 136, 164, 168-179)
+        assert_eq!(parse_flexible_f64_with_props("1,234.56", ".", ",", None, None, None, false), Some(1234.56));
+        assert_eq!(parse_flexible_f64_with_props("1.23+04", ".", ",", None, None, Some(""), false), Some(12300.0));
+        assert_eq!(parse_flexible_f64_with_props("1.23e02", ".", ",", None, None, Some("e"), false), Some(123.0));
+    }
+
+    /// Tests additional number parsing branches including pattern pad positions,
+    /// head and tail trimming, empty strings, and affix sign variations.
+    ///
+    /// Verifies that:
+    /// 1. Pattern pad escapes in prefix and suffix positions (`AfterPrefix`, `BeforeSuffix`, `AfterSuffix`) are extracted and stripped.
+    /// 2. `normalize_text_number` correctly applies `TextTrimKind::Head` and `TextTrimKind::Tail`.
+    /// 3. Completely trimmed strings or empty inputs yield `None`.
+    /// 4. Negative subpatterns with parentheses reject plain leading minus signs.
+    /// 5. Trailing signs (`+` and `-`) are stripped correctly with and without positive patterns.
+    #[test]
+    fn test_numbers_parser_extended_coverage() {
+        // 1. Pattern pad positions (lines 356-382)
+        let (_, _, _, pad_after_pre) = extract_pattern_affixes("ABC*_##0");
+        assert_eq!(pad_after_pre, Some(('_', PatternPadPos::AfterPrefix)));
+        assert_eq!(
+            normalize_text_number("ABC___42", Some("ABC*_##0"), ".", ",", None, TextTrimKind::None),
+            Some((false, alloc::string::String::from("42")))
+        );
+
+        let (_, _, _, pad_before_suf) = extract_pattern_affixes("##0*_DEF");
+        assert_eq!(pad_before_suf, Some(('_', PatternPadPos::BeforeSuffix)));
+        assert_eq!(
+            normalize_text_number("42___DEF", Some("##0*_DEF"), ".", ",", None, TextTrimKind::None),
+            Some((false, alloc::string::String::from("42")))
+        );
+
+        let (_, _, _, pad_after_suf) = extract_pattern_affixes("##0DEF*_");
+        assert_eq!(pad_after_suf, Some(('_', PatternPadPos::AfterSuffix)));
+        assert_eq!(
+            normalize_text_number("42DEF___", Some("##0DEF*_"), ".", ",", None, TextTrimKind::None),
+            Some((false, alloc::string::String::from("42")))
+        );
+
+        // 2. Text trimming head and tail (lines 414, 417, 426)
+        assert_eq!(
+            normalize_text_number("**123", None, ".", ",", Some("*"), TextTrimKind::Head),
+            Some((false, alloc::string::String::from("123")))
+        );
+        assert_eq!(
+            normalize_text_number("123**", None, ".", ",", Some("*"), TextTrimKind::Tail),
+            Some((false, alloc::string::String::from("123")))
+        );
+        assert_eq!(
+            normalize_text_number("****", None, ".", ",", Some("*"), TextTrimKind::Head),
+            None
+        );
+
+        // 3. Negative pattern with parentheses rejecting leading minus (line 452)
+        assert_eq!(
+            normalize_text_number("-123", Some("#,##0;(#,##0)"), ".", ",", None, TextTrimKind::None),
+            None
+        );
+
+        // 4. Trailing sign variations (lines 465-468, 480-485)
+        assert_eq!(
+            normalize_text_number("123-", Some("#,##0"), ".", ",", None, TextTrimKind::None),
+            Some((true, alloc::string::String::from("123")))
+        );
+        assert_eq!(
+            normalize_text_number("123+", Some("#,##0"), ".", ",", None, TextTrimKind::None),
+            Some((false, alloc::string::String::from("123")))
+        );
+        assert_eq!(
+            normalize_text_number("456-", None, ".", ",", None, TextTrimKind::None),
+            Some((true, alloc::string::String::from("456")))
+        );
+        assert_eq!(
+            normalize_text_number("456+", None, ".", ",", None, TextTrimKind::None),
+            Some((false, alloc::string::String::from("456")))
+        );
+
+        // 5. Empty inputs to flexible integer parsers (lines 53, 70)
+        assert_eq!(parse_flexible_int_i64(""), None);
+        assert_eq!(parse_flexible_uint_u64(""), None);
+
+        // 6. parse_flexible_f64_with_props infinity representation, grouping separator, and exponent reps (lines 114-181)
+        assert_eq!(parse_flexible_f64_with_props("+Infinity", ".", ",", Some("NaN"), Some("Infinity"), None, true), Some(f64::INFINITY));
+        assert_eq!(parse_flexible_f64_with_props("-Infinity", ".", ",", Some("NaN"), Some("Infinity"), None, true), Some(f64::NEG_INFINITY));
+        assert_eq!(parse_flexible_f64_with_props("1,234.5", ".", ",", None, None, None, false), Some(1234.5));
+        assert_eq!(parse_flexible_f64_with_props("1.2x3", ".", ",", None, None, Some("x"), false), Some(1200.0));
+        // empty exponent representation directly signaled by '+'
+        assert_eq!(parse_flexible_f64_with_props("1.2+3", ".", ",", None, None, Some(""), false), Some(1200.0));
+        assert_eq!(parse_flexible_f64_with_props("123", ".", ",", None, None, Some(""), false), Some(123.0));
+
+        // 7. parse_strict_int_i64 head/tail trim and grouping rejection (lines 698-734)
+        assert_eq!(parse_strict_int_i64("##42", Some("##0"), ".", ",", Some("#"), TextTrimKind::Head), Some(42));
+        assert_eq!(parse_strict_int_i64("42##", Some("##0"), ".", ",", Some("#"), TextTrimKind::Tail), Some(42));
+        // Pattern without grouping rejects input containing grouping separator with invalid group lengths
+        assert_eq!(parse_strict_int_i64("1,234,56", Some("0000"), ".", ",", None, TextTrimKind::None), None);
+
+        // 8. parse_flexible_bool empty input returns None (line 70)
+        assert_eq!(parse_flexible_bool(""), None);
+        assert_eq!(parse_flexible_bool("  "), None);
+
+        // 9. All 4 PatternPadPos variants in extract_pattern_affixes & strip_pattern_affixes_and_pad (lines 300-382)
+        // BeforePrefix: *#$#,##0
+        let (p1, s1, _, pad1) = extract_pattern_affixes("*#$#,##0");
+        assert_eq!(pad1, Some(('#', PatternPadPos::BeforePrefix)));
+        assert_eq!(strip_pattern_affixes_and_pad("###$1234", p1, s1, pad1), Some("1234"));
+
+        // AfterPrefix: $*##,##0
+        let (p2, s2, _, pad2) = extract_pattern_affixes("$*##,##0");
+        assert_eq!(pad2, Some(('#', PatternPadPos::AfterPrefix)));
+        assert_eq!(strip_pattern_affixes_and_pad("$###1234", p2, s2, pad2), Some("1234"));
+
+        // BeforeSuffix: #,##0*#%
+        let (p3, s3, _, pad3) = extract_pattern_affixes("#,##0*#%");
+        assert_eq!(pad3, Some(('#', PatternPadPos::BeforeSuffix)));
+        assert_eq!(strip_pattern_affixes_and_pad("1234###%", p3, s3, pad3), Some("1234"));
+
+        // AfterSuffix: #,##0%*#
+        let (p4, s4, _, pad4) = extract_pattern_affixes("#,##0%*#");
+        assert_eq!(pad4, Some(('#', PatternPadPos::AfterSuffix)));
+        assert_eq!(strip_pattern_affixes_and_pad("1234%###", p4, s4, pad4), Some("1234"));
+
+        // 10. parse_flexible_f64_with_props with non-standard decimal separator rejecting '.' in input (line 140)
+        assert_eq!(parse_flexible_f64_with_props("12.34", ",", " ", None, None, None, false), None);
+
+        // 11. extract_dual_grouping_sizes with trailing comma or primary == 0 (lines 623-625)
+        assert_eq!(extract_dual_grouping_sizes("###,"), (None, None));
+        assert_eq!(extract_dual_grouping_sizes("###"), (None, None));
+
+        // 12. parse_strict_int_i64 empty clean string and 0x prefix rejection (lines 738-746)
+        assert_eq!(parse_strict_int_i64("", None, ".", ",", None, TextTrimKind::None), None);
+        assert_eq!(parse_strict_int_i64("0x123", None, ".", ",", None, TextTrimKind::None), None);
+        assert_eq!(parse_strict_int_i64("-0x123", None, ".", ",", None, TextTrimKind::None), None);
+
+        // 13. parse_strict_int_i64 without pattern accepts valid grouping and rejects non-digits (lines 660-692)
+        assert_eq!(parse_strict_int_i64("1,234", None, ".", ",", None, TextTrimKind::None), Some(1234));
+        assert_eq!(parse_strict_int_i64("12a34", None, ".", ",", None, TextTrimKind::None), None);
+
+        // 14. parse_strict_int_i64 negative subpattern matching with prefix '-' (lines 781-785)
+        assert_eq!(parse_strict_int_i64("-123", Some("+#,##0;[#,##0]"), ".", ",", None, TextTrimKind::None), Some(-123));
+        assert_eq!(parse_strict_int_i64("+123", Some("+#,##0;[#,##0]"), ".", ",", None, TextTrimKind::None), Some(123));
+        assert_eq!(parse_strict_int_i64("[123]", Some("+#,##0;[#,##0]"), ".", ",", None, TextTrimKind::None), Some(-123));
     }
 }
 

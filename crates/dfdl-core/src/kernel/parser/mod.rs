@@ -479,7 +479,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let res = match &term.kind {
             TermKind::Element(elem) => self.parse_element(term, elem, builder),
             TermKind::Sequence(seq) => {
-                let eval_init = if let Some(ref raw_init) = term.properties.initiator {
+                let eval_init = if let Some(ref init_prop) = term.properties.initiator_prop {
+                    let evaluated = self.evaluate_delimiter_prop(init_prop, builder)?;
+                    if evaluated.is_empty() {
+                        None
+                    } else {
+                        Some(evaluated)
+                    }
+                } else if let Some(ref raw_init) = term.properties.initiator {
                     if raw_init.is_empty() {
                         None
                     } else {
@@ -499,7 +506,21 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     self.on_initiator_matched(false, false);
                 }
 
-                let eval_sep = if let Some(ref raw_sep) = term.properties.separator {
+                let eval_sep = if let Some(ref sep_prop) = term.properties.separator_prop {
+                    if sep_prop.as_constant().is_some_and(|s| s.is_empty()) {
+                        None
+                    } else {
+                        let evaluated = self.evaluate_delimiter_prop(sep_prop, builder)?;
+                        if evaluated.trim().is_empty() {
+                            return Err(DFDLError::new(
+                                DFDLErrorKind::SchemaDefinition,
+                                "Schema Definition Error: Property separator cannot be empty string",
+                            ));
+                        } else {
+                            Some(evaluated)
+                        }
+                    }
+                } else if let Some(ref raw_sep) = term.properties.separator {
                     if raw_sep.is_empty() {
                         None
                     } else {
@@ -521,7 +542,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     self.push_in_scope_delimiter(sep.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
 
-                let eval_term = if let Some(ref raw_term) = term.properties.terminator {
+                let eval_term = if let Some(ref term_prop) = term.properties.terminator_prop {
+                    let evaluated = self.evaluate_delimiter_prop(term_prop, builder)?;
+                    if evaluated.is_empty() {
+                        None
+                    } else {
+                        Some(evaluated)
+                    }
+                } else if let Some(ref raw_term) = term.properties.terminator {
                     if raw_term.is_empty() {
                         None
                     } else {

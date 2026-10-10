@@ -243,4 +243,115 @@ mod tests {
 
         assert!(bounded.read_byte().is_err());
     }
+
+    #[test]
+    fn test_slice_byte_source_seeking_and_limits() {
+        let data = [10, 20, 30, 40, 50];
+        let mut src = SliceByteSource::new(&data);
+
+        // read_bytes beyond length
+        let mut big_buf = [0u8; 10];
+        assert!(src.read_bytes(&mut big_buf).is_err());
+
+        // Valid set_position
+        assert!(src.set_position(BitOffset(16)).is_ok());
+        assert_eq!(src.position(), BitOffset(16));
+        assert_eq!(src.read_byte().unwrap(), 30);
+
+        // Non-aligned position
+        assert!(src.set_position(BitOffset(5)).is_err());
+
+        // Past end of slice (64 bits = 8 bytes > 5 bytes, byte-aligned)
+        assert!(src.set_position(BitOffset(64)).is_err());
+    }
+
+    #[test]
+    fn test_bounded_source_seeking_and_limits() {
+        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut src = SliceByteSource::new(&data);
+        src.set_position(BitOffset(16)).unwrap(); // start at byte 2
+        let mut bounded = BoundedSource::new(src, 4).unwrap();
+
+        assert_eq!(bounded.remaining_bytes(), 4);
+        assert_eq!(bounded.position(), BitOffset(16));
+
+        // read_bytes beyond region limit
+        let mut buf_over = [0u8; 5];
+        assert!(bounded.read_bytes(&mut buf_over).is_err());
+
+        // Valid seek within bounded region (byte 4 = bit 32, offset 2 within bound)
+        assert!(bounded.set_position(BitOffset(32)).is_ok());
+        assert_eq!(bounded.remaining_bytes(), 2);
+        assert_eq!(bounded.read_byte().unwrap(), 5);
+
+        // Seek before start of bounded region (byte 1 < start byte 2)
+        assert!(bounded.set_position(BitOffset(8)).is_err());
+
+        // Non-aligned seek
+        assert!(bounded.set_position(BitOffset(17)).is_err());
+
+        // Seek past end of bounded region (byte 7 > start 2 + 4)
+        assert!(bounded.set_position(BitOffset(56)).is_err());
+    }
+
+    struct MockUnalignedByteSource {
+        pos: BitOffset,
+    }
+
+    impl ByteSource for MockUnalignedByteSource {
+        fn read_byte(&mut self) -> DFDLResult<u8> {
+            Ok(0)
+        }
+        fn read_bytes(&mut self, _buf: &mut [u8]) -> DFDLResult<()> {
+            Ok(())
+        }
+        fn position(&self) -> BitOffset {
+            self.pos
+        }
+        fn set_position(&mut self, pos: BitOffset) -> DFDLResult<()> {
+            self.pos = pos;
+            Ok(())
+        }
+        fn remaining_bytes(&self) -> usize {
+            10
+        }
+    }
+
+    #[test]
+    fn test_bounded_source_unaligned_and_underflow_error_branches() {
+        // 1. Initial unaligned position
+        let mock_unaligned = MockUnalignedByteSource { pos: BitOffset(3) };
+        assert!(BoundedSource::new(mock_unaligned, 10).is_err());
+
+        // 2. Unaligned position during read_byte and read_bytes
+        let mock_aligned = MockUnalignedByteSource { pos: BitOffset(0) };
+        let mut bounded = BoundedSource::new(mock_aligned, 10).unwrap();
+        bounded.inner.pos = BitOffset(5);
+        assert!(bounded.read_byte().is_err());
+        assert!(bounded.read_bytes(&mut [0u8; 1]).is_err());
+
+        // 3. Underflow (current_pos < start_pos)
+        bounded.inner.pos = BitOffset(0);
+        bounded.start_pos = 10;
+        assert!(bounded.read_byte().is_err());
+        assert!(bounded.read_bytes(&mut [0u8; 1]).is_err());
+
+        // 4. Mock source trait method execution
+        let mut m = MockUnalignedByteSource { pos: BitOffset(0) };
+        assert_eq!(m.read_byte().unwrap(), 0);
+        assert!(m.read_bytes(&mut [0u8; 2]).is_ok());
+        assert_eq!(m.position(), BitOffset(0));
+        assert!(m.set_position(BitOffset(8)).is_ok());
+        assert_eq!(m.remaining_bytes(), 10);
+
+        // 5. BoundedSource set_position, remaining_bytes, and overflow
+        let mut b_ok = BoundedSource::new(m, 5).unwrap();
+        assert_eq!(b_ok.remaining_bytes(), 5);
+        assert!(b_ok.set_position(BitOffset(8)).is_ok());
+
+        // Exceeding max_bytes limit
+        b_ok.start_pos = 0;
+        b_ok.inner.pos = BitOffset(0);
+        assert!(b_ok.read_bytes(&mut [0u8; 10]).is_err());
+    }
 }

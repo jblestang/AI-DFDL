@@ -25,10 +25,7 @@ impl<'a> FixedSliceByteSink<'a> {
 
 impl<'a> ByteSink for FixedSliceByteSink<'a> {
     fn write_byte(&mut self, byte: u8) -> DFDLResult<()> {
-        if self.position < self.buf.len() {
-            let slot = self.buf.get_mut(self.position).ok_or_else(|| {
-                DFDLError::new(DFDLErrorKind::Parse, "Buffer overflow in slice sink")
-            })?;
+        if let Some(slot) = self.buf.get_mut(self.position) {
             *slot = byte;
             self.position = checked_add_usize(self.position, 1)?;
             Ok(())
@@ -42,11 +39,7 @@ impl<'a> ByteSink for FixedSliceByteSink<'a> {
 
     fn write_bytes(&mut self, bytes: &[u8]) -> DFDLResult<()> {
         let end = checked_add_usize(self.position, bytes.len())?;
-        if end <= self.buf.len() {
-            let target = self
-                .buf
-                .get_mut(self.position..end)
-                .ok_or_else(|| DFDLError::new(DFDLErrorKind::Parse, "Buffer slice range error"))?;
+        if let Some(target) = self.buf.get_mut(self.position..end) {
             target.copy_from_slice(bytes);
             self.position = end;
             Ok(())
@@ -171,5 +164,40 @@ mod tests {
 
         sink.set_position(BitOffset(24)).unwrap(); // rollback to 3 bytes
         assert_eq!(sink.as_slice(), &[1, 2, 3]);
+
+        // Non-aligned position returns error
+        assert!(sink.set_position(BitOffset(10)).is_err());
+
+        // Position past length returns error (64 bits = 8 bytes > 3 bytes)
+        assert!(sink.set_position(BitOffset(64)).is_err());
+
+        // write_byte and into_vec
+        sink.write_byte(99).unwrap();
+        assert_eq!(sink.position(), BitOffset(32));
+        let vec = sink.into_vec();
+        assert_eq!(vec, alloc::vec![1, 2, 3, 99]);
+    }
+
+    #[test]
+    fn test_fixed_slice_sink_limits_and_positioning() {
+        let mut buffer = [0u8; 4];
+        let mut sink = FixedSliceByteSink::new(&mut buffer);
+
+        // write_bytes overflow
+        assert!(sink.write_bytes(&[1, 2, 3, 4, 5]).is_err());
+
+        // Valid write_bytes
+        assert!(sink.write_bytes(&[1, 2]).is_ok());
+        assert_eq!(sink.position(), BitOffset(16));
+
+        // set_position rollback to 1 byte
+        assert!(sink.set_position(BitOffset(8)).is_ok());
+        assert_eq!(sink.position(), BitOffset(8));
+
+        // Non-aligned position
+        assert!(sink.set_position(BitOffset(5)).is_err());
+
+        // Out of bounds position
+        assert!(sink.set_position(BitOffset(80)).is_err());
     }
 }

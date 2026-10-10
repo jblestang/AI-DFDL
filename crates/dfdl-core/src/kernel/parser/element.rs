@@ -21,7 +21,7 @@ use super::numbers::{
 };
 use super::{ParserEngine, PointOfUncertainty, PouKind, ValidationMode};
 
-fn dfdl_value_type_name(val: &DfdlValue) -> &'static str {
+pub(crate) fn dfdl_value_type_name(val: &DfdlValue) -> &'static str {
     match val {
         DfdlValue::String(_) => "String",
         DfdlValue::Int(_) => "Int",
@@ -43,7 +43,7 @@ fn dfdl_value_type_name(val: &DfdlValue) -> &'static str {
     }
 }
 
-fn dfdl_simple_type_name(st: &DfdlSimpleType) -> &'static str {
+pub(crate) fn dfdl_simple_type_name(st: &DfdlSimpleType) -> &'static str {
     match st {
         DfdlSimpleType::String => "String",
         DfdlSimpleType::Int => "Int",
@@ -65,7 +65,7 @@ fn dfdl_simple_type_name(st: &DfdlSimpleType) -> &'static str {
     }
 }
 
-fn validate_expression_result_coercion(raw: &DfdlValue, st: &DfdlSimpleType) -> DFDLResult<()> {
+pub(crate) fn validate_expression_result_coercion(raw: &DfdlValue, st: &DfdlSimpleType) -> DFDLResult<()> {
     let raw_name = dfdl_value_type_name(raw);
     let target_name = dfdl_simple_type_name(st);
     if raw_name == target_name {
@@ -646,8 +646,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
         let max_occurs = match term.properties.occurs_count_kind {
             OccursCountKind::Expression => {
-                if let Some(ref expr_str) = term.properties.occurs_count_expr {
-                    let ast = crate::expr::parse_expr(expr_str)?;
+                let eval_ast_fn = |ast: &crate::expr::ast::ExprAst, this: &mut Self| -> DFDLResult<usize> {
                     let mut current_path = builder.current_path();
                     let clean_name = elem
                         .name
@@ -667,36 +666,47 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         Some(&active_doc),
                         &current_path,
                         &[],
-                        Some(&self.variable_map),
-                        self.budget,
+                        Some(&this.variable_map),
+                        this.budget,
                     )
-                    .with_occurs_index(self.current_occurs_index)
-                    .with_schema(self.schema)
+                    .with_occurs_index(this.current_occurs_index)
+                    .with_schema(this.schema)
                     .with_namespaces(&term.properties.in_scope_namespaces)
-                    .with_enclosing_lengths(&self.enclosing_complex_elements);
-                    let val = crate::expr::eval_expr(&ast, &mut ctx)?;
+                    .with_enclosing_lengths(&this.enclosing_complex_elements);
+                    let val = crate::expr::eval_expr(ast, &mut ctx)?;
                     match val {
-                        DfdlValue::Int(v) if v >= 0 => v as usize,
-                        DfdlValue::Long(v) if v >= 0 => v as usize,
-                        DfdlValue::UnsignedLong(v) => v as usize,
-                        DfdlValue::UnsignedInt(v) => v as usize,
-                        DfdlValue::UnsignedShort(v) => v as usize,
-                        DfdlValue::UnsignedByte(v) => v as usize,
-                        DfdlValue::Short(v) if v >= 0 => v as usize,
-                        DfdlValue::Byte(v) if v >= 0 => v as usize,
+                        DfdlValue::Int(v) if v >= 0 => Ok(v as usize),
+                        DfdlValue::Long(v) if v >= 0 => Ok(v as usize),
+                        DfdlValue::UnsignedLong(v) => Ok(v as usize),
+                        DfdlValue::UnsignedInt(v) => Ok(v as usize),
+                        DfdlValue::UnsignedShort(v) => Ok(v as usize),
+                        DfdlValue::UnsignedByte(v) => Ok(v as usize),
+                        DfdlValue::Short(v) if v >= 0 => Ok(v as usize),
+                        DfdlValue::Byte(v) if v >= 0 => Ok(v as usize),
                         DfdlValue::String(ref s) => s.trim().parse::<usize>().map_err(|_| {
                             DFDLError::new_static(
                                 DFDLErrorKind::Parse,
                                 "occursCount expression string must be a non-negative integer",
                             )
-                        })?,
+                        }),
                         _ => {
-                            return Err(DFDLError::new_static(
+                            Err(DFDLError::new_static(
                                 DFDLErrorKind::Parse,
                                 "occursCount expression must evaluate to a non-negative integer",
-                            ));
+                            ))
                         }
                     }
+                };
+                if let Some(ref prop) = term.properties.occurs_count_prop {
+                    match prop {
+                        crate::schema::ir::DfdlProp::Constant(v) => *v,
+                        crate::schema::ir::DfdlProp::Expression { ast, .. } => {
+                            eval_ast_fn(ast, self)?
+                        }
+                    }
+                } else if let Some(ref expr_str) = term.properties.occurs_count_expr {
+                    let ast = crate::expr::parse_expr(expr_str)?;
+                    eval_ast_fn(&ast, self)?
                 } else {
                     elem.max_occurs.unwrap_or(1)
                 }
@@ -2546,26 +2556,17 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         builder: &InfosetBuilder,
     ) -> DFDLResult<Option<usize>> {
         if props.length_kind == crate::schema::ir::LengthKind::Prefixed {
-            let ptype = props
+            let desc = props
                 .prefix_length_type
-                .as_deref()
-                .unwrap_or("xs:unsignedShort");
-            let parts: Vec<&str> = ptype.split(':').collect();
-            let len_part = parts.get(2).copied().unwrap_or("");
-            // DFDL §12.3.4: Chained/nested prefixLengthType descriptors are encoded as `@clean_nested,rep,len,units,min,max@`.
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| crate::schema::ir::PrefixLengthDescriptor::from_legacy_desc("xs:unsignedShort"));
+
+            // DFDL §12.3.4: Chained/nested prefixLengthType descriptors.
             // When present, recursively read the nested prefix length first to determine the length of the current prefix.
-            let nested_prefix_len = if len_part.starts_with('@') && len_part.ends_with('@') && len_part.len() >= 2 {
-                let inner = &len_part[1..len_part.len() - 1];
-                let nparts: Vec<&str> = inner.split(',').collect();
-                let n_rep = nparts.get(1).copied().unwrap_or("binary");
-                let n_len: usize = nparts.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
-                let n_units = nparts.get(3).copied().unwrap_or("bytes");
-                let n_is_text = n_rep.eq_ignore_ascii_case("text");
-                let n_bits = if n_units.eq_ignore_ascii_case("bits") {
-                    n_len
-                } else {
-                    n_len.saturating_mul(8)
-                };
+            let nested_prefix_len = if let Some(ref nested) = desc.nested {
+                let n_is_text = nested.is_text();
+                let n_bits = nested.prefix_bits();
                 let n_val = if n_is_text {
                     let byte_count = n_bits.div_ceil(8);
                     let mut bvec = Vec::new();
@@ -2582,47 +2583,19 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             } else {
                 None
             };
-            let (is_text, bits) = if parts.len() >= 4 {
-                let rep = parts.get(1).copied().unwrap_or("binary");
-                let units = parts.get(3).copied().unwrap_or("bytes");
-                let is_txt = rep.eq_ignore_ascii_case("text");
-                let num_len: usize = if let Some(n_val) = nested_prefix_len {
+
+            let is_text = desc.is_text();
+            let bits = if let Some(n_val) = nested_prefix_len {
+                if desc.length_units == crate::schema::ir::LengthUnits::Bits {
                     n_val
                 } else {
-                    parts
-                        .get(2)
-                        .filter(|s| !s.is_empty())
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or_else(|| {
-                            let clean_ptype = parts.first().copied().unwrap_or(ptype);
-                            match clean_ptype {
-                                "byte" | "unsignedByte" => 1,
-                                "short" | "unsignedShort" => 2,
-                                "int" | "unsignedInt" => 4,
-                                "long" | "unsignedLong" | "integer" | "nonNegativeInteger" => 8,
-                                _ => 2,
-                            }
-                        })
-                };
-                let b = if units.eq_ignore_ascii_case("bits") {
-                    num_len
-                } else {
-                    num_len.saturating_mul(8)
-                };
-                (is_txt, b)
+                    n_val.saturating_mul(8)
+                }
             } else {
-                let clean_ptype = parts.last().copied().unwrap_or(ptype);
-                let bits = match clean_ptype {
-                    "byte" | "unsignedByte" => 8,
-                    "short" | "unsignedShort" => 16,
-                    "int" | "unsignedInt" => 32,
-                    "long" | "unsignedLong" | "integer" | "nonNegativeInteger" => 64,
-                    _ => 16,
-                };
-                (false, bits)
+                desc.prefix_bits()
             };
 
-            let pad_char = parts.get(6).copied().unwrap_or("");
+            let pad_char = desc.pad_char;
             let len = if is_text {
                 let byte_count = bits.div_ceil(8);
                 let mut bytes = Vec::new();
@@ -2632,8 +2605,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 let s =
                     crate::encoding::decode_text_bytes(&bytes, &props.encoding).unwrap_or_default();
-                let trimmed = if !pad_char.is_empty() {
-                    s.trim_matches(|c: char| c.is_whitespace() || pad_char.contains(c))
+                let trimmed = if let Some(pc) = pad_char {
+                    s.trim_matches(|c: char| c.is_whitespace() || c == pc)
                 } else {
                     s.trim()
                 };
@@ -2671,24 +2644,19 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     },
                 }
             };
-            let min_inc = parts.get(4).copied().unwrap_or("");
-            let max_inc = parts.get(5).copied().unwrap_or("");
-            if !max_inc.is_empty() {
-                if let Ok(max) = max_inc.parse::<usize>() {
-                    if len > max {
-                        let name = elem_name.unwrap_or("element");
-                        let msg = alloc::format!("Parse Error: failed check {name} ({len}) facet maxInclusive ({max})");
-                        return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
-                    }
+
+            if let Some(max) = desc.max_inclusive {
+                if len > (max as usize) {
+                    let name = elem_name.unwrap_or("element");
+                    let msg = alloc::format!("Parse Error: failed check {name} ({len}) facet maxInclusive ({max})");
+                    return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                 }
             }
-            if !min_inc.is_empty() {
-                if let Ok(min) = min_inc.parse::<usize>() {
-                    if len < min {
-                        let name = elem_name.unwrap_or("element");
-                        let msg = alloc::format!("Parse Error: failed check {name} ({len}) facet minInclusive ({min})");
-                        return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
-                    }
+            if let Some(min) = desc.min_inclusive {
+                if len < (min as usize) {
+                    let name = elem_name.unwrap_or("element");
+                    let msg = alloc::format!("Parse Error: failed check {name} ({len}) facet minInclusive ({min})");
+                    return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                 }
             }
 
@@ -2802,7 +2770,47 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             return Ok(None);
         }
 
-        if let Some(ref expr_str) = props.length_expr {
+        if let Some(ref prop) = props.length_prop {
+            match prop {
+                crate::schema::ir::DfdlProp::Constant(l) => Ok(Some(*l)),
+                crate::schema::ir::DfdlProp::Expression { ast, .. } => {
+                    let mut current_path = builder.current_path();
+                    if let Some(name) = elem_name {
+                        let clean_name = name.split(':').next_back().unwrap_or(name);
+                        let last_seg = current_path.segments().last().map(|s| s.as_str());
+                        if last_seg != Some(clean_name) {
+                            let _ = current_path.try_push(clean_name);
+                        }
+                    }
+                    let active_doc = builder.active_doc();
+                    let mut ctx = crate::expr::ExprContext::with_variable_map(
+                        Some(&active_doc),
+                        &current_path,
+                        &[],
+                        Some(&self.variable_map),
+                        self.budget,
+                    )
+                    .with_occurs_index(self.current_occurs_index)
+                    .with_schema(self.schema)
+                    .with_namespaces(&props.in_scope_namespaces)
+                    .with_enclosing_lengths(&self.enclosing_complex_elements);
+                    let val = crate::expr::eval_expr(ast, &mut ctx)?;
+                    let len = match val {
+                        DfdlValue::Int(v) if v >= 0 => v as usize,
+                        DfdlValue::Long(v) if v >= 0 => v as usize,
+                        DfdlValue::UnsignedInt(v) => v as usize,
+                        DfdlValue::UnsignedLong(v) => v as usize,
+                        DfdlValue::Short(v) if v >= 0 => v as usize,
+                        DfdlValue::Byte(v) if v >= 0 => v as usize,
+                        DfdlValue::UnsignedShort(v) => v as usize,
+                        DfdlValue::UnsignedByte(v) => v as usize,
+                        DfdlValue::String(ref s) => s.trim().parse::<usize>().unwrap_or(0),
+                        _ => 0,
+                    };
+                    Ok(Some(len))
+                }
+            }
+        } else if let Some(ref expr_str) = props.length_expr {
             let ast = crate::expr::parse_expr(expr_str)?;
             let mut current_path = builder.current_path();
             if let Some(name) = elem_name {
@@ -2851,19 +2859,19 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         builder: &InfosetBuilder,
     ) -> DFDLResult<DfdlValue> {
         let mut local_props;
-        let props = if (props.encoding.starts_with('{') && props.encoding.ends_with('}'))
-            || props.byte_order_expr.is_some()
-            || props.text_boolean_true_rep.as_ref().is_some_and(|s| s.starts_with('{') && s.ends_with('}'))
-            || props.text_boolean_false_rep.as_ref().is_some_and(|s| s.starts_with('{') && s.ends_with('}'))
-            || props.text_standard_exponent_rep.as_ref().is_some_and(|s| s.starts_with('{') && s.ends_with('}'))
+        let props = if props.encoding_prop.is_expression()
+            || props.byte_order_prop.is_expression()
+            || props.text_boolean_true_rep_prop.as_ref().is_some_and(|p| p.is_expression())
+            || props.text_boolean_false_rep_prop.as_ref().is_some_and(|p| p.is_expression())
+            || props.text_standard_exponent_rep_prop.as_ref().is_some_and(|p| p.is_expression())
         {
             local_props = props.clone();
-            if let Some(ref bo_expr) = props.byte_order_expr {
-                let bo = self.evaluate_property_str_at(bo_expr, builder, elem_name)?;
+            if let Some(ast) = props.byte_order_prop.expr_ast() {
+                let bo = self.evaluate_ast_at(ast, builder, elem_name, None)?;
                 local_props.byte_order = crate::expr::properties::parse_byte_order(&bo)?;
             }
-            if props.encoding.starts_with('{') && props.encoding.ends_with('}') {
-                let dyn_encoding = self.evaluate_property_str_at(&props.encoding, builder, elem_name)?;
+            if let Some(ast) = props.encoding_prop.expr_ast() {
+                let dyn_encoding = self.evaluate_ast_at(ast, builder, elem_name, None)?;
                 let dyn_upper = dyn_encoding.to_ascii_uppercase();
                 if dyn_upper.contains("6-BIT")
                     || dyn_upper.contains("5-BIT")
@@ -2878,22 +2886,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 local_props.encoding = dyn_encoding;
             }
-            if let Some(ref rep) = props.text_boolean_true_rep {
-                if rep.starts_with('{') && rep.ends_with('}') {
+            if let Some(ref prop) = props.text_boolean_true_rep_prop {
+                if let Some(ast) = prop.expr_ast() {
                     local_props.text_boolean_true_rep =
-                        Some(self.evaluate_property_str_at(rep, builder, elem_name)?);
+                        Some(self.evaluate_ast_at(ast, builder, elem_name, None)?);
                 }
             }
-            if let Some(ref rep) = props.text_boolean_false_rep {
-                if rep.starts_with('{') && rep.ends_with('}') {
+            if let Some(ref prop) = props.text_boolean_false_rep_prop {
+                if let Some(ast) = prop.expr_ast() {
                     local_props.text_boolean_false_rep =
-                        Some(self.evaluate_property_str_at(rep, builder, elem_name)?);
+                        Some(self.evaluate_ast_at(ast, builder, elem_name, None)?);
                 }
             }
-            if let Some(ref exp) = props.text_standard_exponent_rep {
-                if exp.starts_with('{') && exp.ends_with('}') {
+            if let Some(ref prop) = props.text_standard_exponent_rep_prop {
+                if let Some(ast) = prop.expr_ast() {
                     local_props.text_standard_exponent_rep =
-                        Some(self.evaluate_property_str_at(exp, builder, elem_name)?);
+                        Some(self.evaluate_ast_at(ast, builder, elem_name, None)?);
                 }
             }
             &local_props
@@ -3072,5 +3080,112 @@ mod tests {
         assert!(res.is_err());
         let err = alloc::format!("{}", res.unwrap_err());
         assert!(err.contains("Mismatched closing tag"));
+    }
+
+    /// Verifies value and simple type name mappings, coercion validations, and IVC conversions.
+    #[test]
+    fn test_ivc_coercion_and_type_names() {
+        // 1. All DfdlValue and DfdlSimpleType variants formatting
+        let vals = [
+            DfdlValue::String("s".into()),
+            DfdlValue::Int(1),
+            DfdlValue::Long(2),
+            DfdlValue::Short(3),
+            DfdlValue::Byte(4),
+            DfdlValue::UnsignedLong(5),
+            DfdlValue::UnsignedInt(6),
+            DfdlValue::UnsignedShort(7),
+            DfdlValue::UnsignedByte(8),
+            DfdlValue::Boolean(true),
+            DfdlValue::Float(1.0),
+            DfdlValue::Double(2.0),
+            DfdlValue::HexBinary(alloc::vec![0xAA]),
+            DfdlValue::DateTime("2026-10-08T00:00:00".into()),
+            DfdlValue::Date("2026-10-08".into()),
+            DfdlValue::Time("00:00:00".into()),
+            DfdlValue::Decimal("12.34".into()),
+        ];
+        let types = [
+            DfdlSimpleType::String,
+            DfdlSimpleType::Int,
+            DfdlSimpleType::Long,
+            DfdlSimpleType::Short,
+            DfdlSimpleType::Byte,
+            DfdlSimpleType::UnsignedLong,
+            DfdlSimpleType::UnsignedInt,
+            DfdlSimpleType::UnsignedShort,
+            DfdlSimpleType::UnsignedByte,
+            DfdlSimpleType::Boolean,
+            DfdlSimpleType::Float,
+            DfdlSimpleType::Double,
+            DfdlSimpleType::HexBinary,
+            DfdlSimpleType::DateTime,
+            DfdlSimpleType::Date,
+            DfdlSimpleType::Time,
+            DfdlSimpleType::Decimal,
+        ];
+        for v in &vals {
+            assert!(!dfdl_value_type_name(v).is_empty());
+        }
+        for t in &types {
+            assert!(!dfdl_simple_type_name(t).is_empty());
+        }
+
+        // 2. validate_expression_result_coercion compatibility & errors
+        assert!(validate_expression_result_coercion(&DfdlValue::Int(1), &DfdlSimpleType::Int).is_ok());
+        assert!(validate_expression_result_coercion(&DfdlValue::Int(1), &DfdlSimpleType::Long).is_ok());
+        assert!(validate_expression_result_coercion(&DfdlValue::Short(1), &DfdlSimpleType::Int).is_ok());
+        assert!(validate_expression_result_coercion(&DfdlValue::Byte(1), &DfdlSimpleType::Int).is_ok());
+        assert!(validate_expression_result_coercion(&DfdlValue::Byte(1), &DfdlSimpleType::Short).is_ok());
+        assert!(validate_expression_result_coercion(&DfdlValue::Double(1.0), &DfdlSimpleType::Decimal).is_ok());
+        assert!(validate_expression_result_coercion(&DfdlValue::String("x".into()), &DfdlSimpleType::Int).is_err());
+
+        // 3. coerce_and_validate_ivc_value conversions
+        let mut props = ResolvedProperties::default();
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Int(42), &DfdlSimpleType::Double, &props).unwrap(), DfdlValue::Double(42.0));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Int(0), &DfdlSimpleType::Boolean, &props).unwrap(), DfdlValue::Boolean(false));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Int(1), &DfdlSimpleType::Boolean, &props).unwrap(), DfdlValue::Boolean(true));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Int(5), &DfdlSimpleType::Boolean, &props).unwrap(), DfdlValue::Int(5));
+
+        // Facet min_exclusive and min_inclusive rejections
+        props.facets.min_exclusive = Some("0".into());
+        assert!(coerce_and_validate_ivc_value(&DfdlValue::Int(0), &DfdlSimpleType::Decimal, &props).is_err());
+        assert!(coerce_and_validate_ivc_value(&DfdlValue::Int(-1), &DfdlSimpleType::Decimal, &props).is_err());
+
+        props.facets.min_exclusive = None;
+        props.facets.min_inclusive = Some("0".into());
+        assert!(coerce_and_validate_ivc_value(&DfdlValue::Int(-5), &DfdlSimpleType::Decimal, &props).is_err());
+        assert!(coerce_and_validate_ivc_value(&DfdlValue::Long(-5), &DfdlSimpleType::Decimal, &props).is_err());
+        assert!(coerce_and_validate_ivc_value(&DfdlValue::Double(-5.0), &DfdlSimpleType::Decimal, &props).is_err());
+
+        // HexBinary from hex string
+        props.facets.min_inclusive = None;
+        let hex_coerced = coerce_and_validate_ivc_value(&DfdlValue::String("ABCD".into()), &DfdlSimpleType::HexBinary, &props).unwrap();
+        assert_eq!(hex_coerced, DfdlValue::HexBinary(alloc::vec![0xAB, 0xCD]));
+        let hex_invalid = coerce_and_validate_ivc_value(&DfdlValue::String("XYZ".into()), &DfdlSimpleType::HexBinary, &props).unwrap();
+        assert_eq!(hex_invalid, DfdlValue::String("XYZ".into()));
+
+        // Cross-float and string parsing
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Float(1.5), &DfdlSimpleType::Double, &props).unwrap(), DfdlValue::Double(1.5));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Double(2.5), &DfdlSimpleType::Float, &props).unwrap(), DfdlValue::Float(2.5));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("100".into()), &DfdlSimpleType::Int, &props).unwrap(), DfdlValue::Int(100));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("200".into()), &DfdlSimpleType::Long, &props).unwrap(), DfdlValue::Long(200));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("300".into()), &DfdlSimpleType::Short, &props).unwrap(), DfdlValue::Short(300));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("50".into()), &DfdlSimpleType::Byte, &props).unwrap(), DfdlValue::Byte(50));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("1000".into()), &DfdlSimpleType::UnsignedLong, &props).unwrap(), DfdlValue::UnsignedLong(1000));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("2000".into()), &DfdlSimpleType::UnsignedInt, &props).unwrap(), DfdlValue::UnsignedInt(2000));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("3000".into()), &DfdlSimpleType::UnsignedShort, &props).unwrap(), DfdlValue::UnsignedShort(3000));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::String("150".into()), &DfdlSimpleType::UnsignedByte, &props).unwrap(), DfdlValue::UnsignedByte(150));
+
+        // Decimal to Float and Double
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Decimal("12.5".into()), &DfdlSimpleType::Float, &props).unwrap(), DfdlValue::Float(12.5));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Decimal("12.5".into()), &DfdlSimpleType::Double, &props).unwrap(), DfdlValue::Double(12.5));
+
+        // Long and Int to Decimal
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Long(123), &DfdlSimpleType::Decimal, &props).unwrap(), DfdlValue::Decimal("123".into()));
+        assert_eq!(coerce_and_validate_ivc_value(&DfdlValue::Int(456), &DfdlSimpleType::Decimal, &props).unwrap(), DfdlValue::Decimal("456".into()));
+
+        // UnsignedLong negative rejection
+        assert!(coerce_and_validate_ivc_value(&DfdlValue::String("-50".into()), &DfdlSimpleType::UnsignedLong, &props).is_err());
     }
 }

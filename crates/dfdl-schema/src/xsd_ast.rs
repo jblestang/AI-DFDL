@@ -289,3 +289,182 @@ impl XsdSchema {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects
+)]
+mod tests {
+    use super::*;
+
+    /// Verifies XsdSchema default properties and merge operations without conflicts.
+    #[test]
+    fn test_xsd_schema_merge_success() {
+        let mut s1 = XsdSchema::default();
+        let mut s2 = XsdSchema::default();
+
+        let mut fmt1 = PropertyStore::new();
+        fmt1.set_property("initiator", "[").unwrap();
+        s1.defined_formats.push((QName::local("fmt1"), fmt1));
+
+        let mut fmt2 = PropertyStore::new();
+        fmt2.set_property("terminator", "]").unwrap();
+        s2.defined_formats.push((QName::local("fmt2"), fmt2));
+
+        let mut es = PropertyStore::new();
+        es.set_property("escapeCharacter", "/").unwrap();
+        s2.defined_escape_schemes.push((QName::local("es1"), es));
+
+        s1.defined_variables.push(DfdlVariableDef {
+            name: QName::local("v1"),
+            var_type: DfdlSimpleType::String,
+            default_value: None,
+            direction: dfdl_core::expr::variables::VariableDirection::Both,
+        });
+
+        s2.defined_variables.push(DfdlVariableDef {
+            name: QName::local("v1"),
+            var_type: DfdlSimpleType::Int,
+            default_value: Some("42".into()),
+            direction: dfdl_core::expr::variables::VariableDirection::Both,
+        });
+
+        // Test ref element replacement by concrete element definition
+        let mut ref_props = PropertyStore::new();
+        ref_props.set_property("__dfdl_element_ref", "true").unwrap();
+        s1.top_level_elements.push(XsdElement {
+            name: QName::local("refElem"),
+            elem_type: XsdType::Simple(DfdlSimpleType::String),
+            type_name: None,
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+            properties: ref_props,
+        });
+
+        s2.top_level_elements.push(XsdElement {
+            name: QName::local("refElem"),
+            elem_type: XsdType::Simple(DfdlSimpleType::Int),
+            type_name: None,
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+            properties: PropertyStore::new(),
+        });
+
+        assert!(s1.merge(s2).is_ok());
+        assert_eq!(s1.defined_formats.len(), 2);
+        assert_eq!(s1.defined_escape_schemes.len(), 1);
+        let v1 = s1.defined_variables.iter().find(|v| v.name.local_name == "v1").unwrap();
+        assert_eq!(v1.var_type, DfdlSimpleType::Int);
+        assert_eq!(v1.default_value.as_deref(), Some("42"));
+        let elem = s1.top_level_elements.iter().find(|e| e.name.local_name == "refElem").unwrap();
+        assert_eq!(elem.elem_type, XsdType::Simple(DfdlSimpleType::Int));
+    }
+
+    /// Verifies XsdSchema::merge conflict detections for duplicate groups, types, and elements.
+    #[test]
+    fn test_xsd_schema_merge_conflicts() {
+        // Duplicate conflicting named group
+        let mut s1 = XsdSchema::default();
+        let mut s2 = XsdSchema::default();
+        let qn_grp = QName::local("grp");
+        s1.named_groups.push((
+            qn_grp.clone(),
+            XsdSequence {
+                members: alloc::vec![XsdTerm::GroupRef(QName::local("m1"), PropertyStore::new())],
+                properties: PropertyStore::new(),
+            },
+        ));
+        s2.named_groups.push((
+            qn_grp,
+            XsdSequence {
+                members: alloc::vec![XsdTerm::GroupRef(QName::local("m2"), PropertyStore::new())],
+                properties: PropertyStore::new(),
+            },
+        ));
+        assert!(s1.merge(s2).is_err());
+
+        // Duplicate conflicting named complex type
+        let mut s3 = XsdSchema::default();
+        let mut s4 = XsdSchema::default();
+        let qn_ct = QName::local("ct");
+        s3.named_complex_types.push((qn_ct.clone(), XsdType::Simple(DfdlSimpleType::Int)));
+        s4.named_complex_types.push((qn_ct, XsdType::Simple(DfdlSimpleType::String)));
+        assert!(s3.merge(s4).is_err());
+
+        // Duplicate conflicting named simple type
+        let mut s5 = XsdSchema::default();
+        let mut s6 = XsdSchema::default();
+        let qn_st = QName::local("st");
+        s5.named_simple_types.push(XsdNamedSimpleType {
+            name: qn_st.clone(),
+            xsd_type: XsdType::Simple(DfdlSimpleType::Int),
+            local_props: PropertyStore::new(),
+            effective_props: PropertyStore::new(),
+        });
+        s6.named_simple_types.push(XsdNamedSimpleType {
+            name: qn_st,
+            xsd_type: XsdType::Simple(DfdlSimpleType::String),
+            local_props: PropertyStore::new(),
+            effective_props: PropertyStore::new(),
+        });
+        assert!(s5.merge(s6).is_err());
+
+        // Duplicate conflicting top-level element
+        let mut s7 = XsdSchema::default();
+        let mut s8 = XsdSchema::default();
+        let qn_el = QName::local("elem");
+        s7.top_level_elements.push(XsdElement {
+            name: qn_el.clone(),
+            elem_type: XsdType::Simple(DfdlSimpleType::Int),
+            type_name: None,
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+            properties: PropertyStore::new(),
+        });
+        s8.top_level_elements.push(XsdElement {
+            name: qn_el,
+            elem_type: XsdType::Simple(DfdlSimpleType::String),
+            type_name: None,
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+            properties: PropertyStore::new(),
+        });
+        assert!(s7.merge(s8).is_err());
+
+        // Successful merge of new complex type, simple type with global format propagation, and variable
+        let mut s_base = XsdSchema::default();
+        let mut s_new = XsdSchema::default();
+        s_new.global_format.set_property("byteOrder", "bigEndian").unwrap();
+        s_new.named_complex_types.push((QName::local("newCt"), XsdType::Simple(DfdlSimpleType::Int)));
+        s_new.named_simple_types.push(XsdNamedSimpleType {
+            name: QName::local("newSt"),
+            xsd_type: XsdType::Simple(DfdlSimpleType::String),
+            local_props: PropertyStore::new(),
+            effective_props: PropertyStore::new(),
+        });
+        s_new.defined_variables.push(DfdlVariableDef {
+            name: QName::local("newVar"),
+            var_type: DfdlSimpleType::Int,
+            default_value: Some("42".into()),
+            direction: dfdl_core::expr::variables::VariableDirection::Both,
+        });
+
+        assert!(s_base.merge(s_new).is_ok());
+        assert_eq!(s_base.named_complex_types.len(), 1);
+        assert_eq!(s_base.named_simple_types.len(), 1);
+        assert_eq!(s_base.named_simple_types[0].effective_props.get_property("byteOrder"), Some("bigEndian"));
+        assert_eq!(s_base.defined_variables.len(), 1);
+    }
+}
+

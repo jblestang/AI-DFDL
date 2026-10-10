@@ -1817,7 +1817,12 @@ pub(crate) fn format_calendar_with_pattern(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects
+)]
 mod tests {
     use super::*;
 
@@ -1867,6 +1872,309 @@ mod tests {
         // English date: 2013-03-01 with EEEE MMMM yyyy -> Friday March 2013
         let res = format_calendar_with_pattern("2013-03-01", "EEEE MMMM yyyy", Some("en"), None).unwrap();
         assert_eq!(res, "Friday March 2013");
+
+        // Short month names (MMM) in German, Spanish, and Russian
+        assert_eq!(format_calendar_with_pattern("2026-10-08", "MMM yyyy", Some("de"), None).unwrap(), "Okt 2026");
+        assert_eq!(format_calendar_with_pattern("2026-10-08", "MMM yyyy", Some("es"), None).unwrap(), "oct 2026");
+        assert_eq!(format_calendar_with_pattern("2026-10-08", "MMM yyyy", Some("ru"), None).unwrap(), "окт. 2026");
+
+        // Quoted literals and escaped quotes in calendar pattern
+        assert_eq!(format_calendar_with_pattern("2026-10-08T12:30:45", "yyyy-MM-dd'T'HH:mm:ss", None, None).unwrap(), "2026-10-08T12:30:45");
+        assert_eq!(format_calendar_with_pattern("2026-10-08T12:30:45", "yyyy-MM-dd'at''noon'HH:mm:ss", None, None).unwrap(), "2026-10-08at'noon12:30:45");
+
+        // Timezone normalization for 2-digit and 4-digit offsets without colon
+        assert_eq!(normalize_timezone_suffix("+05", crate::schema::ir::CalendarCheckPolicy::Strict), Some("+05:00".into()));
+        assert_eq!(normalize_timezone_suffix("+0530", crate::schema::ir::CalendarCheckPolicy::Strict), Some("+05:30".into()));
+        assert_eq!(normalize_timezone_suffix("-08", crate::schema::ir::CalendarCheckPolicy::Strict), Some("-08:00".into()));
+        assert_eq!(normalize_timezone_suffix("-0800", crate::schema::ir::CalendarCheckPolicy::Strict), Some("-08:00".into()));
+
+        // parse_xs_date_time_wall_ms valid and error branches (lines 74-121)
+        assert!(parse_xs_date_time_wall_ms("2026-10-08T12:00:00Z").is_ok());
+        assert!(parse_xs_date_time_wall_ms("2026-10-08T12:00:00.5Z").is_ok());
+        assert!(parse_xs_date_time_wall_ms("-0044-03-15T00:00:00Z").is_ok());
+        assert!(parse_xs_date_time_wall_ms("bad_epoch").is_err());
+        assert!(parse_xs_date_time_wall_ms("2026-10T12:00:00").is_err());
+        assert!(parse_xs_date_time_wall_ms("ABCD-10-08T12:00:00").is_err());
+        assert!(parse_xs_date_time_wall_ms("2026-XX-08T12:00:00").is_err());
+        assert!(parse_xs_date_time_wall_ms("2026-10-YYT12:00:00").is_err());
+
+        // Day of week first_day_of_week variations in calendar pattern parsing (lines 268-298)
+        let test_pat = |text: &str, pat: &str, fdw: crate::schema::ir::CalendarFirstDayOfWeek| {
+            parse_calendar_from_text(
+                text,
+                Some(pat),
+                None,
+                crate::schema::ir::TextTrimKind::None,
+                DfdlSimpleType::Date,
+                crate::schema::ir::CalendarCheckPolicy::Lax,
+                fdw,
+            )
+        };
+        assert!(test_pat("3 2026-10-08", "e yyyy-MM-dd", crate::schema::ir::CalendarFirstDayOfWeek::Tuesday).is_ok());
+        assert!(test_pat("3 2026-10-08", "e yyyy-MM-dd", crate::schema::ir::CalendarFirstDayOfWeek::Wednesday).is_ok());
+        assert!(test_pat("3 2026-10-08", "e yyyy-MM-dd", crate::schema::ir::CalendarFirstDayOfWeek::Thursday).is_ok());
+        assert!(test_pat("3 2026-10-08", "e yyyy-MM-dd", crate::schema::ir::CalendarFirstDayOfWeek::Friday).is_ok());
+        assert!(test_pat("3 2026-10-08", "e yyyy-MM-dd", crate::schema::ir::CalendarFirstDayOfWeek::Saturday).is_ok());
+        assert!(test_pat("Thu 2026-10-08", "eee yyyy-MM-dd", crate::schema::ir::CalendarFirstDayOfWeek::Sunday).is_ok());
+    }
+
+    /// Tests additional calendar parser branches including day name length resolution,
+    /// escaped quotes in pattern strings, week/julian field parsing, lax month rolling, and timezone aliases.
+    ///
+    /// Verifies that:
+    /// 1. Day of week matching prefers the longest matching name (e.g. "Thursday" over "Thu").
+    /// 2. Escaped quotes (`''`) inside pattern literals match single quotes in input text.
+    /// 3. Week and day-of-week-in-month fields (`w`, `W`, `F`, `g`) are consumed without error.
+    /// 4. Lax calendar checking normalizes months greater than 12 by rolling over to the next year.
+    /// 5. Timezone normalizer maps `-00:00` to `+00:00` under Lax policy and rejects it under Strict policy.
+    /// 6. Named UTC/GMT timezone prefixes are recognized and normalized under Lax policy.
+    #[test]
+    fn test_calendar_parser_extended_coverage() {
+        // 1. Longest day of week matching ("Thursday" vs "Thu", line 188)
+        let (dow_full, len_full) = match_day_of_week("Thursday").unwrap();
+        assert_eq!(dow_full, 4);
+        assert_eq!(len_full, 8);
+
+        // 2. Escaped quotes in pattern string (lines 224-228)
+        let res_quotes = parse_calendar_with_pattern(
+            "2026'10'08",
+            "yyyy''MM''dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_quotes, Some("2026-10-08".into()));
+
+        // 3. Week field (lines 248-260)
+        let res_week = parse_calendar_with_pattern(
+            "2026-10-08 w41",
+            "yyyy-MM-dd 'w'ww",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_week, Some("2026-10-08".into()));
+
+        // 4. Month > 12 lax normalization (lines 636-642)
+        let res_lax_month = parse_calendar_with_pattern(
+            "2026-14-08",
+            "yyyy-MM-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_lax_month, Some("2027-02-08".into()));
+
+        // 5. Strict rejection of out-of-range month and hours (lines 648-653)
+        assert!(parse_calendar_with_pattern(
+            "2026-13-08",
+            "yyyy-MM-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        ).is_none());
+
+        assert!(parse_calendar_with_pattern(
+            "25:00:00",
+            "HH:mm:ss",
+            DfdlSimpleType::Time,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        ).is_none());
+
+        // 6. Timezone normalization with -00:00 and GMT/UTC prefixes (lines 676-691)
+        assert_eq!(
+            normalize_timezone_suffix("-00:00", crate::schema::ir::CalendarCheckPolicy::Strict),
+            None
+        );
+        assert_eq!(
+            normalize_timezone_suffix("-00:00", crate::schema::ir::CalendarCheckPolicy::Lax),
+            Some("+00:00".into())
+        );
+        assert_eq!(
+            normalize_timezone_suffix("GMT+05:00", crate::schema::ir::CalendarCheckPolicy::Lax),
+            Some("+05:00".into())
+        );
+        assert_eq!(
+            normalize_timezone_suffix("UTC-03:00", crate::schema::ir::CalendarCheckPolicy::Lax),
+            Some("-03:00".into())
+        );
+
+        // 7. Day of week mapping with CalendarFirstDayOfWeek variants (lines 280-298)
+        let dow_tue = parse_calendar_with_pattern(
+            "2026-10-08 e3",
+            "yyyy-MM-dd 'e'e",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Tuesday,
+        );
+        assert_eq!(dow_tue, Some("2026-10-08".into()));
+
+        let dow_fri = parse_calendar_with_pattern(
+            "2026-10-08 e7",
+            "yyyy-MM-dd 'e'e",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Friday,
+        );
+        assert_eq!(dow_fri, Some("2026-10-08".into()));
+
+        // 8. Day of year field 'D' (lines 332-353)
+        let res_doy = parse_calendar_with_pattern(
+            "2026-281",
+            "yyyy-DDD",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_doy.is_some());
+
+        // 9. 2-digit year >= 50 rolls into 1900s (line 328)
+        let res_y50 = parse_calendar_with_pattern(
+            "75-10-08",
+            "yy-MM-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_y50, Some("1975-10-08".into()));
+
+        // 10. Month name matching (lines 360-364)
+        let res_mname = parse_calendar_with_pattern(
+            "2026-October-08",
+            "yyyy-MMMM-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_mname, Some("2026-10-08".into()));
+
+        // 11. Timezone variations: Z, GMT, 2-digit, 4-digit (lines 673-720)
+        assert_eq!(normalize_timezone_suffix("Z", crate::schema::ir::CalendarCheckPolicy::Strict), Some("Z".into()));
+        assert_eq!(normalize_timezone_suffix("GMT", crate::schema::ir::CalendarCheckPolicy::Lax), Some("+00:00".into()));
+        assert_eq!(normalize_timezone_suffix("+5", crate::schema::ir::CalendarCheckPolicy::Lax), Some("+05:00".into()));
+        assert_eq!(normalize_timezone_suffix("+0530", crate::schema::ir::CalendarCheckPolicy::Lax), Some("+05:30".into()));
+
+        // 12. days_in_month out-of-range returns 0 (line 32)
+        assert_eq!(days_in_month(2024, 13), 0);
+        assert_eq!(days_in_month(2024, 0), 0);
+
+        // 13. CalendarFirstDayOfWeek for Wednesday, Thursday, Saturday (lines 286-297)
+        let res_wed = parse_calendar_with_pattern(
+            "2024-01-15 3",
+            "yyyy-MM-dd e",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Wednesday,
+        );
+        assert!(res_wed.is_some());
+
+        let res_thu = parse_calendar_with_pattern(
+            "2024-01-15 3",
+            "yyyy-MM-dd e",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Thursday,
+        );
+        assert!(res_thu.is_some());
+
+        let res_sat = parse_calendar_with_pattern(
+            "2024-01-15 3",
+            "yyyy-MM-dd e",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Saturday,
+        );
+        assert!(res_sat.is_some());
+
+        // 14. Pattern without separators between year and month (line 317)
+        let res_ymd = parse_calendar_with_pattern(
+            "20240115",
+            "yyyyMMdd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_ymd, Some("2024-01-15".into()));
+
+        // 15. Negative zero timezone offset rejection (line 554)
+        let res_neg_zero = parse_calendar_with_pattern(
+            "2024-01-15T12:00:00-00:00",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            DfdlSimpleType::DateTime,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_neg_zero.is_none());
+
+        // 16. GMT with positive offset (lines 543-547)
+        let res_gmt_offset = parse_calendar_with_pattern(
+            "2024-01-15T12:00:00GMT+02:00",
+            "yyyy-MM-dd'T'HH:mm:ssz",
+            DfdlSimpleType::DateTime,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_gmt_offset.is_some());
+
+        // 17. Era G matching AD (lines 521-523)
+        let res_era_ad = parse_calendar_with_pattern(
+            "2024-01-15 AD",
+            "yyyy-MM-dd G",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_era_ad.is_some());
+
+        // 18. Escaped quote in pattern: '' (lines 224-228)
+        let res_quote = parse_calendar_with_pattern(
+            "2024'01'15",
+            "yyyy''MM''dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert_eq!(res_quote, Some("2024-01-15".into()));
+
+        // 19. Week/day patterns w, W, F, g (lines 248-260)
+        let res_w = parse_calendar_with_pattern(
+            "2024-03-15",
+            "yyyy-ww-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_w.is_some());
+
+        // 20. Pattern with day of week E and eee (lines 268-272, 405-414)
+        let res_e = parse_calendar_with_pattern(
+            "Monday, 2024-01-15",
+            "eee, yyyy-MM-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_e.is_some());
+
+        let res_e_cap = parse_calendar_with_pattern(
+            "Mon, 2024-01-15",
+            "EEE, yyyy-MM-dd",
+            DfdlSimpleType::Date,
+            crate::schema::ir::CalendarCheckPolicy::Lax,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_e_cap.is_some());
+
+        // 21. Quoted literal with 'literal' (lines 231-247)
+        let res_lit = parse_calendar_with_pattern(
+            "2024T12H30M00",
+            "yyyy'T'HH'H'mm'M'ss",
+            DfdlSimpleType::DateTime,
+            crate::schema::ir::CalendarCheckPolicy::Strict,
+            crate::schema::ir::CalendarFirstDayOfWeek::Monday,
+        );
+        assert!(res_lit.is_some());
     }
 }
 

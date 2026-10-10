@@ -472,4 +472,70 @@ mod tests {
 
         assert_eq!(buf.len(), 2);
     }
+
+    /// Verifies lookahead_bits, zero-bit operations, limits, and order accessors.
+    #[test]
+    fn test_bitstream_lookahead_and_limits() {
+        let data = [
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+            0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00,
+            0x12, 0x34,
+        ];
+        let src = SliceByteSource::new(&data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+
+        // Byte order and remaining bytes
+        assert_eq!(reader.byte_order(), ByteOrder::BigEndian);
+        assert_eq!(reader.remaining_bytes(), 18);
+
+        // Read 0 bits returns Ok(0)
+        assert_eq!(reader.read_bits(0).unwrap(), 0);
+
+        // Read > 64 bits returns ImplementationLimit error
+        let err_read_large = reader.read_bits(65);
+        assert!(matches!(err_read_large, Err(ref e) if e.kind == DFDLErrorKind::ImplementationLimit));
+
+        // Lookahead <= 64 bits with 0 offset
+        let la_64 = reader.lookahead_bits(0, 16).unwrap();
+        assert_eq!(la_64, 0x1122);
+        assert_eq!(reader.position(), crate::types::BitOffset(0)); // Position must be unchanged
+
+        // Lookahead with offset > 0
+        let la_offset = reader.lookahead_bits(8, 16).unwrap();
+        assert_eq!(la_offset, 0x2233);
+        assert_eq!(reader.position(), crate::types::BitOffset(0));
+
+        // Lookahead up to 128 bits (e.g. 72 bits)
+        let la_72 = reader.lookahead_bits(0, 72).unwrap();
+        assert_eq!(reader.position(), crate::types::BitOffset(0));
+        assert_eq!((la_72 >> 8) as u64, 0x1122334455667788);
+
+        // Lookahead > 128 bits returns ImplementationLimit error
+        let err_la_overflow = reader.lookahead_bits(0, 129);
+        assert!(matches!(err_la_overflow, Err(ref e) if e.kind == DFDLErrorKind::ImplementationLimit));
+
+        // Lookahead beyond stream end returns Parse error (insufficient bits)
+        let err_la_insufficient = reader.lookahead_bits(0, 128 + 64);
+        assert!(err_la_insufficient.is_err());
+
+        // Writer operations
+        let sink = VecByteSink::new();
+        let mut writer = BitWriter::new(
+            sink,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+
+        assert_eq!(writer.byte_order(), ByteOrder::BigEndian);
+        writer.set_bit_order(BitOrder::LeastSignificantBitFirst);
+
+        // Write 0 bits returns Ok(())
+        assert!(writer.write_bits(0, 0).is_ok());
+
+        // Write > 64 bits returns ImplementationLimit error
+        let err_write_large = writer.write_bits(1, 65);
+        assert!(matches!(err_write_large, Err(ref e) if e.kind == DFDLErrorKind::ImplementationLimit));
+    }
 }
+

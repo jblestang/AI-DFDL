@@ -1707,6 +1707,39 @@ mod tests {
     }
 
     #[test]
+    fn test_delimiters_conformance_tdml_suite() {
+        use crate::tdml::{TdmlRunner, TdmlTestSuite};
+
+        let tdml_content = include_str!("../tests/delimiters/delimiters_conformance.tdml");
+        let suite = match TdmlTestSuite::parse_xml(tdml_content) {
+            Ok(s) => s,
+            Err(e) => panic!("Failed to parse Delimiters TDML test suite XML: {:?}", e),
+        };
+
+        let default_schema = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" bitOrder="mostSignificantBitFirst" alignment="1" representation="text" encoding="UTF-8" lengthKind="delimited"/>
+</xs:schema>"#;
+
+        let path = std::path::Path::new("tests/delimiters/delimiters_conformance.tdml");
+        let report = TdmlRunner::run_suite_with_base_dir(&suite, default_schema, path.parent());
+
+        for failure in &report.failure_messages {
+            eprintln!("[Delimiters TDML Failure] {}", failure);
+        }
+
+        assert_eq!(
+            report.failed, 0,
+            "Delimiters TDML Conformance Suite failed {} / {} test cases: {:?}",
+            report.failed, report.total, report.failure_messages
+        );
+        assert!(
+            report.passed > 0,
+            "Delimiters TDML Conformance Suite ran zero test cases"
+        );
+    }
+
+    #[test]
     #[ignore = "Full Apache Daffodil official TDML benchmark suite (4,337 test cases) - run explicitly with -- --ignored"]
     fn test_apache_daffodil_official_tdml_suite() {
         use crate::tdml::{TdmlRunner, TdmlTestSuite};

@@ -375,4 +375,106 @@ mod tests {
             assert!(!t.is_numeric(), "Expected {:?} to be non-numeric", t);
         }
     }
+
+    /// Verifies default primitive values, type names, coercions, EBV, and is_negative across all types.
+    #[test]
+    fn test_dfdl_value_coercions_ebv_and_defaults() {
+        let all_types = [
+            DfdlSimpleType::String,
+            DfdlSimpleType::Int,
+            DfdlSimpleType::Long,
+            DfdlSimpleType::Short,
+            DfdlSimpleType::Byte,
+            DfdlSimpleType::UnsignedLong,
+            DfdlSimpleType::UnsignedInt,
+            DfdlSimpleType::UnsignedShort,
+            DfdlSimpleType::UnsignedByte,
+            DfdlSimpleType::Boolean,
+            DfdlSimpleType::Float,
+            DfdlSimpleType::Double,
+            DfdlSimpleType::HexBinary,
+            DfdlSimpleType::DateTime,
+            DfdlSimpleType::Date,
+            DfdlSimpleType::Time,
+            DfdlSimpleType::Decimal,
+        ];
+
+        for t in all_types {
+            let def = t.default_primitive_value();
+            assert_eq!(def.simple_type(), t);
+            assert_eq!(t.name(), def.type_name());
+            assert!(!t.name().is_empty());
+        }
+
+        // Coerce string to numeric and boolean types
+        let str_val = DfdlValue::String("123".into());
+        assert_eq!(DfdlSimpleType::Int.coerce_value(&str_val), Some(DfdlValue::Int(123)));
+        assert_eq!(DfdlSimpleType::Long.coerce_value(&str_val), Some(DfdlValue::Long(123)));
+        assert_eq!(DfdlSimpleType::Short.coerce_value(&str_val), Some(DfdlValue::Short(123)));
+        assert_eq!(DfdlSimpleType::Byte.coerce_value(&str_val), Some(DfdlValue::Byte(123)));
+        assert_eq!(DfdlSimpleType::UnsignedLong.coerce_value(&str_val), Some(DfdlValue::UnsignedLong(123)));
+        assert_eq!(DfdlSimpleType::UnsignedInt.coerce_value(&str_val), Some(DfdlValue::UnsignedInt(123)));
+        assert_eq!(DfdlSimpleType::UnsignedShort.coerce_value(&str_val), Some(DfdlValue::UnsignedShort(123)));
+        assert_eq!(DfdlSimpleType::UnsignedByte.coerce_value(&str_val), Some(DfdlValue::UnsignedByte(123)));
+        assert_eq!(DfdlSimpleType::Float.coerce_value(&str_val), Some(DfdlValue::Float(123.0)));
+        assert_eq!(DfdlSimpleType::Double.coerce_value(&str_val), Some(DfdlValue::Double(123.0)));
+
+        assert_eq!(DfdlSimpleType::Boolean.coerce_value(&DfdlValue::String("true".into())), Some(DfdlValue::Boolean(true)));
+        assert_eq!(DfdlSimpleType::Boolean.coerce_value(&DfdlValue::String("0".into())), Some(DfdlValue::Boolean(false)));
+        assert_eq!(DfdlSimpleType::Boolean.coerce_value(&DfdlValue::String("invalid".into())), None);
+
+        // as_i128 across integer types
+        assert_eq!(DfdlValue::Short(10).as_i128(), Some(10));
+        assert_eq!(DfdlValue::Byte(5).as_i128(), Some(5));
+        assert_eq!(DfdlValue::Long(100).as_i128(), Some(100));
+        assert_eq!(DfdlValue::UnsignedLong(100).as_i128(), Some(100));
+        assert_eq!(DfdlValue::UnsignedInt(50).as_i128(), Some(50));
+        assert_eq!(DfdlValue::UnsignedShort(20).as_i128(), Some(20));
+        assert_eq!(DfdlValue::UnsignedByte(10).as_i128(), Some(10));
+        assert_eq!(DfdlValue::Decimal("99".into()).as_i128(), Some(99));
+        assert_eq!(DfdlValue::Boolean(true).as_i128(), None);
+
+        // effective_boolean_value
+        assert!(DfdlValue::Boolean(true).effective_boolean_value());
+        assert!(!DfdlValue::Boolean(false).effective_boolean_value());
+        assert!(DfdlValue::Long(1).effective_boolean_value());
+        assert!(!DfdlValue::Long(0).effective_boolean_value());
+        assert!(DfdlValue::Short(1).effective_boolean_value());
+        assert!(DfdlValue::Byte(1).effective_boolean_value());
+        assert!(DfdlValue::UnsignedLong(1).effective_boolean_value());
+        assert!(DfdlValue::UnsignedInt(1).effective_boolean_value());
+        assert!(DfdlValue::UnsignedShort(1).effective_boolean_value());
+        assert!(DfdlValue::UnsignedByte(1).effective_boolean_value());
+        assert!(DfdlValue::Float(12.34).effective_boolean_value());
+        assert!(!DfdlValue::Float(0.0).effective_boolean_value());
+        assert!(DfdlValue::Double(56.78).effective_boolean_value());
+        assert!(!DfdlValue::Double(0.0).effective_boolean_value());
+        assert!(DfdlValue::Decimal("12".into()).effective_boolean_value());
+        assert!(!DfdlValue::Decimal("0".into()).effective_boolean_value());
+        assert!(DfdlValue::String("non-empty".into()).effective_boolean_value());
+        assert!(!DfdlValue::String("".into()).effective_boolean_value());
+
+        // is_negative
+        assert!(DfdlValue::Int(-5).is_negative());
+        assert!(!DfdlValue::Int(5).is_negative());
+        assert!(DfdlValue::Long(-50).is_negative());
+        assert!(DfdlValue::Short(-10).is_negative());
+        assert!(DfdlValue::Byte(-1).is_negative());
+        assert!(DfdlValue::Float(-12.34).is_negative());
+        assert!(DfdlValue::Double(-56.78).is_negative());
+        assert!(DfdlValue::Decimal("-123".into()).is_negative());
+        assert!(!DfdlValue::UnsignedLong(10).is_negative());
+
+        // Display formatting
+        assert_eq!(alloc::format!("{}", DfdlValue::Short(10)), "10");
+        assert_eq!(alloc::format!("{}", DfdlValue::Byte(2)), "2");
+        assert_eq!(alloc::format!("{}", DfdlValue::UnsignedLong(99)), "99");
+        assert_eq!(alloc::format!("{}", DfdlValue::UnsignedInt(88)), "88");
+        assert_eq!(alloc::format!("{}", DfdlValue::UnsignedShort(77)), "77");
+        assert_eq!(alloc::format!("{}", DfdlValue::UnsignedByte(66)), "66");
+        assert_eq!(alloc::format!("{}", DfdlValue::Boolean(true)), "true");
+        assert_eq!(alloc::format!("{}", DfdlValue::Date("2026-01-01".into())), "2026-01-01");
+        assert_eq!(alloc::format!("{}", DfdlValue::Time("12:00:00".into())), "12:00:00");
+        assert_eq!(alloc::format!("{}", DfdlValue::DateTime("2026-01-01T12:00:00".into())), "2026-01-01T12:00:00");
+    }
 }

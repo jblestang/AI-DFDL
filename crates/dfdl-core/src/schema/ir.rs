@@ -4,7 +4,8 @@
 //! Aligned with DFDL 1.0 §§5–8 semantic model.
 
 extern crate alloc;
-use alloc::string::String;
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::error::{DFDLError, DFDLErrorKind, DFDLResult};
@@ -591,8 +592,345 @@ pub enum EmptyElementParsePolicy {
     TreatAsAbsent,
 }
 
+/// Strongly-typed descriptor for `dfdl:prefixLengthType` (§12.3.4).
+///
+/// Encapsulates the resolved physical representation, width, units, facets,
+/// and padding character of a prefix length element instead of ad-hoc string formatting.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PrefixLengthDescriptor {
+    /// Type or element name reference (e.g. "xs:unsignedShort", "threeByteTextInt").
+    pub name: String,
+    /// Physical representation (Binary or Text).
+    pub representation: Representation,
+    /// Explicit length if defined on simple type or facet.
+    pub length: Option<usize>,
+    /// Units of length (Bits, Bytes, Characters).
+    pub length_units: LengthUnits,
+    /// Optional minInclusive facet constraint.
+    pub min_inclusive: Option<i64>,
+    /// Optional maxInclusive facet constraint.
+    pub max_inclusive: Option<i64>,
+    /// Optional padding character for text numbers.
+    pub pad_char: Option<char>,
+    /// Nested prefix length descriptor for chained prefix lengths (§12.3.4).
+    pub nested: Option<Box<PrefixLengthDescriptor>>,
+}
+
+impl PrefixLengthDescriptor {
+    /// Returns the prefix length in bits.
+    #[inline]
+    #[must_use]
+    pub fn prefix_bits(&self) -> usize {
+        let num_len = self.length.unwrap_or_else(|| {
+            let clean = self.name.split(':').next_back().unwrap_or(&self.name);
+            match clean {
+                "byte" | "unsignedByte" => 1,
+                "short" | "unsignedShort" => 2,
+                "int" | "unsignedInt" => 4,
+                "long" | "unsignedLong" | "integer" | "nonNegativeInteger" => 8,
+                _ => 2,
+            }
+        });
+        if self.length_units == LengthUnits::Bits {
+            num_len
+        } else {
+            num_len.saturating_mul(8)
+        }
+    }
+
+    /// Returns the prefix length in whole bytes (rounded up).
+    #[inline]
+    #[must_use]
+    pub fn prefix_bytes(&self) -> usize {
+        self.prefix_bits().div_ceil(8)
+    }
+
+    /// Returns whether the prefix length is text-represented.
+    #[inline]
+    #[must_use]
+    pub fn is_text(&self) -> bool {
+        self.representation == Representation::Text
+    }
+
+    /// Deserializes a descriptor string into a strongly-typed [`PrefixLengthDescriptor`].
+    ///
+    /// Accepts both legacy colon-delimited string representations (e.g.
+    /// `name:rep:len:units:min:max:pad` or `@nested@`) and simple primitive type names.
+    #[must_use]
+    pub fn from_legacy_desc(desc: &str) -> Self {
+        if desc.starts_with('@') && desc.ends_with('@') && desc.len() >= 2 {
+            let inner = &desc[1..desc.len().saturating_sub(1)];
+            let nparts: Vec<&str> = inner.split(',').collect();
+            let name = nparts.first().copied().unwrap_or("").to_string();
+            let rep = if nparts.get(1).copied().unwrap_or("binary").eq_ignore_ascii_case("text") {
+                Representation::Text
+            } else {
+                Representation::Binary
+            };
+            let length = nparts.get(2).and_then(|s| s.parse::<usize>().ok());
+            let units = if nparts.get(3).copied().unwrap_or("bytes").eq_ignore_ascii_case("bits") {
+                LengthUnits::Bits
+            } else {
+                LengthUnits::Bytes
+            };
+            let min_inc = nparts.get(4).and_then(|s| s.parse::<i64>().ok());
+            let max_inc = nparts.get(5).and_then(|s| s.parse::<i64>().ok());
+            return Self {
+                name,
+                representation: rep,
+                length,
+                length_units: units,
+                min_inclusive: min_inc,
+                max_inclusive: max_inc,
+                pad_char: None,
+                nested: None,
+            };
+        }
+
+        let parts: Vec<&str> = desc.split(':').collect();
+        if parts.len() >= 4 {
+            let name = parts.first().copied().unwrap_or("").to_string();
+            let rep = if parts.get(1).copied().unwrap_or("binary").eq_ignore_ascii_case("text") {
+                Representation::Text
+            } else {
+                Representation::Binary
+            };
+            let len_part = parts.get(2).copied().unwrap_or("");
+            let (length, nested) = if len_part.starts_with('@') && len_part.ends_with('@') && len_part.len() >= 2 {
+                (None, Some(Box::new(Self::from_legacy_desc(len_part))))
+            } else {
+                (len_part.parse::<usize>().ok(), None)
+            };
+            let units = if parts.get(3).copied().unwrap_or("bytes").eq_ignore_ascii_case("bits") {
+                LengthUnits::Bits
+            } else {
+                LengthUnits::Bytes
+            };
+            let min_inc = parts.get(4).and_then(|s| s.parse::<i64>().ok());
+            let max_inc = parts.get(5).and_then(|s| s.parse::<i64>().ok());
+            let pad_char = parts.get(6).and_then(|s| s.chars().next());
+            Self {
+                name,
+                representation: rep,
+                length,
+                length_units: units,
+                min_inclusive: min_inc,
+                max_inclusive: max_inc,
+                pad_char,
+                nested,
+            }
+        } else {
+            let clean = parts.last().copied().unwrap_or(desc);
+            let byte_len = match clean {
+                "byte" | "unsignedByte" => 1,
+                "short" | "unsignedShort" => 2,
+                "int" | "unsignedInt" => 4,
+                "long" | "unsignedLong" | "integer" | "nonNegativeInteger" => 8,
+                _ => 2,
+            };
+            Self {
+                name: desc.to_string(),
+                representation: Representation::Binary,
+                length: Some(byte_len),
+                length_units: LengthUnits::Bytes,
+                min_inclusive: None,
+                max_inclusive: None,
+                pad_char: None,
+                nested: None,
+            }
+        }
+    }
+
+    /// Serializes this descriptor to the legacy colon-delimited string format.
+    #[must_use]
+    pub fn to_legacy_desc(&self) -> String {
+        let rep_str = if self.is_text() { "text" } else { "binary" };
+        let units_str = match self.length_units {
+            LengthUnits::Bits => "bits",
+            LengthUnits::Bytes => "bytes",
+            LengthUnits::Characters => "characters",
+        };
+        let len_str = if let Some(ref n) = self.nested {
+            let n_rep = if n.is_text() { "text" } else { "binary" };
+            let n_units = match n.length_units {
+                LengthUnits::Bits => "bits",
+                LengthUnits::Bytes => "bytes",
+                LengthUnits::Characters => "characters",
+            };
+            let n_len = n.length.map(|l| alloc::format!("{l}")).unwrap_or_else(|| "1".to_string());
+            let n_min = n.min_inclusive.map(|v| alloc::format!("{v}")).unwrap_or_default();
+            let n_max = n.max_inclusive.map(|v| alloc::format!("{v}")).unwrap_or_default();
+            alloc::format!("@{},{},{},{},{},{}@", n.name, n_rep, n_len, n_units, n_min, n_max)
+        } else if let Some(l) = self.length {
+            alloc::format!("{l}")
+        } else {
+            String::new()
+        };
+        let min_str = self.min_inclusive.map(|v| alloc::format!("{v}")).unwrap_or_default();
+        let max_str = self.max_inclusive.map(|v| alloc::format!("{v}")).unwrap_or_default();
+        let pad_str = self.pad_char.map(|c| alloc::format!("{c}")).unwrap_or_default();
+        alloc::format!("{}:{}:{}:{}:{}:{}:{}", self.name, rep_str, len_str, units_str, min_str, max_str, pad_str)
+    }
+}
+
+/// DFDL property value that is either a static constant known at schema compile time,
+/// or a pre-compiled dynamic XPath expression (`{ expr }`) evaluated against the infoset at runtime.
+///
+/// Pre-parsing expressions into [`ExprAst`] at schema compilation time eliminates
+/// runtime string scanning, `starts_with('{')` pattern matching, and runtime Pest parsing in hot paths.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DfdlProp<T> {
+    /// Static constant property value.
+    Constant(T),
+    /// Pre-compiled dynamic expression evaluated with runtime infoset context.
+    Expression {
+        /// Original raw expression string (including curly braces).
+        raw: String,
+        /// Pre-compiled Abstract Syntax Tree.
+        ast: Box<crate::expr::ast::ExprAst>,
+    },
+}
+
+impl<T> DfdlProp<T> {
+    /// Creates a static constant property.
+    #[inline]
+    pub const fn constant(val: T) -> Self {
+        Self::Constant(val)
+    }
+
+    /// Creates a pre-compiled dynamic expression property.
+    #[inline]
+    pub fn expression(raw: impl Into<String>, ast: crate::expr::ast::ExprAst) -> Self {
+        Self::Expression {
+            raw: raw.into(),
+            ast: Box::new(ast),
+        }
+    }
+
+    /// Returns `true` if the property is a static constant.
+    #[inline]
+    pub const fn is_constant(&self) -> bool {
+        matches!(self, Self::Constant(_))
+    }
+
+    /// Returns `true` if the property is a dynamic expression.
+    #[inline]
+    pub const fn is_expression(&self) -> bool {
+        matches!(self, Self::Expression { .. })
+    }
+
+    /// Returns a reference to the constant value, or `None` if dynamic.
+    #[inline]
+    pub const fn as_constant(&self) -> Option<&T> {
+        match self {
+            Self::Constant(ref val) => Some(val),
+            Self::Expression { .. } => None,
+        }
+    }
+
+    /// Returns a mutable reference to the constant value, or `None` if dynamic.
+    #[inline]
+    pub fn as_constant_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::Constant(ref mut val) => Some(val),
+            Self::Expression { .. } => None,
+        }
+    }
+
+    /// Returns the pre-compiled AST if this property is dynamic.
+    #[inline]
+    pub fn expr_ast(&self) -> Option<&crate::expr::ast::ExprAst> {
+        match self {
+            Self::Constant(_) => None,
+            Self::Expression { ast, .. } => Some(ast.as_ref()),
+        }
+    }
+
+    /// Returns the raw expression string if this property is dynamic.
+    #[inline]
+    pub fn raw_expr(&self) -> Option<&str> {
+        match self {
+            Self::Constant(_) => None,
+            Self::Expression { raw, .. } => Some(raw.as_str()),
+        }
+    }
+
+    /// Parses a raw property string at schema compile time into either a constant or a pre-compiled expression.
+    ///
+    /// - If `raw` matches `{ expr }` (and is not an escaped `{{`), the expression body is parsed
+    ///   into an [`ExprAst`] immediately using [`crate::expr::parse_expr`].
+    ///   If the expression evaluates to a constant literal at compile time, it is folded to `Constant(T)`.
+    /// - If `raw` starts with `{{`, it is treated as an escaped literal `{` and passed to `convert_const`.
+    /// - Otherwise, `convert_const` converts the static string into `T`.
+    pub fn parse_with<F>(raw: &str, convert_const: F) -> DFDLResult<Self>
+    where
+        F: FnOnce(&str) -> DFDLResult<T>,
+    {
+        let trimmed = raw.trim();
+        if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+            let expr_body = trimmed
+                .get(1..trimmed.len().saturating_sub(1))
+                .unwrap_or("")
+                .trim();
+            let ast = crate::expr::parse_expr(expr_body)?;
+            Ok(Self::Expression {
+                raw: String::from(raw),
+                ast: Box::new(ast),
+            })
+        } else if let Some(stripped) = trimmed.strip_prefix("{{") {
+            let unescaped = alloc::format!("{{{stripped}");
+            let val = convert_const(&unescaped)?;
+            Ok(Self::Constant(val))
+        } else {
+            let val = convert_const(raw)?;
+            Ok(Self::Constant(val))
+        }
+    }
+
+    /// Maps the constant value using function `f`, preserving expressions unchanged.
+    pub fn map_constant<U, F>(self, f: F) -> DfdlProp<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::Constant(val) => DfdlProp::Constant(f(val)),
+            Self::Expression { raw, ast } => DfdlProp::Expression { raw, ast },
+        }
+    }
+}
+
+impl<T: Default> Default for DfdlProp<T> {
+    #[inline]
+    fn default() -> Self {
+        Self::Constant(T::default())
+    }
+}
+
+impl<T> From<T> for DfdlProp<T> {
+    #[inline]
+    fn from(val: T) -> Self {
+        Self::Constant(val)
+    }
+}
+
+impl DfdlProp<String> {
+    /// Parses a string property into either a constant string or a pre-compiled expression.
+    pub fn parse_str(raw: &str) -> DFDLResult<Self> {
+        Self::parse_with(raw, |s| Ok(String::from(s)))
+    }
+
+    /// Returns the constant string or raw expression representation.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Constant(s) => s.as_str(),
+            Self::Expression { raw, .. } => raw.as_str(),
+        }
+    }
+}
+
 /// Resolved DFDL physical format properties bound to a schema term.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedProperties {
     /// Physical representation mode.
     pub representation: Representation,
@@ -600,6 +938,8 @@ pub struct ResolvedProperties {
     pub byte_order: ByteOrder,
     /// Optional dynamic byte order expression string if calculated at runtime.
     pub byte_order_expr: Option<String>,
+    /// Pre-compiled byte order property (`Constant(ByteOrder)` or pre-compiled `Expression`).
+    pub byte_order_prop: DfdlProp<ByteOrder>,
     /// Bit ordering mode.
     pub bit_order: BitOrder,
     /// Length strategy.
@@ -608,8 +948,10 @@ pub struct ResolvedProperties {
     pub length: Option<usize>,
     /// Optional dynamic length expression string if length is calculated at runtime.
     pub length_expr: Option<String>,
-    /// Optional prefix length type string if lengthKind="prefixed" (`dfdl:prefixLengthType`).
-    pub prefix_length_type: Option<String>,
+    /// Pre-compiled length property (`Constant(usize)` or pre-compiled `Expression`).
+    pub length_prop: Option<DfdlProp<usize>>,
+    /// Optional prefix length type descriptor if lengthKind="prefixed" (`dfdl:prefixLengthType`).
+    pub prefix_length_type: Option<PrefixLengthDescriptor>,
     /// Whether prefix length includes prefix length itself (`dfdl:prefixIncludesPrefixLength`).
     pub prefix_includes_prefix_length: bool,
     /// Optional length pattern regex string if lengthKind="pattern" (`dfdl:lengthPattern`).
@@ -628,8 +970,12 @@ pub struct ResolvedProperties {
     pub trailing_skip: usize,
     /// Character encoding for textual scalars.
     pub encoding: String,
+    /// Pre-compiled character encoding property (`Constant(String)` or pre-compiled `Expression`).
+    pub encoding_prop: DfdlProp<String>,
     /// Sequence separator string if specified.
     pub separator: Option<String>,
+    /// Pre-compiled sequence separator property if specified.
+    pub separator_prop: Option<DfdlProp<String>>,
     /// Separator position strategy (Infix, Prefix, Postfix).
     pub separator_position: SeparatorPosition,
     /// Separator suppression policy for empty elements.
@@ -638,6 +984,8 @@ pub struct ResolvedProperties {
     pub sequence_kind: SequenceKind,
     /// Optional initiator string.
     pub initiator: Option<String>,
+    /// Pre-compiled initiator property if specified.
+    pub initiator_prop: Option<DfdlProp<String>>,
     /// Initiated content policy for sequence/choice.
     pub initiated_content: bool,
     /// Choice length strategy (Implicit or Explicit) (`dfdl:choiceLengthKind`).
@@ -646,10 +994,14 @@ pub struct ResolvedProperties {
     pub choice_length: Option<usize>,
     /// Optional terminator string.
     pub terminator: Option<String>,
+    /// Pre-compiled terminator property if specified.
+    pub terminator_prop: Option<DfdlProp<String>>,
     /// Occurs count strategy (Fixed, Parsed, Expression, StopValue).
     pub occurs_count_kind: OccursCountKind,
     /// Optional occurs count expression string if specified.
     pub occurs_count_expr: Option<String>,
+    /// Pre-compiled occurs count property (`Constant(usize)` or pre-compiled `Expression`).
+    pub occurs_count_prop: Option<DfdlProp<usize>>,
     /// Optional choice branch discriminator expression string if specified.
     pub discriminator: Option<String>,
     /// Test kind for discriminator (Expression or Pattern).
@@ -660,6 +1012,8 @@ pub struct ResolvedProperties {
     pub nil_kind: NilKind,
     /// Optional nil value string if specified.
     pub nil_value: Option<String>,
+    /// Pre-compiled nil value property.
+    pub nil_value_prop: Option<DfdlProp<String>>,
     /// Delimiter policy for nil representation (`dfdl:nilValueDelimiterPolicy`).
     pub nil_value_delimiter_policy: NilValueDelimiterPolicy,
     /// Text trimming strategy (None, Head, Tail, Both).
@@ -693,8 +1047,12 @@ pub struct ResolvedProperties {
     pub text_number_pattern: Option<String>,
     /// Text standard decimal separator string (default `"."`).
     pub text_standard_decimal_separator: String,
+    /// Pre-compiled decimal separator property.
+    pub text_standard_decimal_separator_prop: DfdlProp<String>,
     /// Text standard grouping separator string (default `","`).
     pub text_standard_grouping_separator: String,
+    /// Pre-compiled grouping separator property.
+    pub text_standard_grouping_separator_prop: DfdlProp<String>,
     /// DFDL truncateSpecifiedLengthString property (default `false`).
     pub truncate_specified_length_string: bool,
     /// DFDL textStringJustification property (§13.2, default `Left`).
@@ -721,10 +1079,16 @@ pub struct ResolvedProperties {
     pub binary_decimal_virtual_point: i32,
     /// DFDL calendarPattern property (`dfdl:calendarPattern`).
     pub calendar_pattern: Option<String>,
+    /// Pre-compiled calendar pattern property.
+    pub calendar_pattern_prop: Option<DfdlProp<String>>,
     /// DFDL calendarLanguage property (`dfdl:calendarLanguage`).
     pub calendar_language: Option<String>,
+    /// Pre-compiled calendar language property.
+    pub calendar_language_prop: Option<DfdlProp<String>>,
     /// DFDL calendarTimeZone property (`dfdl:calendarTimeZone`).
     pub calendar_time_zone: Option<String>,
+    /// Pre-compiled calendar time zone property.
+    pub calendar_time_zone_prop: Option<DfdlProp<String>>,
     /// DFDL binaryNumberRep property (binary, packed, bcd, ibm4690Packed).
     pub binary_number_rep: BinaryNumberRep,
     /// DFDL binaryPackedSignCodes property (`dfdl:binaryPackedSignCodes`).
@@ -749,6 +1113,8 @@ pub struct ResolvedProperties {
     pub parse_unparse_policy: ParseUnparsePolicy,
     /// DFDL outputNewLine property (`dfdl:outputNewLine`).
     pub output_new_line: Option<String>,
+    /// Pre-compiled output newline property.
+    pub output_new_line_prop: Option<DfdlProp<String>>,
     /// DFDL textStandardNaNRep property (`dfdl:textStandardNaNRep`).
     pub text_standard_nan_rep: Option<String>,
     /// DFDL textStandardInfinityRep property (`dfdl:textStandardInfinityRep`).
@@ -761,12 +1127,18 @@ pub struct ResolvedProperties {
     pub text_calendar_pad_character: Option<String>,
     /// DFDL textStandardExponentRep property (`dfdl:textStandardExponentRep`).
     pub text_standard_exponent_rep: Option<String>,
+    /// Pre-compiled exponent rep property.
+    pub text_standard_exponent_rep_prop: Option<DfdlProp<String>>,
     /// DFDL ignoreCase property (`dfdl:ignoreCase`).
     pub ignore_case: bool,
     /// DFDL textBooleanTrueRep property (`dfdl:textBooleanTrueRep`).
     pub text_boolean_true_rep: Option<String>,
+    /// Pre-compiled boolean true rep property.
+    pub text_boolean_true_rep_prop: Option<DfdlProp<String>>,
     /// DFDL textBooleanFalseRep property (`dfdl:textBooleanFalseRep`).
     pub text_boolean_false_rep: Option<String>,
+    /// Pre-compiled boolean false rep property.
+    pub text_boolean_false_rep_prop: Option<DfdlProp<String>>,
     /// DFDL textBooleanPadCharacter property (`dfdl:textBooleanPadCharacter`).
     pub text_boolean_pad_character: Option<String>,
     /// DFDL binaryBooleanTrueRep property (`dfdl:binaryBooleanTrueRep`).
@@ -1142,10 +1514,12 @@ impl Default for ResolvedProperties {
             representation: Representation::default(),
             byte_order: ByteOrder::default(),
             byte_order_expr: None,
+            byte_order_prop: DfdlProp::constant(ByteOrder::default()),
             bit_order: BitOrder::default(),
             length_kind: LengthKind::default(),
             length: None,
             length_expr: None,
+            length_prop: None,
             prefix_length_type: None,
             prefix_includes_prefix_length: false,
             length_pattern: None,
@@ -1156,22 +1530,28 @@ impl Default for ResolvedProperties {
             leading_skip: 0,
             trailing_skip: 0,
             encoding: String::from("UTF-8"),
+            encoding_prop: DfdlProp::constant(String::from("UTF-8")),
             separator: None,
+            separator_prop: None,
             separator_position: SeparatorPosition::default(),
             separator_suppression_policy: SeparatorSuppressionPolicy::default(),
             sequence_kind: SequenceKind::default(),
             initiator: None,
+            initiator_prop: None,
             initiated_content: false,
             choice_length_kind: LengthKind::Implicit,
             choice_length: None,
             terminator: None,
+            terminator_prop: None,
             occurs_count_kind: OccursCountKind::default(),
             occurs_count_expr: None,
+            occurs_count_prop: None,
             discriminator: None,
             discriminator_test_kind: TestKind::default(),
             discriminator_message: None,
             nil_kind: NilKind::default(),
             nil_value: None,
+            nil_value_prop: None,
             nil_value_delimiter_policy: NilValueDelimiterPolicy::default(),
             text_trim_kind: TextTrimKind::default(),
             text_pad_char: String::from(" "),
@@ -1188,7 +1568,9 @@ impl Default for ResolvedProperties {
             text_number_check_policy: TextNumberCheckPolicy::Lax,
             text_number_pattern: None,
             text_standard_decimal_separator: String::from("."),
+            text_standard_decimal_separator_prop: DfdlProp::constant(String::from(".")),
             text_standard_grouping_separator: String::from(","),
+            text_standard_grouping_separator_prop: DfdlProp::constant(String::from(",")),
             truncate_specified_length_string: false,
             text_string_justification: TextJustification::Left,
             text_number_justification: TextJustification::Right,
@@ -1201,8 +1583,11 @@ impl Default for ResolvedProperties {
             encoding_error_policy_defined: true,
             binary_decimal_virtual_point: 0,
             calendar_pattern: None,
+            calendar_pattern_prop: None,
             calendar_language: None,
+            calendar_language_prop: None,
             calendar_time_zone: None,
+            calendar_time_zone_prop: None,
             binary_number_rep: BinaryNumberRep::default(),
             binary_packed_sign_codes: None,
             binary_calendar_rep: BinaryCalendarRep::default(),
@@ -1215,15 +1600,19 @@ impl Default for ResolvedProperties {
             binary_calendar_epoch: None,
             parse_unparse_policy: ParseUnparsePolicy::default(),
             output_new_line: None,
+            output_new_line_prop: None,
             text_standard_nan_rep: None,
             text_standard_infinity_rep: None,
             text_standard_zero_rep: None,
             text_number_pad_character: None,
             text_calendar_pad_character: None,
             text_standard_exponent_rep: None,
+            text_standard_exponent_rep_prop: None,
             ignore_case: false,
             text_boolean_true_rep: None,
+            text_boolean_true_rep_prop: None,
             text_boolean_false_rep: None,
+            text_boolean_false_rep_prop: None,
             text_boolean_pad_character: None,
             binary_boolean_true_rep: BinaryBooleanRep::NotSpecified,
             binary_boolean_false_rep: BinaryBooleanRep::NotSpecified,
@@ -1508,8 +1897,13 @@ impl CompiledSchema {
             }
             TermKind::Choice(ch) => {
                 for &branch_id in &ch.branches {
-                    if let Some(deep) = self.find_child_element_term(branch_id, child_name) {
-                        return Some(deep);
+                    if let Some(term) = self.get_term(branch_id) {
+                        if term.name.local_name == child_name {
+                            return Some(term);
+                        }
+                        if let Some(deep) = self.find_child_element_term(branch_id, child_name) {
+                            return Some(deep);
+                        }
                     }
                 }
                 None
@@ -1710,7 +2104,12 @@ impl CompiledSchema {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects
+)]
 mod tests {
     use super::*;
 
@@ -1746,5 +2145,334 @@ mod tests {
         let root = schema.root_term().unwrap();
         assert_eq!(root.id, NodeId(0));
         assert_eq!(root.name.local_name, "root");
+        assert_eq!(schema.find_term_by_name("root"), Some(NodeId(0)));
+        assert!(schema.term_has_representation(NodeId(0)));
+
+        let path = crate::types::InfosetPath::parse("/root");
+        assert_eq!(schema.find_term_by_path(&path).map(|t| t.id), Some(NodeId(0)));
+    }
+
+    /// Verifies escape scheme unparsing for both character and block escape schemes.
+    #[test]
+    fn test_escape_scheme_unparsing_details() {
+        let char_scheme = CompiledEscapeScheme {
+            escape_kind: EscapeKind::EscapeCharacter,
+            escape_character: Some("/".into()),
+            escape_escape_character: Some("\\".into()),
+            escape_block_start: None,
+            escape_block_end: None,
+            extra_escaped_characters: alloc::vec![',', ';'],
+            generate_escape_block: GenerateEscapeBlock::WhenNeeded,
+        };
+
+        // Escapes extra chars and escape character itself
+        let unp = char_scheme.escape_text("a,b/c", None, None, None, None, &[","]);
+        assert_eq!(unp, "a/,b\\/c");
+
+        // Block escape scheme with Always
+        let block_scheme = CompiledEscapeScheme {
+            escape_kind: EscapeKind::EscapeBlock,
+            escape_character: None,
+            escape_escape_character: Some("\"".into()),
+            escape_block_start: Some("[".into()),
+            escape_block_end: Some("]".into()),
+            extra_escaped_characters: alloc::vec![],
+            generate_escape_block: GenerateEscapeBlock::Always,
+        };
+        let unp_block = block_scheme.escape_text("data]end", None, None, None, None, &[","]);
+        assert_eq!(unp_block, "[data\"]end]");
+    }
+
+    /// Verifies numeric and hexBinary facet validations across types.
+    #[test]
+    fn test_facet_validations_across_types() {
+        let facets = SimpleTypeFacets {
+            min_inclusive: Some("10".into()),
+            max_inclusive: Some("100".into()),
+            min_exclusive: Some("5".into()),
+            max_exclusive: Some("150".into()),
+            ..Default::default()
+        };
+        assert!(facets.has_facets());
+
+        // Validate Byte, Long, UnsignedLong, UnsignedShort, UnsignedByte
+        assert!(facets.validate_value(&DfdlValue::Byte(20)));
+        assert!(!facets.validate_value(&DfdlValue::Byte(5)));
+        assert!(facets.validate_value_detailed(&DfdlValue::Long(50)).is_ok());
+        assert!(facets.validate_value_detailed(&DfdlValue::UnsignedLong(50)).is_ok());
+        assert!(facets.validate_value_detailed(&DfdlValue::UnsignedShort(50)).is_ok());
+        assert!(facets.validate_value_detailed(&DfdlValue::UnsignedByte(50)).is_ok());
+
+        // String patterns: valid match, mismatch, and invalid regex pattern syntax
+        let pat_facets = SimpleTypeFacets {
+            pattern: Some("[a-z]+".into()),
+            ..Default::default()
+        };
+        assert!(pat_facets.validate_value_detailed(&DfdlValue::String("abc".into())).is_ok());
+        assert!(pat_facets.validate_value_detailed(&DfdlValue::String("123".into())).is_err());
+
+        let bad_pat = SimpleTypeFacets {
+            pattern: Some("[(".into()),
+            ..Default::default()
+        };
+        assert!(bad_pat.validate_value_detailed(&DfdlValue::String("abc".into())).is_err());
+
+        // Enumerations: match and mismatch
+        let enum_facets = SimpleTypeFacets {
+            enumeration: alloc::vec!["RED".into(), "GREEN".into()],
+            ..Default::default()
+        };
+        assert!(enum_facets.validate_value_detailed(&DfdlValue::String("RED".into())).is_ok());
+        assert!(enum_facets.validate_value_detailed(&DfdlValue::String("BLUE".into())).is_err());
+
+        // String length, minLength, maxLength
+        let len_facets = SimpleTypeFacets {
+            min_length: Some(2),
+            max_length: Some(4),
+            ..Default::default()
+        };
+        assert!(len_facets.validate_value_detailed(&DfdlValue::String("a".into())).is_err());
+        assert!(len_facets.validate_value_detailed(&DfdlValue::String("abc".into())).is_ok());
+        assert!(len_facets.validate_value_detailed(&DfdlValue::String("abcde".into())).is_err());
+
+        // totalDigits and fractionDigits
+        let digit_facets = SimpleTypeFacets {
+            total_digits: Some(4),
+            fraction_digits: Some(2),
+            ..Default::default()
+        };
+        assert!(digit_facets.validate_value_detailed(&DfdlValue::String("12.34".into())).is_ok());
+        assert!(digit_facets.validate_value_detailed(&DfdlValue::String("123.45".into())).is_err());
+        assert!(digit_facets.validate_value_detailed(&DfdlValue::String("1.234".into())).is_err());
+        assert!(digit_facets.validate_value_detailed(&DfdlValue::Int(12345)).is_err());
+
+        // HexBinary length facet validation
+        let hex_facets = SimpleTypeFacets {
+            length: Some(2),
+            ..Default::default()
+        };
+        let hex_ok = DfdlValue::HexBinary(alloc::vec![0xAA, 0xBB]);
+        let hex_bad = DfdlValue::HexBinary(alloc::vec![0xAA]);
+        assert!(hex_facets.validate_value_detailed(&hex_ok).is_ok());
+        assert!(hex_facets.validate_value_detailed(&hex_bad).is_err());
+
+        // Escape scheme edge cases: empty characters and escape_escape in blocks
+        let empty_scheme = CompiledEscapeScheme {
+            escape_kind: EscapeKind::EscapeCharacter,
+            escape_character: None,
+            escape_escape_character: None,
+            escape_block_start: None,
+            escape_block_end: None,
+            extra_escaped_characters: alloc::vec![],
+            generate_escape_block: GenerateEscapeBlock::WhenNeeded,
+        };
+        assert_eq!(empty_scheme.escape_text("raw", None, None, None, None, &[]), "raw");
+
+        let empty_block = CompiledEscapeScheme {
+            escape_kind: EscapeKind::EscapeBlock,
+            escape_character: None,
+            escape_escape_character: None,
+            escape_block_start: None,
+            escape_block_end: None,
+            extra_escaped_characters: alloc::vec![],
+            generate_escape_block: GenerateEscapeBlock::WhenNeeded,
+        };
+        assert_eq!(empty_block.escape_text("raw", None, None, None, None, &[]), "raw");
+
+        let block_esc_esc = CompiledEscapeScheme {
+            escape_kind: EscapeKind::EscapeBlock,
+            escape_character: None,
+            escape_escape_character: Some("#".into()),
+            escape_block_start: Some("[".into()),
+            escape_block_end: Some("]".into()),
+            extra_escaped_characters: alloc::vec![],
+            generate_escape_block: GenerateEscapeBlock::Always,
+        };
+        assert_eq!(block_esc_esc.escape_text("a#b]c", None, None, None, None, &[]), "[a##b#]c]");
+
+        // Justification for boolean and other types
+        let props = ResolvedProperties::default();
+        assert_eq!(props.text_justification_for_value(&DfdlValue::Boolean(true)), TextJustification::Left);
+        assert_eq!(props.text_justification_for_value(&DfdlValue::Long(42)), TextJustification::Right);
+    }
+
+    /// Verifies CompiledSchema nested path lookups, relative steps, and query-style path validation.
+    #[test]
+    fn test_compiled_schema_paths_and_validation() {
+        use crate::types::InfosetPath;
+
+        let root_qn = QName::local("root");
+        let child_qn = QName::local("child");
+        let grand_qn = QName::local("grand");
+
+        let grand_elem = CompiledElement {
+            name: grand_qn.clone(),
+            type_ir: CompiledType::Simple(DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let grand_term = CompiledTerm {
+            id: NodeId(3),
+            name: grand_qn,
+            kind: TermKind::Element(grand_elem),
+            properties: ResolvedProperties::default(),
+        };
+
+        let seq_child = CompiledSequence {
+            members: alloc::vec![NodeId(3)],
+        };
+        let seq_child_term = CompiledTerm {
+            id: NodeId(2),
+            name: QName::local("seqChild"),
+            kind: TermKind::Sequence(seq_child),
+            properties: ResolvedProperties::default(),
+        };
+
+        let child_elem = CompiledElement {
+            name: child_qn.clone(),
+            type_ir: CompiledType::Complex(NodeId(2)),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let child_term = CompiledTerm {
+            id: NodeId(1),
+            name: child_qn,
+            kind: TermKind::Element(child_elem),
+            properties: ResolvedProperties::default(),
+        };
+
+        let root_seq = CompiledSequence {
+            members: alloc::vec![NodeId(1)],
+        };
+        let root_seq_term = CompiledTerm {
+            id: NodeId(10),
+            name: QName::local("rootSeq"),
+            kind: TermKind::Sequence(root_seq),
+            properties: ResolvedProperties::default(),
+        };
+
+        let mut root_props = ResolvedProperties::default();
+        root_props.in_scope_namespaces.push(("ex".into(), "http://example.com".into()));
+        root_props.in_scope_namespaces.push(("xs".into(), "http://www.w3.org/2001/XMLSchema".into()));
+        root_props.in_scope_namespaces.push(("fn".into(), "http://www.w3.org/2005/xpath-functions".into()));
+        root_props.input_value_calc = Some("{ xs:string(42) }".into());
+        root_props.output_value_calc = Some("{ xs:string(42) }".into());
+        root_props.length_expr = Some("{ 10 }".into());
+        root_props.occurs_count_expr = Some("{ 1 }".into());
+        root_props.discriminator = Some("{ fn:true() }".into());
+        root_props.byte_order_expr = Some("{ 'bigEndian' }".into());
+        root_props.choice_dispatch_key = Some("{ 'key1' }".into());
+        root_props.asserts.push(CompiledAssert {
+            test_kind: TestKind::Expression,
+            test_expr: "{ fn:true() }".into(),
+            message: None,
+            failure_type: FailureType::ProcessingError,
+        });
+
+        let root_elem = CompiledElement {
+            name: root_qn.clone(),
+            type_ir: CompiledType::Complex(NodeId(10)),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_term = CompiledTerm {
+            id: NodeId(0),
+            name: root_qn,
+            kind: TermKind::Element(root_elem),
+            properties: root_props,
+        };
+
+        // GroupRef and Choice traversal
+        let branch_elem = CompiledElement {
+            name: QName::local("branchElem"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let branch_term = CompiledTerm {
+            id: NodeId(6),
+            name: QName::local("branchElem"),
+            kind: TermKind::Element(branch_elem),
+            properties: ResolvedProperties::default(),
+        };
+        let choice_term = CompiledTerm {
+            id: NodeId(5),
+            name: QName::local("choiceBlock"),
+            kind: TermKind::Choice(CompiledChoice { branches: alloc::vec![NodeId(6)] }),
+            properties: ResolvedProperties::default(),
+        };
+        let grp_term = CompiledTerm {
+            id: NodeId(7),
+            name: QName::local("grpRef"),
+            kind: TermKind::GroupRef(NodeId(5)),
+            properties: ResolvedProperties::default(),
+        };
+
+        let mut root_seq_term = root_seq_term;
+        if let TermKind::Sequence(ref mut s) = root_seq_term.kind {
+            s.members.push(NodeId(7));
+        }
+
+        let schema = CompiledSchema {
+            root_element_id: NodeId(0),
+            terms: alloc::vec![root_term, root_seq_term, child_term, seq_child_term, grand_term, choice_term, branch_term, grp_term],
+            variable_map: Default::default(),
+            disallow_signed_integer_length_1bit: false,
+            max_occurs_bounds: None,
+            unqualified_path_step_policy: Default::default(),
+            max_hex_binary_length_in_bytes: None,
+        };
+
+        // Find path through nested complex elements
+        let p1 = InfosetPath::parse("/root/child/grand");
+        assert_eq!(schema.find_term_by_path(&p1).map(|t| t.id), Some(NodeId(3)));
+
+        // Path with '.' and '..' steps
+        let p2 = InfosetPath::parse("/root/child/./grand");
+        assert_eq!(schema.find_term_by_path(&p2).map(|t| t.id), Some(NodeId(3)));
+
+        // Path through GroupRef and Choice
+        let p_choice = InfosetPath::parse("/root/branchElem");
+        assert_eq!(schema.find_term_by_path(&p_choice).map(|t| t.id), Some(NodeId(6)));
+
+        // Validate query style paths
+        assert!(schema.validate_query_style_paths().is_ok());
+
+        // Check query style path with array without predicate
+        let array_elem = CompiledElement {
+            name: QName::local("arr"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 0,
+            max_occurs: None, // unbounded array
+            is_nillable: false,
+            default_value: None,
+        };
+        let array_term = CompiledTerm {
+            id: NodeId(4),
+            name: QName::local("arr"),
+            kind: TermKind::Element(array_elem),
+            properties: ResolvedProperties::default(),
+        };
+        let mut schema_with_arr = schema;
+        schema_with_arr.terms.push(array_term);
+        if let TermKind::Sequence(ref mut s) = schema_with_arr.terms[1].kind {
+            s.members.push(NodeId(4));
+        }
+        let bad_path = InfosetPath::parse("/root/arr");
+        assert!(schema_with_arr.check_path_for_query_style(&bad_path).is_err());
+        let good_path = InfosetPath::parse("/root/arr[1]");
+        assert!(schema_with_arr.check_path_for_query_style(&good_path).is_ok());
+
+        // Check relative steps in query style check
+        let dot_path = InfosetPath::parse("/root/child/../child/./arr[1]");
+        assert!(schema_with_arr.check_path_for_query_style(&dot_path).is_ok());
     }
 }

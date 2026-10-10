@@ -83,25 +83,13 @@ fn validate_ast_namespaces(
             Ok(())
         }
         ExprAst::Path(ref path) => {
-            for seg in path.segments() {
-                let node_part = seg.split('[').next().unwrap_or(seg);
-                let unparenthesized = if let Some(inner) = node_part.strip_prefix("..(") {
-                    inner.strip_suffix(')').unwrap_or(inner)
-                } else if let Some(inner) = node_part.strip_prefix(".(") {
-                    inner.strip_suffix(')').unwrap_or(inner)
-                } else {
-                    node_part
-                };
-                if let Some((prefix, _local)) = unparenthesized.split_once(':') {
-                    if !prefix.is_empty() && prefix != ".." && prefix != "." {
-                        check_prefix(prefix, seg, raw_expr, in_scope_namespaces)?;
-                    }
+            for step in path.steps() {
+                if let Some(prefix) = step.prefix() {
+                    let seg = step.to_segment_string();
+                    check_prefix(prefix, &seg, raw_expr, in_scope_namespaces)?;
                 }
-                if let (Some(b_open), Some(b_close)) = (seg.find('['), seg.rfind(']')) {
-                    if b_open < b_close {
-                        let pred_inner = &seg[b_open.saturating_add(1)..b_close];
-                        let _ = validate_expression_namespaces(pred_inner, in_scope_namespaces);
-                    }
+                if let Some(ref pred_expr) = step.predicate_expr {
+                    let _ = validate_expression_namespaces(pred_expr, in_scope_namespaces);
                 }
             }
             Ok(())

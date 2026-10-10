@@ -93,8 +93,137 @@ impl SchemaBuilder {
         &mut self,
         name: QName,
         kind: TermKind,
-        properties: crate::schema::ir::ResolvedProperties,
+        mut properties: crate::schema::ir::ResolvedProperties,
     ) -> DFDLResult<NodeId> {
+        if properties.encoding_prop.is_constant() && properties.encoding.starts_with('{') {
+            if let Ok(p) = crate::schema::ir::DfdlProp::parse_str(&properties.encoding) {
+                properties.encoding_prop = p;
+            }
+        }
+        if properties.byte_order_prop.is_constant() {
+            if let Some(ref bo_expr) = properties.byte_order_expr {
+                if let Ok(p) = crate::schema::ir::DfdlProp::parse_with(bo_expr, crate::expr::properties::parse_byte_order) {
+                    properties.byte_order_prop = p;
+                }
+            }
+        }
+        if properties.initiator_prop.is_none() {
+            if let Some(ref init) = properties.initiator {
+                if !init.is_empty() {
+                    properties.initiator_prop = crate::schema::ir::DfdlProp::parse_str(init).ok();
+                }
+            }
+        }
+        if properties.terminator_prop.is_none() {
+            if let Some(ref term) = properties.terminator {
+                if !term.is_empty() {
+                    properties.terminator_prop = crate::schema::ir::DfdlProp::parse_str(term).ok();
+                }
+            }
+        }
+        if properties.separator_prop.is_none() {
+            if let Some(ref sep) = properties.separator {
+                if !sep.is_empty() {
+                    properties.separator_prop = crate::schema::ir::DfdlProp::parse_str(sep).ok();
+                }
+            }
+        }
+        if properties.length_prop.is_none() {
+            if let Some(ref expr) = properties.length_expr {
+                properties.length_prop = crate::schema::ir::DfdlProp::parse_with(expr, |raw| {
+                    raw.trim().parse::<usize>().map_err(|e| {
+                        crate::error::DFDLError::new(
+                            crate::error::DFDLErrorKind::SchemaDefinition,
+                            &alloc::format!("Invalid length constant '{}': {}", raw, e),
+                        )
+                    })
+                }).ok();
+            } else if let Some(len) = properties.length {
+                properties.length_prop = Some(crate::schema::ir::DfdlProp::constant(len));
+            }
+        }
+        if properties.occurs_count_prop.is_none() {
+            if let Some(ref expr) = properties.occurs_count_expr {
+                properties.occurs_count_prop = crate::schema::ir::DfdlProp::parse_with(expr, |raw| {
+                    raw.trim().parse::<usize>().map_err(|e| {
+                        crate::error::DFDLError::new(
+                            crate::error::DFDLErrorKind::SchemaDefinition,
+                            &alloc::format!("Invalid occursCount constant '{}': {}", raw, e),
+                        )
+                    })
+                }).ok();
+            }
+        }
+        if properties.nil_value_prop.is_none() {
+            if let Some(ref nv) = properties.nil_value {
+                if !nv.is_empty() {
+                    properties.nil_value_prop = crate::schema::ir::DfdlProp::parse_str(nv).ok();
+                }
+            }
+        }
+        if properties.text_standard_decimal_separator_prop.is_constant()
+            && properties.text_standard_decimal_separator.starts_with('{')
+        {
+            if let Ok(p) = crate::schema::ir::DfdlProp::parse_str(&properties.text_standard_decimal_separator) {
+                properties.text_standard_decimal_separator_prop = p;
+            }
+        }
+        if properties.text_standard_grouping_separator_prop.is_constant()
+            && properties.text_standard_grouping_separator.starts_with('{')
+        {
+            if let Ok(p) = crate::schema::ir::DfdlProp::parse_str(&properties.text_standard_grouping_separator) {
+                properties.text_standard_grouping_separator_prop = p;
+            }
+        }
+        if properties.calendar_pattern_prop.is_none() {
+            if let Some(ref cp) = properties.calendar_pattern {
+                if !cp.is_empty() {
+                    properties.calendar_pattern_prop = crate::schema::ir::DfdlProp::parse_str(cp).ok();
+                }
+            }
+        }
+        if properties.calendar_language_prop.is_none() {
+            if let Some(ref cl) = properties.calendar_language {
+                if !cl.is_empty() {
+                    properties.calendar_language_prop = crate::schema::ir::DfdlProp::parse_str(cl).ok();
+                }
+            }
+        }
+        if properties.calendar_time_zone_prop.is_none() {
+            if let Some(ref ctz) = properties.calendar_time_zone {
+                if !ctz.is_empty() {
+                    properties.calendar_time_zone_prop = crate::schema::ir::DfdlProp::parse_str(ctz).ok();
+                }
+            }
+        }
+        if properties.output_new_line_prop.is_none() {
+            if let Some(ref onl) = properties.output_new_line {
+                if !onl.is_empty() {
+                    properties.output_new_line_prop = crate::schema::ir::DfdlProp::parse_str(onl).ok();
+                }
+            }
+        }
+        if properties.text_standard_exponent_rep_prop.is_none() {
+            if let Some(ref exp) = properties.text_standard_exponent_rep {
+                if !exp.is_empty() {
+                    properties.text_standard_exponent_rep_prop = crate::schema::ir::DfdlProp::parse_str(exp).ok();
+                }
+            }
+        }
+        if properties.text_boolean_true_rep_prop.is_none() {
+            if let Some(ref tr) = properties.text_boolean_true_rep {
+                if !tr.is_empty() {
+                    properties.text_boolean_true_rep_prop = crate::schema::ir::DfdlProp::parse_str(tr).ok();
+                }
+            }
+        }
+        if properties.text_boolean_false_rep_prop.is_none() {
+            if let Some(ref fr) = properties.text_boolean_false_rep {
+                if !fr.is_empty() {
+                    properties.text_boolean_false_rep_prop = crate::schema::ir::DfdlProp::parse_str(fr).ok();
+                }
+            }
+        }
         let id = self.alloc_id();
         let term = CompiledTerm {
             id,
@@ -310,7 +439,13 @@ fn check_pattern_complex_descendants(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::field_reassign_with_default,
+    clippy::arithmetic_side_effects
+)]
 mod tests {
     use super::*;
     use crate::infoset::value::DfdlSimpleType;
@@ -350,5 +485,119 @@ mod tests {
         builder.set_root(id);
 
         assert!(builder.build().is_err());
+    }
+
+    /// Verifies variable declarations, accessors, and graph validation constraints.
+    #[test]
+    fn test_schema_builder_and_validation_error_branches() {
+        use crate::schema::ir::{CompiledChoice, Representation, ResolvedProperties};
+
+        let mut b = SchemaBuilder::new();
+        b.define_variable(
+            QName::local("v1"),
+            DfdlSimpleType::String,
+            Some(crate::infoset::value::DfdlValue::String("val".into())),
+        );
+        b.define_variable_with_direction(
+            QName::local("v2"),
+            DfdlSimpleType::Int,
+            None,
+            crate::expr::variables::VariableDirection::ParseOnly,
+        );
+
+        let elem_valid = CompiledElement {
+            name: QName::local("e1"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let e1_id = b.add_term_with_props(
+            QName::local("e1"),
+            TermKind::Element(elem_valid),
+            ResolvedProperties::default(),
+        ).unwrap();
+
+        assert!(b.get_term(e1_id).is_some());
+        assert!(b.get_term_props(e1_id).is_some());
+
+        // Test minOccurs > maxOccurs rejection
+        let mut b_min_max = SchemaBuilder::new();
+        let elem_invalid = CompiledElement {
+            name: QName::local("badOccurs"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 5,
+            max_occurs: Some(2),
+            is_nillable: false,
+            default_value: None,
+        };
+        let bad_id = b_min_max.add_term(QName::local("badOccurs"), TermKind::Element(elem_invalid)).unwrap();
+        b_min_max.set_root(bad_id);
+        assert!(b_min_max.build().is_err());
+
+        // Test non-existent choice branch
+        let mut b_choice = SchemaBuilder::new();
+        let choice = CompiledChoice {
+            branches: alloc::vec![NodeId(888)],
+        };
+        let c_id = b_choice.add_term(QName::local("choice"), TermKind::Choice(choice)).unwrap();
+        b_choice.set_root(c_id);
+        assert!(b_choice.build().is_err());
+
+        // Test non-existent group ref target
+        let mut b_grp = SchemaBuilder::new();
+        let g_id = b_grp.add_term(QName::local("grp"), TermKind::GroupRef(NodeId(777))).unwrap();
+        b_grp.set_root(g_id);
+        assert!(b_grp.build().is_err());
+
+        // Test pattern complex with binary child rejection (DFDL-12-088R)
+        let mut b_pat = SchemaBuilder::new();
+        let mut bin_props = ResolvedProperties::default();
+        bin_props.representation = Representation::Binary;
+        let bin_elem = CompiledElement {
+            name: QName::local("binChild"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let bin_id = b_pat.add_term_with_props(QName::local("binChild"), TermKind::Element(bin_elem), bin_props).unwrap();
+
+        let seq_pat = CompiledSequence {
+            members: alloc::vec![bin_id],
+        };
+        let seq_id = b_pat.add_term(QName::local("patSeq"), TermKind::Sequence(seq_pat)).unwrap();
+
+        let mut pat_props = ResolvedProperties::default();
+        pat_props.length_kind = LengthKind::Pattern;
+        let pat_elem = CompiledElement {
+            name: QName::local("patRoot"),
+            type_ir: CompiledType::Complex(seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let pat_root_id = b_pat.add_term_with_props(QName::local("patRoot"), TermKind::Element(pat_elem), pat_props).unwrap();
+        b_pat.set_root(pat_root_id);
+        assert!(b_pat.build().is_err());
+
+        // Test build without root element
+        let b_no_root = SchemaBuilder::new();
+        assert!(b_no_root.build().is_err());
+
+        // Test root ID referring to missing term
+        let mut b_missing_root = SchemaBuilder::new();
+        b_missing_root.set_root(NodeId(9999));
+        assert!(b_missing_root.build().is_err());
+
+        // Test cycle detection in schema graph
+        let mut b_cycle = SchemaBuilder::new();
+        let s1_id = b_cycle.add_term(QName::local("s1"), TermKind::Sequence(CompiledSequence { members: alloc::vec![NodeId(1)] })).unwrap();
+        let _s2_id = b_cycle.add_term(QName::local("s2"), TermKind::Sequence(CompiledSequence { members: alloc::vec![s1_id] })).unwrap();
+        b_cycle.set_root(s1_id);
+        assert!(b_cycle.build().is_err());
     }
 }

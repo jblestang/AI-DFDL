@@ -44,20 +44,12 @@ pub fn get_slice_checked<T>(slice: &[T], start: usize, len: usize) -> DFDLResult
         )
     })?;
 
-    if end <= slice.len() {
-        match slice.get(start..end) {
-            Some(sub) => Ok(sub),
-            None => Err(DFDLError::new(
-                DFDLErrorKind::Parse,
-                "Slice range out of bounds",
-            )),
-        }
-    } else {
-        Err(DFDLError::new(
+    slice.get(start..end).ok_or_else(|| {
+        DFDLError::new(
             DFDLErrorKind::Parse,
             "Requested slice range exceeds buffer length",
-        ))
-    }
+        )
+    })
 }
 
 /// Pushes an item into a `Vec` using fallible `try_reserve`.
@@ -115,17 +107,11 @@ pub const fn checked_mul_usize(a: usize, b: usize) -> DFDLResult<usize> {
 /// Checked integer division helper protecting against zero division and overflow.
 #[inline]
 pub const fn checked_div_usize(a: usize, b: usize) -> DFDLResult<usize> {
-    if b == 0 {
-        return Err(DFDLError::new_static(
-            DFDLErrorKind::Parse,
-            "Division by zero in integer arithmetic",
-        ));
-    }
     match a.checked_div(b) {
         Some(val) => Ok(val),
         None => Err(DFDLError::new_static(
             DFDLErrorKind::Parse,
-            "Integer overflow in division",
+            "Division by zero in integer arithmetic",
         )),
     }
 }
@@ -422,11 +408,8 @@ pub fn remap_raw_chars_to_pua(text: &str) -> alloc::string::String {
     for c in text.chars() {
         let u = c as u32;
         if (u <= 0x1F && u != 0x09 && u != 0x0A && u != 0x0D) || (0x80..=0x9F).contains(&u) {
-            if let Some(mapped) = core::char::from_u32(u.saturating_add(0xE000)) {
-                out.push(mapped);
-            } else {
-                out.push(c);
-            }
+            let mapped = core::char::from_u32(u.saturating_add(0xE000)).unwrap_or(c);
+            out.push(mapped);
         } else {
             out.push(c);
         }
@@ -441,11 +424,8 @@ pub fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
     for c in text.chars() {
         let u = c as u32;
         if (0xE000..=0xE01F).contains(&u) || (0xE080..=0xE09F).contains(&u) {
-            if let Some(mapped) = core::char::from_u32(u.saturating_sub(0xE000)) {
-                out.push(mapped);
-            } else {
-                out.push(c);
-            }
+            let mapped = core::char::from_u32(u.saturating_sub(0xE000)).unwrap_or(c);
+            out.push(mapped);
         } else if u == 0xE07F {
             out.push('\x7F');
         } else {
@@ -662,5 +642,124 @@ mod tests {
 
         // 64-bit (8-byte) reversal: 0x123456789ABCDEF0 -> 0xF0DEBC9A78563412
         assert_eq!(order_integer_bytes(0x123456789ABCDEF0, 64, ByteOrder::LittleEndian), 0xF0DEBC9A78563412);
+    }
+
+    /// Verifies checked arithmetic overflow, try_extend_from_slice, and decimal error branches.
+    #[test]
+    fn test_util_arithmetic_and_codecs_error_branches() {
+        // try_extend_from_slice
+        let mut v = Vec::new();
+        try_extend_from_slice(&mut v, &[1, 2, 3]).unwrap();
+        assert_eq!(v, [1, 2, 3]);
+
+        // checked_mul_usize
+        assert_eq!(checked_mul_usize(10, 20), Ok(200));
+        assert!(checked_mul_usize(usize::MAX, 2).is_err());
+
+        // decode_packed_decimal_with_signs empty bytes
+        assert!(decode_packed_decimal_with_signs(&[], None).is_err());
+
+        // decode_packed_decimal invalid high nibble in data byte
+        assert!(decode_packed_decimal(&[0xF1, 0x2C]).is_err());
+
+        // decode_packed_decimal invalid low nibble in data byte
+        assert!(decode_packed_decimal(&[0x1F, 0x2C]).is_err());
+
+        // decode_packed_decimal invalid high nibble in sign byte
+        assert!(decode_packed_decimal(&[0x12, 0xFC]).is_err());
+
+        // decode_packed_decimal invalid sign nibble
+        assert!(decode_packed_decimal(&[0x12, 0x31]).is_err());
+
+        // decode_ibm4690_packed empty bytes
+        assert!(decode_ibm4690_packed(&[]).is_err());
+
+        // decode_ibm4690_packed pad 0xF after digits
+        assert!(decode_ibm4690_packed(&[0x12, 0xF3]).is_err());
+
+        // decode_ibm4690_packed duplicate sign 0xD
+        assert!(decode_ibm4690_packed(&[0xD1, 0xD2]).is_err());
+
+        // decode_ibm4690_packed invalid nibble 0xA
+        assert!(decode_ibm4690_packed(&[0x1A, 0x23]).is_err());
+
+        // checked_add_usize
+        assert_eq!(checked_add_usize(10, 20), Ok(30));
+        assert!(checked_add_usize(usize::MAX, 1).is_err());
+
+        // checked_div_usize
+        assert_eq!(checked_div_usize(20, 10), Ok(2));
+        assert!(checked_div_usize(20, 0).is_err());
+
+        // encode_bcd length overflow
+        assert!(encode_bcd(12345, Some(1)).is_err());
+
+        // decode_packed_decimal_with_signs incomplete sign spec
+        assert_eq!(decode_packed_decimal_with_signs(&[0x12, 0x3C], Some("C D")), Ok(123));
+
+        // decode_packed_decimal_with_signs invalid custom sign
+        assert!(decode_packed_decimal_with_signs(&[0x12, 0x3E], Some("C D F C")).is_err());
+
+        // decode_packed_decimal alternative sign codes (0x0B negative, 0x0A and 0x0E positive)
+        assert_eq!(decode_packed_decimal(&[0x12, 0x3B]), Ok(-123));
+        assert_eq!(decode_packed_decimal(&[0x12, 0x3A]), Ok(123));
+        assert_eq!(decode_packed_decimal(&[0x12, 0x3E]), Ok(123));
+
+        // PUA character remapping roundtrip
+        let raw = "\x01\x1Fhello\t\r\n";
+        let pua = remap_raw_chars_to_pua(raw);
+        let back = remap_pua_to_raw_chars(&pua);
+        assert_eq!(back, raw);
+        assert_eq!(remap_pua_to_raw_chars("\u{E07F}"), "\x7F");
+
+        // get_slice_checked overflow
+        assert!(get_slice_checked(&[1, 2], usize::MAX, 1).is_err());
+
+        // encode_bcd with target_len > bytes.len() (padding zeros)
+        let bcd_padded = encode_bcd(42, Some(3)).unwrap();
+        assert_eq!(bcd_padded, [0x00, 0x00, 0x42]);
+
+        // encode_ibm4690_packed with odd nibble count (F padding)
+        let ibm_pos = encode_ibm4690_packed(42);
+        assert_eq!(ibm_pos.len(), 1);
+        let ibm_neg = encode_ibm4690_packed(-42);
+        assert_eq!(ibm_neg.len(), 2);
+
+        // try_extend_from_slice
+        let mut v_ext = Vec::new();
+        assert!(try_extend_from_slice(&mut v_ext, &[10, 20, 30]).is_ok());
+        assert_eq!(v_ext, [10, 20, 30]);
+
+        // Packed decimal integer overflow
+        let huge_packed = [0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x9C];
+        assert!(decode_packed_decimal(&huge_packed).is_err());
+
+        // IBM 4690 integer overflow
+        let mut huge_ibm = alloc::vec![0x0D];
+        huge_ibm.extend_from_slice(&[0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99]);
+        assert!(decode_ibm4690_packed(&huge_ibm).is_err());
+
+        // C1 control characters (0x80..=0x9F) PUA mapping roundtrip
+        let c1_raw = "\u{0080}\u{0085}\u{009F}";
+        let c1_pua = remap_raw_chars_to_pua(c1_raw);
+        assert_eq!(remap_pua_to_raw_chars(&c1_pua), c1_raw);
+
+        // Verifies zero-padding branch in encode_bcd when target length exceeds byte length.
+        let pad_bcd = encode_bcd(42, Some(4)).unwrap();
+        assert_eq!(pad_bcd, [0x00, 0x00, 0x00, 0x42]);
+
+        // Verifies encode_bcd when target length matches encoded byte length exactly.
+        let exact_bcd = encode_bcd(42, Some(1)).unwrap();
+        assert_eq!(exact_bcd, [0x42]);
+
+        // Verifies checked_div_usize error on division by zero.
+        assert!(checked_div_usize(42, 0).is_err());
+
+        // Verifies PUA codepoint 0xE07F mapping back to ASCII DEL character (0x7F).
+        assert_eq!(remap_pua_to_raw_chars("\u{E07F}"), "\x7F");
+
+        // Verifies standard ASCII characters pass through unchanged in PUA remapping.
+        assert_eq!(remap_raw_chars_to_pua("Hello, World!"), "Hello, World!");
+        assert_eq!(remap_pua_to_raw_chars("Hello, World!"), "Hello, World!");
     }
 }

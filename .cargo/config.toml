@@ -1,0 +1,9 @@
+[alias]
+# Calcul de couverture des tests unitaires uniquement (exclut les harnesses de test)
+cov-unit = "llvm-cov --workspace --summary-only --exclude-from-report dfdl-tests --exclude-from-report dfdl-fuzz"
+
+# Calcul de couverture des tests de conformance TDML uniquement (suite officielle Apache Daffodil)
+cov-conformance = "llvm-cov test test_apache_daffodil_official_tdml_suite --release --summary-only --exclude-from-report dfdl-tests --exclude-from-report dfdl-fuzz -- --ignored"
+
+# Calcul de couverture combiné (tests unitaires + tests de conformance)
+cov-all = "llvm-cov test --release --summary-only --exclude-from-report dfdl-tests --exclude-from-report dfdl-fuzz -- --include-ignored"

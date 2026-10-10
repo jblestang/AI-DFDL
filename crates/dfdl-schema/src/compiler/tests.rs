@@ -1,4 +1,11 @@
 use super::*;
+use super::elements::*;
+use super::lower::*;
+use super::schema_doc::*;
+use dfdl_core::expr::variables::VariableMap;
+use dfdl_core::expr::PropertyStore;
+use dfdl_core::infoset::value::{DfdlSimpleType, DfdlValue};
+use dfdl_core::schema::ir::*;
 
 #[test]
 fn test_parse_default_value_expressions_and_literals() {
@@ -1931,7 +1938,7 @@ fn test_nested_prefixed_depth_validation() {
 
 #[test]
 fn test_is_known_layer_validation() {
-    use super::is_known_layer;
+    use super::lower::is_known_layer;
 
     // Standard Daffodil extension layers.
     assert!(is_known_layer("fourByteSwap"));
@@ -2031,5 +2038,415 @@ fn test_nested_chameleon_includes_with_multiple_namespaces() {
     let compiled_b = compiler.compile_str_with_resolver(schema_b, &mut resolver);
     assert!(compiled_b.is_ok(), "Schema B compilation failed: {:?}", compiled_b.err());
 }
+
+/// Verifies SchemaCompiler builder methods and tunable configuration.
+#[test]
+fn test_schema_compiler_tunables_and_builder_methods() {
+    let limits = XmlReaderLimits {
+        max_depth: 32,
+        max_attributes: 50,
+        max_token_length: 4096,
+        max_entity_expansion_bytes: 16384,
+        strict_namespaces: true,
+    };
+    let compiler = SchemaCompiler::with_limits(limits)
+        .with_escalate_warnings(true)
+        .with_unqualified_path_step_policy(UnqualifiedPathStepPolicy::PreferDefaultNamespace)
+        .with_max_hex_binary_length_in_bytes(Some(256))
+        .with_invalid_restriction_policy(InvalidRestrictionPolicy::Error);
+
+    assert!(compiler.escalate_warnings);
+    assert_eq!(compiler.unqualified_path_step_policy, UnqualifiedPathStepPolicy::PreferDefaultNamespace);
+    assert_eq!(compiler.max_hex_binary_length_in_bytes, Some(256));
+    assert_eq!(compiler.invalid_restriction_policy, InvalidRestrictionPolicy::Error);
+    assert_eq!(compiler.limits.max_depth, 32);
+}
+
+/// Verifies simple type facet applicability and validation rules per XSD Part 2 §4.3 and DFDL 1.0.
+#[test]
+fn test_validate_simple_type_facets_comprehensive() {
+    // 1. Pattern restriction on non-string type with policy=Error fails with SchemaDefinition
+    let mut props_pat = PropertyStore::new();
+    let _ = props_pat.set_property("pattern", "[0-9]+");
+    let res_pat_err = validate_simple_type_facets(
+        DfdlSimpleType::Int,
+        &props_pat,
+        "testInt",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_pat_err.is_err());
+    assert!(res_pat_err.unwrap_err().message.as_str().contains("Pattern restriction is only allowed on types derived from string"));
+
+    // Pattern restriction allowed on non-string with policy=Validate or Ignore
+    assert!(validate_simple_type_facets(
+        DfdlSimpleType::Int,
+        &props_pat,
+        "testInt",
+        InvalidRestrictionPolicy::Validate,
+    ).is_ok());
+
+    // 2. minLength / maxLength invalid for non-string / non-hexBinary types
+    let mut props_min = PropertyStore::new();
+    let _ = props_min.set_property("minLength", "5");
+    let res_min = validate_simple_type_facets(
+        DfdlSimpleType::Int,
+        &props_min,
+        "testInt",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_min.is_err());
+    assert!(res_min.unwrap_err().message.as_str().contains("Facet 'minLength' is not valid for type 'Int'"));
+
+    let mut props_max = PropertyStore::new();
+    let _ = props_max.set_property("maxLength", "10");
+    let res_max = validate_simple_type_facets(
+        DfdlSimpleType::Boolean,
+        &props_max,
+        "testBool",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_max.is_err());
+    assert!(res_max.unwrap_err().message.as_str().contains("Facet 'maxLength' is not valid for type 'Boolean'"));
+
+    // minLength / maxLength valid for String and HexBinary
+    assert!(validate_simple_type_facets(
+        DfdlSimpleType::String,
+        &props_min,
+        "testStr",
+        InvalidRestrictionPolicy::Error,
+    ).is_ok());
+    assert!(validate_simple_type_facets(
+        DfdlSimpleType::HexBinary,
+        &props_max,
+        "testHex",
+        InvalidRestrictionPolicy::Error,
+    ).is_ok());
+
+    // 3. fractionDigits only valid for Decimal
+    let mut props_frac = PropertyStore::new();
+    let _ = props_frac.set_property("fractionDigits", "2");
+    let res_frac = validate_simple_type_facets(
+        DfdlSimpleType::Int,
+        &props_frac,
+        "testInt",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_frac.is_err());
+    assert!(res_frac.unwrap_err().message.as_str().contains("Facet 'fractionDigits' is not valid for type 'Int'"));
+
+    assert!(validate_simple_type_facets(
+        DfdlSimpleType::Decimal,
+        &props_frac,
+        "testDec",
+        InvalidRestrictionPolicy::Error,
+    ).is_ok());
+
+    // 4. totalDigits only valid for Decimal and integer-derived types
+    let mut props_tot = PropertyStore::new();
+    let _ = props_tot.set_property("totalDigits", "4");
+    let res_tot_str = validate_simple_type_facets(
+        DfdlSimpleType::String,
+        &props_tot,
+        "testStr",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_tot_str.is_err());
+    assert!(res_tot_str.unwrap_err().message.as_str().contains("Facet 'totalDigits' is not valid for type 'String'"));
+
+    // totalDigits = 0 must fail
+    let mut props_tot_zero = PropertyStore::new();
+    let _ = props_tot_zero.set_property("totalDigits", "0");
+    let res_tot_zero = validate_simple_type_facets(
+        DfdlSimpleType::Int,
+        &props_tot_zero,
+        "testInt",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_tot_zero.is_err());
+    assert!(res_tot_zero.unwrap_err().message.as_str().contains("must be a positive integer greater than 0"));
+
+    // totalDigits = non-integer must fail
+    let mut props_tot_bad = PropertyStore::new();
+    let _ = props_tot_bad.set_property("totalDigits", "abc");
+    let res_tot_bad = validate_simple_type_facets(
+        DfdlSimpleType::Int,
+        &props_tot_bad,
+        "testInt",
+        InvalidRestrictionPolicy::Error,
+    );
+    assert!(res_tot_bad.is_err());
+    assert!(res_tot_bad.unwrap_err().message.as_str().contains("not a valid positive integer"));
+}
+
+/// Verifies RFC 3986 and W3C XML Schema relative and absolute schemaLocation resolution.
+#[test]
+fn test_resolve_schema_location_edge_cases() {
+    // Absolute paths return unchanged
+    assert_eq!(
+        resolve_schema_location(Some("/base/dir/schema.xsd"), "/abs/path/other.xsd"),
+        "/abs/path/other.xsd"
+    );
+
+    // URI schemes return unchanged
+    assert_eq!(
+        resolve_schema_location(Some("/base/dir/schema.xsd"), "http://example.com/other.xsd"),
+        "http://example.com/other.xsd"
+    );
+    assert_eq!(
+        resolve_schema_location(Some("/base/dir/schema.xsd"), "urn:dfdl:other"),
+        "urn:dfdl:other"
+    );
+
+    // None base returns target verbatim
+    assert_eq!(
+        resolve_schema_location(None, "relative.xsd"),
+        "relative.xsd"
+    );
+
+    // Base without slash returns target verbatim
+    assert_eq!(
+        resolve_schema_location(Some("noslash.xsd"), "relative.xsd"),
+        "relative.xsd"
+    );
+
+    // Normal relative path resolution with absolute base
+    assert_eq!(
+        resolve_schema_location(Some("/root/sub/schema.xsd"), "other.xsd"),
+        "/root/sub/other.xsd"
+    );
+
+    // Relative path with parent traversal (..)
+    assert_eq!(
+        resolve_schema_location(Some("/root/sub/schema.xsd"), "../sibling.xsd"),
+        "/root/sibling.xsd"
+    );
+
+    // Relative path with current directory (.)
+    assert_eq!(
+        resolve_schema_location(Some("/root/sub/schema.xsd"), "./nested/other.xsd"),
+        "/root/sub/nested/other.xsd"
+    );
+
+    // Relative base directory
+    assert_eq!(
+        resolve_schema_location(Some("root/sub/schema.xsd"), "other.xsd"),
+        "root/sub/other.xsd"
+    );
+}
+
+/// Verifies DFDL-14-007R: A complex type's model group cannot be an empty sequence when delimited.
+#[test]
+fn test_dfdl_14_007r_empty_sequence_restriction() {
+    let schema_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format representation="text" lengthKind="delimited" encoding="utf-8"/>
+    </xs:appinfo>
+  </xs:annotation>
+  <xs:element name="emptyComplex">
+    <xs:complexType>
+      <xs:sequence/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>"#;
+
+    let compiler = SchemaCompiler::new();
+    let res = compiler.compile_str(schema_xml);
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert!(
+        err.message.as_str().contains("DFDL-14-007R"),
+        "Expected error message mentioning DFDL-14-007R, got: {}",
+        err.message.as_str()
+    );
+}
+
+/// Verifies schema compiler facet boundary validations and compiler configuration options.
+#[test]
+fn test_facet_validation_and_compiler_configuration_coverage() {
+    // 1. Compiler configuration options (lines 346-387)
+    let compiler = SchemaCompiler::new()
+        .with_check_delimiter_encoding(false)
+        .with_require_encoding_error_policy(true)
+        .with_max_occurs_bounds(Some(10))
+        .with_require_text_bidi(true)
+        .with_require_floating(true);
+    assert!(compiler.allow_expression_result_coercion());
+
+    // 2. Both minInclusive and minExclusive specified (lines 204-211)
+    let schema_both_min = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="elem" type="badTypeMin"/>
+  <xs:simpleType name="badTypeMin">
+    <xs:restriction base="xs:int">
+      <xs:minInclusive value="10"/>
+      <xs:minExclusive value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_both_min).is_err());
+
+    // 3. Both maxInclusive and maxExclusive specified (lines 212-219)
+    let schema_both_max = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="elem" type="badTypeMax"/>
+  <xs:simpleType name="badTypeMax">
+    <xs:restriction base="xs:int">
+      <xs:maxInclusive value="10"/>
+      <xs:maxExclusive value="20"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_both_max).is_err());
+
+    // 4. Facet value exceeding type capacity (lines 182-200)
+    let schema_bad_byte = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="elem" type="badByte"/>
+  <xs:simpleType name="badByte">
+    <xs:restriction base="xs:byte">
+      <xs:minInclusive value="300"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_bad_byte).is_err());
+
+    // 5. Duplicate top-level element definition error (lines 523-529)
+    let schema_dup_elem = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="dup" type="xs:int"/>
+  <xs:element name="dup" type="xs:int"/>
+</xs:schema>"#;
+    let err_dup_elem = SchemaCompiler::new().compile_str(schema_dup_elem).unwrap_err();
+    assert!(err_dup_elem.message.as_str().contains("More than one definition for name: dup"));
+
+    // 6. Duplicate named group definition error (lines 548-558)
+    let schema_dup_grp = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="root"><xs:complexType><xs:sequence><xs:element name="a" type="xs:int"/></xs:sequence></xs:complexType></xs:element>
+  <xs:group name="dupGrp"><xs:sequence><xs:element name="x" type="xs:int"/></xs:sequence></xs:group>
+  <xs:group name="dupGrp"><xs:sequence><xs:element name="y" type="xs:int"/></xs:sequence></xs:group>
+</xs:schema>"#;
+    let err_dup_grp = SchemaCompiler::new().compile_str(schema_dup_grp).unwrap_err();
+    assert!(err_dup_grp.message.as_str().contains("More than one definition for name: dupGrp"));
+
+    // 7. Duplicate named complexType definition error (lines 578-588)
+    let schema_dup_ct = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="root" type="dupCT"/>
+  <xs:complexType name="dupCT"><xs:sequence><xs:element name="x" type="xs:int"/></xs:sequence></xs:complexType>
+  <xs:complexType name="dupCT"><xs:sequence><xs:element name="y" type="xs:int"/></xs:sequence></xs:complexType>
+</xs:schema>"#;
+    let err_dup_ct = SchemaCompiler::new().compile_str(schema_dup_ct).unwrap_err();
+    assert!(err_dup_ct.message.as_str().contains("More than one definition for name: dupCT"));
+
+    // 8. Complex type sequence with hiddenGroupRef (lines 606-615)
+    let schema_ct_hidden = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:group name="hGrp"><xs:sequence><xs:element name="h" type="xs:int"/></xs:sequence></xs:group>
+  <xs:element name="root" type="ctWithHidden"/>
+  <xs:complexType name="ctWithHidden">
+    <xs:sequence dfdl:hiddenGroupRef="hGrp"/>
+  </xs:complexType>
+</xs:schema>"#;
+    let err_ct_h = SchemaCompiler::new().compile_str(schema_ct_hidden).unwrap_err();
+    assert!(err_ct_h.message.as_str().contains("A complex type cannot have a sequence with a hiddenGroupRef"));
+}
+
+/// Comprehensive test exercising SchemaCompiler edge paths:
+/// 1. zoned textNumberRep validation without sign indicator (+ at start/end) on signed simple types
+/// 2. facet parsing errors for long and unsignedLong restriction bounds
+/// 3. global format setVariable definitions
+/// 4. property annotation with text body rather than value attribute
+/// 5. unrecognized / custom annotation elements with nested children
+/// 6. assert annotations using testKind="pattern" and testPattern regex
+/// 7. sequence and choice models containing nested sequences and choices with format properties
+#[test]
+fn test_schema_compiler_extended_coverage() {
+    // 1. Zoned textNumberRep without + indicator on signed integer
+    let schema_zoned_bad = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="text" lengthKind="delimited"/></xs:appinfo></xs:annotation>
+  <xs:element name="root" type="xs:int" dfdl:textNumberRep="zoned" dfdl:textNumberPattern="000"/>
+</xs:schema>"#;
+    let err_zoned = SchemaCompiler::new().compile_str(schema_zoned_bad).unwrap_err();
+    assert!(err_zoned.message.as_str().contains("textNumberPattern must have '+' at the beginning or end"));
+
+    // 2. Facet parsing failures on long and unsignedLong restrictions
+    let schema_bad_long = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="elem" type="badLong"/>
+  <xs:simpleType name="badLong">
+    <xs:restriction base="xs:long">
+      <xs:minInclusive value="not_a_long_number"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_bad_long).is_err());
+
+    let schema_bad_ulong = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+  <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/"><dfdl:format representation="binary"/></xs:appinfo></xs:annotation>
+  <xs:element name="elem" type="badULong"/>
+  <xs:simpleType name="badULong">
+    <xs:restriction base="xs:unsignedLong">
+      <xs:maxInclusive value="not_an_unsigned_long"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_bad_ulong).is_err());
+
+    // 3. Global format with setVariable, property body text, and custom annotations
+    let schema_rich_annotations = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:ex="http://example.com" targetNamespace="http://example.com">
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:defineVariable name="myVar" type="xs:string" defaultValue="init"/>
+      <dfdl:format representation="text" encoding="ASCII" lengthUnits="bytes" alignment="1" alignmentUnits="bytes" fillByte="0" occursCountKind="implicit" lengthKind="delimited" initiator="" terminator="" separator="">
+        <dfdl:property name="separator">,</dfdl:property>
+        <dfdl:setVariable ref="ex:myVar" value="init_val"/>
+      </dfdl:format>
+      <dfdl:customAnnotation attr1="val1">
+        <nestedChild>data</nestedChild>
+      </dfdl:customAnnotation>
+    </xs:appinfo>
+  </xs:annotation>
+  <xs:element name="root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="patElem" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:assert testKind="pattern" testPattern="^[0-9]+$"/>
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:element>
+        <xs:choice>
+          <xs:sequence>
+            <xs:element name="sub1" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="4"/>
+          </xs:sequence>
+          <xs:choice>
+            <xs:element name="sub2" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"/>
+          </xs:choice>
+        </xs:choice>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>"#;
+    let compiled = SchemaCompiler::new().compile_str(schema_rich_annotations);
+    assert!(compiled.is_ok());
+}
+
+
 
 

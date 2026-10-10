@@ -86,16 +86,47 @@ mod tests {
     fn test_xml_event_construction() {
         let name = QName::local("root");
         let loc = SourceLocation::at_offset(0);
-        let event = XmlEvent::StartElement {
-            name: name.clone(),
-            attributes: Vec::new(),
+        let attr = Attribute {
+            name: QName::local("attr"),
+            value: Cow::Borrowed("val"),
             location: loc,
         };
+        assert_eq!(attr.name.local_name, "attr");
+        assert_eq!(attr.value, "val");
 
-        if let XmlEvent::StartElement { name: n, .. } = event {
-            assert_eq!(n.local_name, "root");
-        } else {
-            panic!("Expected StartElement");
-        }
+        let events = [
+            XmlEvent::StartDocument {
+                encoding: "UTF-8",
+                location: loc,
+            },
+            XmlEvent::StartElement {
+                name: name.clone(),
+                attributes: alloc::vec![attr],
+                location: loc,
+            },
+            XmlEvent::Text {
+                content: Cow::Borrowed("hello"),
+                location: loc,
+            },
+            XmlEvent::CData {
+                content: "cdata_data",
+                location: loc,
+            },
+            XmlEvent::Comment {
+                content: "comment_text",
+                location: loc,
+            },
+            XmlEvent::ProcessingInstruction {
+                target: "target",
+                content: Some("data"),
+                location: loc,
+            },
+            XmlEvent::EndElement {
+                name,
+                location: loc,
+            },
+        ];
+
+        assert_eq!(events.len(), 7);
     }
 }

@@ -623,4 +623,74 @@ mod tests {
         map.pop_variable_instance(&QName::local("scopeVar"));
         assert_eq!(map.get_variable("scopeVar"), Some(&DfdlValue::Int(50)));
     }
+
+    /// Verifies variable direction validation during parsing and unparsing.
+    #[test]
+    fn test_variable_direction_and_error_states() {
+        let mut map = VariableMap::new();
+        // Define unparse-only variable
+        map.define_variable(
+            QName::local("unpOnly"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("val".into())),
+        );
+        if let Some(v) = map.variables.iter_mut().find(|v| v.name.local_name == "unpOnly") {
+            v.direction = VariableDirection::UnparseOnly;
+        }
+
+        // Setting unparseOnly during parsing must fail
+        let err_set_parse = map.set_variable_validated(&QName::local("unpOnly"), DfdlValue::String("new".into()), true);
+        assert!(matches!(err_set_parse, Err(ref e) if e.kind == DFDLErrorKind::ExpressionError));
+
+        // Reading unparseOnly during parsing must fail
+        let err_read_parse = map.get_variable_validated("unpOnly", true);
+        assert!(matches!(err_read_parse, Err(ref e) if e.kind == DFDLErrorKind::ExpressionError));
+
+        // Define parse-only variable
+        map.define_variable(
+            QName::local("prsOnly"),
+            DfdlSimpleType::String,
+            Some(DfdlValue::String("val".into())),
+        );
+        if let Some(v) = map.variables.iter_mut().find(|v| v.name.local_name == "prsOnly") {
+            v.direction = VariableDirection::ParseOnly;
+        }
+
+        // Setting parseOnly during unparsing must fail
+        let err_set_unp = map.set_variable_validated(&QName::local("prsOnly"), DfdlValue::String("new".into()), false);
+        assert!(matches!(err_set_unp, Err(ref e) if e.kind == DFDLErrorKind::ExpressionError));
+
+        // Reading parseOnly during unparsing must fail
+        let err_read_unp = map.get_variable_validated("prsOnly", false);
+        assert!(matches!(err_read_unp, Err(ref e) if e.kind == DFDLErrorKind::ExpressionError));
+
+        // Setting an undefined variable returns SchemaDefinition error
+        let err_undef_set = map.set_variable(&QName::local("undefinedVar"), DfdlValue::Int(1));
+        assert!(matches!(err_undef_set, Err(ref e) if e.kind == DFDLErrorKind::SchemaDefinition));
+
+        // Reading an undefined variable returns ExpressionError
+        let err_undef_read = map.get_variable_validated("undefinedVar", true);
+        assert!(matches!(err_undef_read, Err(ref e) if e.kind == DFDLErrorKind::ExpressionError));
+
+        // Variable in Undefined state returns SchemaDefinition error
+        map.define_variable(QName::local("noVal"), DfdlSimpleType::Int, None);
+        let err_no_val = map.get_variable_validated("noVal", true);
+        assert!(matches!(err_no_val, Err(ref e) if e.kind == DFDLErrorKind::SchemaDefinition));
+
+        // Variable in Evaluating state returns circular definition error
+        if let Some(v) = map.variables.iter_mut().find(|v| v.name.local_name == "noVal") {
+            v.state.set(VariableState::Evaluating);
+        }
+        let err_eval = map.get_variable_validated("noVal", true);
+        assert!(matches!(err_eval, Err(ref e) if e.kind == DFDLErrorKind::SchemaDefinition));
+
+        // new_variable_instance on an undeclared variable creates it
+        let mut map2 = VariableMap::new();
+        assert!(map2.new_variable_instance(&QName::local("dynamicVar"), Some(DfdlValue::Int(99))).is_ok());
+        assert_eq!(map2.get_variable("dynamicVar"), Some(&DfdlValue::Int(99)));
+
+        let mut map3 = VariableMap::new();
+        assert!(map3.new_variable_instance(&QName::local("dynamicVar2"), None).is_ok());
+        assert_eq!(map3.get_variable("dynamicVar2"), Some(&DfdlValue::String("".into())));
+    }
 }

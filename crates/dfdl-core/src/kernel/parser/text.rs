@@ -31,16 +31,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         }
         let lead = self.reader.read_bits(8)? as u8;
         try_push(bytes, lead)?;
-        let extra = if lead & 0x80 == 0 {
-            0
-        } else if lead & 0xE0 == 0xC0 {
-            1
-        } else if lead & 0xF0 == 0xE0 {
-            2
-        } else if lead & 0xF8 == 0xF0 {
-            3
-        } else {
-            0
+        let extra = match lead {
+            0x00..=0x7F => 0,
+            0xC0..=0xDF => 1,
+            0xE0..=0xEF => 2,
+            0xF0..=0xF7 => 3,
+            _ => 0,
         };
         for _ in 0..extra {
             if self.reader.is_eof() {
@@ -99,7 +95,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             crate::schema::ir::LengthUnits::Bytes => l,
         });
 
-        let eval_sep = if let Some(ref raw) = props.separator {
+        let eval_sep = if let Some(ref prop) = props.separator_prop {
+            Some(self.evaluate_prop_at(prop, builder, elem_name, Some(&props.in_scope_namespaces))?)
+        } else if let Some(ref raw) = props.separator {
             if raw.is_empty() {
                 None
             } else {
@@ -110,7 +108,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         };
         let sep_str = eval_sep.as_deref();
 
-        let eval_term = if let Some(ref raw) = props.terminator {
+        let eval_term = if let Some(ref prop) = props.terminator_prop {
+            Some(self.evaluate_prop_at(prop, builder, elem_name, Some(&props.in_scope_namespaces))?)
+        } else if let Some(ref raw) = props.terminator {
             if raw.is_empty() {
                 None
             } else {
@@ -574,7 +574,23 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let check_policy = props.text_number_check_policy;
         let pattern_opt = props.text_number_pattern.as_deref();
 
-        let eval_dec_sep = if props.text_standard_decimal_separator.starts_with('{')
+        let eval_dec_sep = if props.text_standard_decimal_separator_prop.is_expression() {
+            let s = self.evaluate_prop_at(
+                &props.text_standard_decimal_separator_prop,
+                builder,
+                elem_name,
+                Some(&props.in_scope_namespaces),
+            )?;
+            let decoded = crate::expr::properties::decode_dfdl_character_entities(&s);
+            if decoded.chars().count() != 1 {
+                let msg = alloc::format!(
+                    "Schema Definition Error: Length of string must be exactly 1 character for textStandardDecimalSeparator, got '{}'",
+                    s
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+            Some(decoded)
+        } else if props.text_standard_decimal_separator.starts_with('{')
             && props.text_standard_decimal_separator.ends_with('}')
         {
             let s = self.evaluate_property_str_at(&props.text_standard_decimal_separator, builder, elem_name)?;
@@ -598,11 +614,26 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             &props.text_standard_decimal_separator
         };
 
-        let eval_grp_sep = if props.text_standard_grouping_separator.starts_with('{')
+        let eval_grp_sep = if props.text_standard_grouping_separator_prop.is_expression() {
+            let s = self.evaluate_prop_at(
+                &props.text_standard_grouping_separator_prop,
+                builder,
+                elem_name,
+                Some(&props.in_scope_namespaces),
+            )?;
+            let decoded = crate::expr::properties::decode_dfdl_character_entities(&s);
+            if decoded.chars().count() != 1 {
+                let msg = alloc::format!(
+                    "Schema Definition Error: Length of string must be exactly 1 character for textStandardGroupingSeparator, got '{}'",
+                    s
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+            Some(decoded)
+        } else if props.text_standard_grouping_separator.starts_with('{')
             && props.text_standard_grouping_separator.ends_with('}')
         {
-            let s =
-                self.evaluate_property_str_at(&props.text_standard_grouping_separator, builder, elem_name)?;
+            let s = self.evaluate_property_str_at(&props.text_standard_grouping_separator, builder, elem_name)?;
             let decoded = crate::expr::properties::decode_dfdl_character_entities(&s);
             if decoded.chars().count() != 1 {
                 let msg = alloc::format!(
@@ -626,8 +657,18 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let base = props.text_standard_base;
         let nan_rep = props.text_standard_nan_rep.as_deref();
         let inf_rep = props.text_standard_infinity_rep.as_deref();
-        let exp_rep_prop = props.text_standard_exponent_rep.as_deref();
-        let eval_exp_rep = if let Some(e) = exp_rep_prop {
+        let eval_exp_rep = if let Some(ref exp_prop) = props.text_standard_exponent_rep_prop {
+            if exp_prop.is_expression() {
+                Some(self.evaluate_prop_at(
+                    exp_prop,
+                    builder,
+                    elem_name,
+                    Some(&props.in_scope_namespaces),
+                )?)
+            } else {
+                Some(exp_prop.as_constant().cloned().unwrap_or_else(|| String::from("E")))
+            }
+        } else if let Some(ref e) = props.text_standard_exponent_rep {
             if e.starts_with('{') && e.ends_with('}') && !e.starts_with("{{") {
                 Some(self.evaluate_property_str_at(e, builder, elem_name)?)
             } else {
@@ -636,7 +677,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         } else {
             None
         };
-        let exp_rep = eval_exp_rep.as_deref().or(exp_rep_prop);
+        let exp_rep = eval_exp_rep
+            .as_deref()
+            .or(props.text_standard_exponent_rep.as_deref());
         let ignore_case = props.ignore_case;
         let num_pad_char_str = if props.text_pad_kind == crate::schema::ir::TextPadKind::PadChar {
             props
@@ -1208,27 +1251,34 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
             }
             DfdlSimpleType::DateTime | DfdlSimpleType::Date | DfdlSimpleType::Time => {
-                if let Some(ref raw_lang) = props.calendar_language {
-                    let trimmed = raw_lang.trim();
-                    let eval_lang = if trimmed.starts_with('{') && !trimmed.starts_with("{{") && trimmed.ends_with('}') {
-                        self.evaluate_property_str_at_with_namespaces(
-                            trimmed,
-                            builder,
-                            elem_name,
-                            Some(&props.in_scope_namespaces),
-                        )?
-                    } else if let Some(stripped) = trimmed.strip_prefix("{{") {
-                        alloc::format!("{{{stripped}")
-                    } else {
-                        alloc::string::ToString::to_string(raw_lang)
-                    };
+                if let Some(ref lang_prop) = props.calendar_language_prop {
+                    let eval_lang = self.evaluate_prop_at(
+                        lang_prop,
+                        builder,
+                        elem_name,
+                        Some(&props.in_scope_namespaces),
+                    )?;
                     crate::kernel::parser::calendar::validate_calendar_language_syntax(&eval_lang)?;
+                } else if let Some(ref raw_lang) = props.calendar_language {
+                    crate::kernel::parser::calendar::validate_calendar_language_syntax(raw_lang)?;
                 }
                 let cal_pad_str = props
                     .text_calendar_pad_character
                     .as_deref()
                     .unwrap_or(&props.text_pad_char);
-                let pat = props.calendar_pattern.as_deref();
+                let eval_cal_pat = if let Some(ref pat_prop) = props.calendar_pattern_prop {
+                    Some(self.evaluate_prop_at(
+                        pat_prop,
+                        builder,
+                        elem_name,
+                        Some(&props.in_scope_namespaces),
+                    )?)
+                } else {
+                    None
+                };
+                let pat = eval_cal_pat
+                    .as_deref()
+                    .or(props.calendar_pattern.as_deref());
                 let parsed = parse_calendar_from_text(
                     val_str,
                     pat,

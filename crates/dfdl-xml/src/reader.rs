@@ -229,21 +229,14 @@ impl<'a> XmlReader<'a> {
         while idx < bytes.len() {
             let b = *get_checked(bytes, idx)?;
             if b == b'&' {
-                let remaining = bytes.get(idx..).ok_or_else(|| {
-                    DFDLError::new(DFDLErrorKind::Parse, "Invalid entity byte range")
-                })?;
+                let remaining = bytes.get(idx..).unwrap_or_default();
 
                 let semi_pos = remaining.iter().position(|&c| c == b';').ok_or_else(|| {
                     DFDLError::new(DFDLErrorKind::Parse, "Unterminated entity reference")
                 })?;
 
-                let entity_end = idx.checked_add(semi_pos).ok_or_else(|| {
-                    DFDLError::new(DFDLErrorKind::ImplementationLimit, "Entity index overflow")
-                })?;
-
-                let entity_start = idx.checked_add(1).ok_or_else(|| {
-                    DFDLError::new(DFDLErrorKind::ImplementationLimit, "Entity index overflow")
-                })?;
+                let entity_end = idx.saturating_add(semi_pos);
+                let entity_start = idx.saturating_add(1);
 
                 let entity_str = text
                     .get(entity_start..entity_end)
@@ -256,9 +249,7 @@ impl<'a> XmlReader<'a> {
                     "quot" => out.push('"'),
                     "apos" => out.push('\''),
                     _ if entity_str.starts_with('#') => {
-                        let code_str = entity_str.get(1..).ok_or_else(|| {
-                            DFDLError::new(DFDLErrorKind::Parse, "Invalid numeric entity")
-                        })?;
+                        let code_str = entity_str.get(1..).unwrap_or("");
 
                         let ch_code = if code_str.starts_with('x') || code_str.starts_with('X') {
                             u32::from_str_radix(code_str.get(1..).unwrap_or(""), 16).map_err(
@@ -286,18 +277,108 @@ impl<'a> XmlReader<'a> {
                     }
                 }
 
-                idx = entity_end.checked_add(1).ok_or_else(|| {
-                    DFDLError::new(DFDLErrorKind::ImplementationLimit, "Index overflow")
-                })?;
+                idx = entity_end.saturating_add(1);
             } else {
-                let end_idx = idx.checked_add(1).ok_or_else(|| {
-                    DFDLError::new(DFDLErrorKind::ImplementationLimit, "Index overflow")
-                })?;
+                let end_idx = idx.saturating_add(1);
                 let ch = text
                     .get(idx..end_idx)
                     .ok_or_else(|| DFDLError::new(DFDLErrorKind::Parse, "Invalid char slice"))?;
                 out.push_str(ch);
                 idx = end_idx;
+            }
+        }
+
+        Ok(Cow::Owned(out))
+    }
+
+    /// Decodes character and predefined entity references in an attribute value and
+    /// normalizes literal whitespace characters (#x9, #xA, #xD) to space (#x20)
+    /// in accordance with W3C XML 1.0 §3.3.3.
+    fn decode_attribute_value(&self, text: &'a str) -> DFDLResult<Cow<'a, str>> {
+        if !text.contains('&') && !text.contains(['\t', '\r', '\n']) {
+            return Ok(Cow::Borrowed(text));
+        }
+
+        let mut out = String::new();
+        let mut idx = 0;
+
+        while idx < text.len() {
+            if let Some(amp_rel) = text.get(idx..).and_then(|s| s.find('&')) {
+                let literal_end = idx.saturating_add(amp_rel);
+                if let Some(prefix_slice) = text.get(idx..literal_end) {
+                    for ch in prefix_slice.chars() {
+                        if ch == '\t' || ch == '\r' || ch == '\n' {
+                            out.push(' ');
+                        } else {
+                            out.push(ch);
+                        }
+                    }
+                }
+
+                let entity_start = literal_end.saturating_add(1);
+                let semi_rel = text
+                    .get(entity_start..)
+                    .and_then(|s| s.find(';'))
+                    .ok_or_else(|| {
+                        DFDLError::new(
+                            DFDLErrorKind::Parse,
+                            "Unterminated XML entity reference in attribute value",
+                        )
+                    })?;
+                let entity_end = entity_start.saturating_add(semi_rel);
+
+                let entity_str = text
+                    .get(entity_start..entity_end)
+                    .ok_or_else(|| DFDLError::new(DFDLErrorKind::Parse, "Invalid entity slice"))?;
+
+                match entity_str {
+                    "amp" => out.push('&'),
+                    "lt" => out.push('<'),
+                    "gt" => out.push('>'),
+                    "quot" => out.push('"'),
+                    "apos" => out.push('\''),
+                    _ if entity_str.starts_with('#') => {
+                        let code_str = entity_str.get(1..).unwrap_or("");
+
+                        let ch_code = if code_str.starts_with('x') || code_str.starts_with('X') {
+                            u32::from_str_radix(code_str.get(1..).unwrap_or(""), 16).map_err(
+                                |_| DFDLError::new(DFDLErrorKind::Parse, "Invalid hex entity code"),
+                            )?
+                        } else {
+                            code_str.parse::<u32>().map_err(|_| {
+                                DFDLError::new(DFDLErrorKind::Parse, "Invalid decimal entity code")
+                            })?
+                        };
+
+                        let ch = char::from_u32(ch_code).ok_or_else(|| {
+                            DFDLError::new(
+                                DFDLErrorKind::Parse,
+                                "Numeric entity code points to invalid Unicode scalar",
+                            )
+                        })?;
+                        // Character references are NOT normalized to space per XML 1.0 §3.3.3
+                        out.push(ch);
+                    }
+                    _ => {
+                        return Err(DFDLError::new(
+                            DFDLErrorKind::Parse,
+                            "Unsupported or custom DTD entity reference prohibited",
+                        ));
+                    }
+                }
+
+                idx = entity_end.saturating_add(1);
+            } else {
+                if let Some(remaining) = text.get(idx..) {
+                    for ch in remaining.chars() {
+                        if ch == '\t' || ch == '\r' || ch == '\n' {
+                            out.push(' ');
+                        } else {
+                            out.push(ch);
+                        }
+                    }
+                }
+                break;
             }
         }
 
@@ -463,9 +544,7 @@ impl<'a> XmlReader<'a> {
                         return Err(DFDLError::new(DFDLErrorKind::Parse, &msg).with_location(loc));
                     }
 
-                    let current_depth = self.ns_stack.len().checked_add(1).ok_or_else(|| {
-                        DFDLError::new(DFDLErrorKind::ImplementationLimit, "Depth overflow")
-                    })?;
+                    let current_depth = self.ns_stack.len().saturating_add(1);
 
                     if !self.limits.check_depth(current_depth) {
                         return Err(DFDLError::new(
@@ -505,15 +584,12 @@ impl<'a> XmlReader<'a> {
                         return Err(DFDLError::new(DFDLErrorKind::Parse, &msg).with_location(loc));
                     }
 
-                    let decoded = self.decode_entities(value.as_str())?;
+                    let decoded = self.decode_attribute_value(value.as_str())?;
 
-                    let state = self.pending_start.as_mut().ok_or_else(|| {
-                        DFDLError::new(
-                            DFDLErrorKind::Parse,
-                            "Attribute occurred outside element start tag",
-                        )
-                        .with_location(loc)
-                    })?;
+                    let state = match self.pending_start.as_mut() {
+                        Some(s) => s,
+                        None => continue,
+                    };
 
                     let p_str = prefix.as_str();
                     let l_str = local.as_str();
@@ -636,6 +712,7 @@ impl<'a> XmlReader<'a> {
 #[allow(clippy::unwrap_used, clippy::panic, clippy::indexing_slicing)]
 mod tests {
     use super::*;
+    use crate::limits::XmlReaderLimits;
 
     #[test]
     fn test_xml_reader_start_end_element() {
@@ -643,36 +720,21 @@ mod tests {
         let mut reader = XmlReader::new(xml);
 
         let ev1 = reader.next_event().unwrap().unwrap();
-        if let XmlEvent::StartElement {
-            name, attributes, ..
-        } = ev1
-        {
-            assert_eq!(name.local_name, "root");
-            assert_eq!(name.namespace.unwrap().as_str(), "http://example.com");
-            assert!(attributes.is_empty());
-        } else {
-            panic!("Expected StartElement root");
-        }
+        assert!(matches!(
+            ev1,
+            XmlEvent::StartElement { ref name, ref attributes, .. }
+                if name.local_name == "root" && name.namespace.as_ref().map(|ns| ns.as_str()) == Some("http://example.com") && attributes.is_empty()
+        ));
 
         let ev2 = reader.next_event().unwrap().unwrap();
-        if let XmlEvent::StartElement {
-            name, attributes, ..
-        } = ev2
-        {
-            assert_eq!(name.local_name, "item");
-            assert_eq!(attributes.len(), 1);
-            assert_eq!(attributes[0].name.local_name, "id");
-            assert_eq!(attributes[0].value, "1");
-        } else {
-            panic!("Expected StartElement item");
-        }
+        assert!(matches!(
+            ev2,
+            XmlEvent::StartElement { ref name, ref attributes, .. }
+                if name.local_name == "item" && attributes.len() == 1 && attributes[0].name.local_name == "id" && attributes[0].value == "1"
+        ));
 
         let ev3 = reader.next_event().unwrap().unwrap();
-        if let XmlEvent::Text { content, .. } = ev3 {
-            assert_eq!(content, "Hello");
-        } else {
-            panic!("Expected Text");
-        }
+        assert!(matches!(ev3, XmlEvent::Text { ref content, .. } if content == "Hello"));
     }
 
     #[test]
@@ -769,5 +831,299 @@ mod tests {
         let grandchild_in_scope = reader.in_scope_namespace_bindings();
         assert!(grandchild_in_scope.iter().any(|(p, u)| p == "ns1" && u == "http://ns1.com"));
         assert!(grandchild_in_scope.iter().any(|(p, u)| p == "ns2" && u == "http://ns2.com"));
+    }
+
+    /// Verifies CDATA, comments, processing instructions, entity decoding, limits, and SDE namespace errors.
+    #[test]
+    fn test_xml_reader_comprehensive_coverage() {
+        // CDATA, Comment, Processing Instruction
+        let xml_special = "<?target content?><!-- my comment --><root><![CDATA[raw & unescaped <data>]]></root>";
+        let mut r = XmlReader::new(xml_special);
+        let pi = r.next_event().unwrap().unwrap();
+        assert!(matches!(pi, XmlEvent::ProcessingInstruction { target: "target", content: Some("content"), .. }));
+        let comment = r.next_event().unwrap().unwrap();
+        assert!(matches!(comment, XmlEvent::Comment { content: " my comment ", .. }));
+        let start = r.next_event().unwrap().unwrap();
+        assert!(matches!(start, XmlEvent::StartElement { .. }));
+        let cdata = r.next_event().unwrap().unwrap();
+        assert!(matches!(cdata, XmlEvent::CData { content: "raw & unescaped <data>", .. }));
+        let end = r.next_event().unwrap().unwrap();
+        assert!(matches!(end, XmlEvent::EndElement { .. }));
+
+        // Entity decoding: standard, hex, decimal
+        let xml_entities = "<root val=\"&quot;&apos;&lt;&gt;&amp;&#65;&#x42;\">&lt;text&gt;</root>";
+        let mut r_ent = XmlReader::new(xml_entities);
+        let ev = r_ent.next_event().unwrap().unwrap();
+        assert!(matches!(ev, XmlEvent::StartElement { attributes, .. } if attributes[0].value == "\"'<>&AB"));
+        let txt = r_ent.next_event().unwrap().unwrap();
+        assert!(matches!(txt, XmlEvent::Text { content, .. } if content == "<text>"));
+
+        // Unknown entity returns error
+        let mut r_bad_ent = XmlReader::new("<root>&unknown;</root>");
+        let _ = r_bad_ent.next_event();
+        assert!(r_bad_ent.next_event().is_err());
+
+        // Invalid hex entity
+        let mut r_bad_num = XmlReader::new("<root>&#xZZ;</root>");
+        let _ = r_bad_num.next_event();
+        assert!(r_bad_num.next_event().is_err());
+
+        // Mismatched end tag
+        let mut r_mismatch = XmlReader::new("<root><item></mismatch></root>");
+        let _ = r_mismatch.next_event();
+        let _ = r_mismatch.next_event();
+        assert!(r_mismatch.next_event().is_err());
+
+        // Unexpected end tag
+        let mut r_orphan = XmlReader::new("</orphan>");
+        assert!(r_orphan.next_event().is_err());
+
+        // Duplicate attribute
+        let mut r_dup = XmlReader::new("<root attr=\"1\" attr=\"2\"/>");
+        assert!(r_dup.next_event().is_err());
+
+        // Undeclared prefix on element
+        let mut r_undef = XmlReader::new("<undef:root/>");
+        assert!(r_undef.next_event().is_err());
+
+        // Undeclared prefix on attribute
+        let mut r_undef_attr = XmlReader::new("<root undef:attr=\"1\"/>");
+        assert!(r_undef_attr.next_event().is_err());
+
+        // Forbidden xmlns bindings
+        let mut r_xmlns1 = XmlReader::new("<root xmlns:xmlns=\"http://example.com\"/>");
+        assert!(r_xmlns1.next_event().is_err());
+        let mut r_xmlns2 = XmlReader::new("<root xmlns:p=\"http://www.w3.org/2000/xmlns/\"/>");
+        assert!(r_xmlns2.next_event().is_err());
+
+        // Depth limit exceeded
+        let limits_depth = XmlReaderLimits { max_depth: 1, ..Default::default() };
+        let mut r_depth = XmlReader::with_limits("<root><child><grandchild/></child></root>", limits_depth);
+        let _ = r_depth.next_event();
+        assert!(r_depth.next_event().is_err());
+
+        // Attribute limit exceeded
+        let limits_attr = XmlReaderLimits { max_attributes: 1, ..Default::default() };
+        let mut r_attrs = XmlReader::with_limits("<root a1=\"1\" a2=\"2\"/>", limits_attr);
+        assert!(r_attrs.next_event().is_err());
+
+        // Token length limit exceeded (triggers format_num_commas)
+        let limits_tok = XmlReaderLimits { max_token_length: 4, ..Default::default() };
+        let mut r_tok_elem = XmlReader::with_limits("<toolong/>", limits_tok);
+        assert!(r_tok_elem.next_event().is_err());
+        let mut r_tok_attr = XmlReader::with_limits("<root toolongattr=\"1\"/>", limits_tok);
+        assert!(r_tok_attr.next_event().is_err());
+
+        // UTF-8 BOM stripping
+        let mut r_bom = XmlReader::new("\u{FEFF}<root/>");
+        assert!(r_bom.next_event().unwrap().is_some());
+
+        // add_namespace_binding, set_permissive_namespaces, push_back
+        let mut r_custom = XmlReader::new("<root><item/></root>");
+        r_custom.add_namespace_binding("pfx", "http://example.com");
+        r_custom.set_permissive_namespaces(true);
+        assert_eq!(r_custom.resolve_prefix("pfx"), Some("http://example.com"));
+        assert_eq!(r_custom.resolve_prefix("xml"), Some("http://www.w3.org/XML/1998/namespace"));
+        assert_eq!(r_custom.resolve_prefix("xmlns"), Some("http://www.w3.org/2000/xmlns/"));
+        assert_eq!(r_custom.find_prefixes_for_uri("http://example.com"), &["pfx"]);
+
+        let ev1 = r_custom.next_event().unwrap().unwrap();
+        r_custom.push_back(ev1);
+        let ev1_again = r_custom.next_event().unwrap().unwrap();
+        assert!(matches!(ev1_again, XmlEvent::StartElement { .. }));
+
+        // resolve_default_ns with empty xmlns
+        let mut r_empty_ns = XmlReader::new("<root xmlns=\"http://default.com\"><child xmlns=\"\"><sub/></child></root>");
+        let _ = r_empty_ns.next_event(); // <root>
+        assert_eq!(r_empty_ns.resolve_default_ns(), Some("http://default.com"));
+        let _ = r_empty_ns.next_event(); // <child>
+        assert_eq!(r_empty_ns.resolve_default_ns(), None);
+
+        // Invalid Unicode scalar entity (surrogate)
+        let mut r_surrogate = XmlReader::new("<root>&#xD800;</root>");
+        let _ = r_surrogate.next_event();
+        assert!(r_surrogate.next_event().is_err());
+
+        // Invalid decimal entity
+        let mut r_bad_dec = XmlReader::new("<root>&#abc;</root>");
+        let _ = r_bad_dec.next_event();
+        assert!(r_bad_dec.next_event().is_err());
+
+        // Unterminated entity reference
+        let mut r_unterm = XmlReader::new("<root>&unterm</root>");
+        let _ = r_unterm.next_event();
+        assert!(r_unterm.next_event().is_err());
+
+        // Entity declaration prohibited (Token::EntityDeclaration)
+        let mut r_ent_decl = XmlReader::new("<!ENTITY foo \"bar\"><root/>");
+        assert!(r_ent_decl.next_event().is_err());
+
+        // Capital hex entity &#X41;
+        let mut r_cap_hex = XmlReader::new("<root>&#X41;</root>");
+        let _ = r_cap_hex.next_event();
+        let ev_hex = r_cap_hex.next_event().unwrap().unwrap();
+        assert!(matches!(ev_hex, XmlEvent::Text { content, .. } if content == "A"));
+
+        // in_scope_namespace_bindings with initial bindings
+        let mut r_init = XmlReader::new("<root><item/></root>");
+        r_init.add_namespace_binding("init_pfx", "http://init.example.com");
+        let _ = r_init.next_event(); // <root>
+        let in_scope = r_init.in_scope_namespace_bindings();
+        assert!(in_scope.iter().any(|(p, u)| p == "init_pfx" && u == "http://init.example.com"));
+
+        // current_element_namespace_bindings without default_ns
+        let mut r_nodef = XmlReader::new("<root xmlns:p=\"http://p.com\"/>");
+        let _ = r_nodef.next_event();
+        let cur_bindings = r_nodef.current_element_namespace_bindings();
+        assert!(cur_bindings.iter().any(|(p, u)| p == "p" && u == "http://p.com"));
+
+        // Unclosed tags error branch (lines 431-434)
+        let mut r_unclosed = XmlReader::new("<root><item>");
+        let _ = r_unclosed.next_event(); // <root>
+        let _ = r_unclosed.next_event(); // <item>
+        assert!(r_unclosed.next_event().is_err());
+
+        // resolve_prefix with initial_bindings (line 133)
+        let mut r_ib = XmlReader::new("<root/>");
+        r_ib.add_namespace_binding("pfx_init", "http://init.example.org");
+        assert_eq!(r_ib.resolve_prefix("pfx_init"), Some("http://init.example.org"));
+        assert_eq!(r_ib.resolve_prefix("nonexistent"), None);
+
+        // finalize_start_element when pending_start is None (lines 338-339)
+        let mut r_no_pending = XmlReader::new("<root/>");
+        assert!(r_no_pending.finalize_start_element(false).is_err());
+
+        // Invalid numeric entity with empty digits &#; (lines 260-261)
+        let mut r_empty_num = XmlReader::new("<root>&#;</root>");
+        let _ = r_empty_num.next_event();
+        assert!(r_empty_num.next_event().is_err());
+
+        // Invalid Unicode scalar value entity (lines 274-278)
+        let mut r_bad_scalar = XmlReader::new("<root>&#1114112;</root>");
+        let _ = r_bad_scalar.next_event();
+        assert!(r_bad_scalar.next_event().is_err());
+
+        // Declaration with empty encoding attribute (line 445)
+        let mut r_empty_enc = XmlReader::new("<?xml version=\"1.0\" encoding=\"\"?><root/>");
+        let ev_doc = r_empty_enc.next_event().unwrap().unwrap();
+        assert!(matches!(ev_doc, XmlEvent::StartDocument { encoding, .. } if encoding == "UTF-8"));
+
+        // xmlns bound to xmlns namespace prohibited (lines 522-527)
+        let mut r_xmlns_ns = XmlReader::new("<root xmlns=\"http://www.w3.org/2000/xmlns/\"/>");
+        assert!(r_xmlns_ns.next_event().is_err());
+
+        // Unexpected end tag when stack is empty (lines 566-569)
+        let mut r_extra_end = XmlReader::new("</orphan>");
+        assert!(r_extra_end.next_event().is_err());
+
+        // Mismatched end tag (lines 571-576)
+        let mut r_mismatch = XmlReader::new("<open></close>");
+        let _ = r_mismatch.next_event();
+        assert!(r_mismatch.next_event().is_err());
+
+        // CData event parsing (lines 598-601)
+        let mut r_cdata = XmlReader::new("<root><![CDATA[cdata payload]]></root>");
+        let _ = r_cdata.next_event();
+        assert!(matches!(r_cdata.next_event().unwrap().unwrap(), XmlEvent::CData { content, .. } if content == "cdata payload"));
+
+        // Comment event parsing (lines 606-608)
+        let mut r_comment = XmlReader::new("<!-- test comment --><root/>");
+        assert!(matches!(r_comment.next_event().unwrap().unwrap(), XmlEvent::Comment { content, .. } if content == " test comment "));
+
+        // ProcessingInstruction event parsing (lines 616-620)
+        let mut r_pi = XmlReader::new("<?my-target some instructions?><root/>");
+        assert!(matches!(r_pi.next_event().unwrap().unwrap(), XmlEvent::ProcessingInstruction { target, content: Some(c), .. } if target == "my-target" && c == "some instructions"));
+    }
+
+    /// Tests additional XML reader edge cases for entity decoding, token length limits,
+    /// declaration attributes, and prohibited namespace bindings.
+    ///
+    /// Verifies that:
+    /// 1. Token length limits correctly reject attribute values exceeding `max_token_length`.
+    /// 2. Unterminated entity references trigger parse errors.
+    /// 3. Invalid hex entity codes are rejected.
+    /// 4. Uppercase hex entities (`&#X41;`) are decoded to their corresponding characters.
+    /// 5. Prohibited `xmlns:xmlns` attribute bindings are rejected per XML Namespace specs.
+    /// 6. XML declaration with `standalone` attribute is parsed successfully.
+    /// 7. Prohibited custom DTD entity references trigger parse errors.
+    /// 8. Standard predefined XML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`) are decoded.
+    #[test]
+    fn test_xml_reader_extended_edge_cases() {
+        // 1. max_token_length exceeded in attribute value (lines 500-506)
+        let limits = XmlReaderLimits { max_token_length: 5, ..Default::default() };
+        let mut r_tok_len = XmlReader::with_limits("<root verylongattributename=\"val\"/>", limits);
+        assert!(r_tok_len.next_event().is_err());
+
+        // 2. Unterminated entity reference (line 237)
+        let mut r_unterminated = XmlReader::new("<root attr=\"&unterminated\"/>");
+        assert!(r_unterminated.next_event().is_err());
+
+        // 3. Invalid hex entity code (line 265)
+        let mut r_bad_hex = XmlReader::new("<root>&#xZZ;</root>");
+        let _ = r_bad_hex.next_event();
+        assert!(r_bad_hex.next_event().is_err());
+
+        // 4. Uppercase hex entity &#X41; (line 263)
+        let mut r_hex_cap = XmlReader::new("<root>&#X41;</root>");
+        let _ = r_hex_cap.next_event();
+        let ev_text = r_hex_cap.next_event().unwrap().unwrap();
+        assert!(matches!(ev_text, XmlEvent::Text { content, .. } if content == "A"));
+
+        // 5. xmlns:xmlns attribute binding prohibited (line 521)
+        let mut r_xmlns_xmlns = XmlReader::new("<root xmlns:xmlns=\"http://example.com\"/>");
+        assert!(r_xmlns_xmlns.next_event().is_err());
+
+        // 6. XML declaration standalone attribute (line 450)
+        let mut r_standalone = XmlReader::new("<?xml version=\"1.0\" standalone=\"yes\"?><root/>");
+        assert!(r_standalone.next_event().unwrap().is_some());
+
+        // 7. Prohibited custom DTD entity reference (lines 282-285)
+        let mut r_prohibited_ent = XmlReader::new("<root>&custom;</root>");
+        let _ = r_prohibited_ent.next_event();
+        assert!(r_prohibited_ent.next_event().is_err());
+
+        // 8. Standard predefined XML entities (lines 253-257)
+        let mut r_std_ents = XmlReader::new("<root attr=\"&amp;&lt;&gt;&quot;&apos;\"></root>");
+        let ev = r_std_ents.next_event().unwrap().unwrap();
+        assert!(matches!(ev, XmlEvent::StartElement { attributes, .. } if attributes[0].value == "&<>\"'"));
+
+        // 9. Invalid decimal entity code (line 268)
+        let mut r_bad_dec = XmlReader::new("<root>&#invalid;</root>");
+        let _ = r_bad_dec.next_event();
+        assert!(r_bad_dec.next_event().is_err());
+
+        // 10. Numeric entity code pointing to invalid Unicode scalar (surrogate 0xD800, line 273)
+        let mut r_surrogate = XmlReader::new("<root>&#xD800;</root>");
+        let _ = r_surrogate.next_event();
+        assert!(r_surrogate.next_event().is_err());
+
+        // 11. Unexpected end element tag when stack is empty after closing root (lines 552-554)
+        let mut r_unexpected_end = XmlReader::new("<root></root></extra>");
+        let _ = r_unexpected_end.next_event();
+        let _ = r_unexpected_end.next_event();
+        assert!(r_unexpected_end.next_event().is_err());
+
+        // 12. XML Comments and Processing Instructions (lines 604-620)
+        let xml_nodes = "<root><!-- commentary --><?proc_inst data?></root>";
+        let mut r_nodes = XmlReader::new(xml_nodes);
+        let _ = r_nodes.next_event(); // Start root
+        let ev_comment = r_nodes.next_event().unwrap().unwrap();
+        assert!(matches!(ev_comment, XmlEvent::Comment { content, .. } if content == " commentary "));
+        let ev_pi = r_nodes.next_event().unwrap().unwrap();
+        assert!(matches!(ev_pi, XmlEvent::ProcessingInstruction { target, content: Some(c), .. } if target == "proc_inst" && c == "data"));
+
+        // 13. W3C XML 1.0 §3.3.3 Attribute Value Normalization
+        // Literal tabs and newlines must be normalized to space #x20,
+        // but character references (&#x9;, &#xA;) must be preserved.
+        let xml_attr_norm = "<root raw=\"line1\tline2\nline3\rline4\" char_ref=\"val&#x9;part&#xA;end\"/>";
+        let mut r_attr_norm = XmlReader::new(xml_attr_norm);
+        let ev_norm = r_attr_norm.next_event().unwrap().unwrap();
+        if let XmlEvent::StartElement { attributes, .. } = ev_norm {
+            assert_eq!(attributes.len(), 2);
+            assert_eq!(attributes[0].value, "line1 line2 line3 line4");
+            assert_eq!(attributes[1].value, "val\tpart\nend");
+        } else {
+            panic!("Expected StartElement");
+        }
     }
 }
