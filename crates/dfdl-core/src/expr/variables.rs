@@ -64,6 +64,49 @@ pub struct DfdlVariable {
     pub primitive_default: Option<DfdlValue>,
 }
 
+/// Undo record for reversible variable mutations during backtracking.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VariableUndo {
+    /// Variable value and state modification.
+    SetValue {
+        /// Index of the mutated variable in `variables`.
+        var_idx: usize,
+        /// Prior active value.
+        prev_val: Option<DfdlValue>,
+        /// Prior lifecycle state.
+        prev_state: VariableState,
+    },
+    /// A new variable instance was pushed.
+    PushInstance {
+        /// Index of the mutated variable.
+        var_idx: usize,
+        /// Prior active value.
+        prev_curr: Option<DfdlValue>,
+        /// Prior lifecycle state.
+        prev_state: VariableState,
+    },
+    /// A variable instance was popped.
+    PopInstance {
+        /// Index of the mutated variable.
+        var_idx: usize,
+        /// Instance value that was popped off the stack.
+        popped_val: Option<DfdlValue>,
+        /// State of the popped instance.
+        popped_state: VariableState,
+        /// Prior active value before pop.
+        prev_curr: Option<DfdlValue>,
+        /// Prior lifecycle state before pop.
+        prev_state: VariableState,
+    },
+    /// Read state transition.
+    StateChange {
+        /// Index of the mutated variable.
+        var_idx: usize,
+        /// Prior lifecycle state.
+        prev_state: VariableState,
+    },
+}
+
 /// Runtime storage manager for DFDL variables (§7).
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableMap {
@@ -71,6 +114,8 @@ pub struct VariableMap {
     pub variables: Vec<DfdlVariable>,
     /// Whether to escalate schema definition warnings to errors (daf:escalateWarningsToErrors).
     pub escalate_warnings: bool,
+    /// Dynamic undo log tracking reversible mutations for backtracking without heap cloning.
+    pub undo_log: core::cell::RefCell<Vec<VariableUndo>>,
 }
 
 impl Default for VariableMap {
@@ -86,6 +131,7 @@ impl VariableMap {
         let mut map = Self {
             variables: Vec::new(),
             escalate_warnings: false,
+            undo_log: core::cell::RefCell::new(Vec::new()),
         };
         map.define_variable(
             QName::with_namespace("http://www.ogf.org/dfdl/dfdl-1.0/", "encoding", Some("dfdl")),
@@ -108,6 +154,60 @@ impl VariableMap {
             Some(DfdlValue::String(String::from("%LF;"))),
         );
         map
+    }
+
+    /// Returns a lightweight checkpoint representing the current mutation position.
+    ///
+    /// This is an allocation-free O(1) operation returning the current undo log length.
+    #[inline]
+    #[must_use]
+    pub fn checkpoint(&self) -> usize {
+        self.undo_log.borrow().len()
+    }
+
+    /// Reverts all variable mutations back to the checkpoint position.
+    ///
+    /// If no variables were mutated since `checkpoint`, this is an instant O(1) NO-OP.
+    pub fn rollback(&mut self, cp: usize) {
+        let mut log = self.undo_log.borrow_mut();
+        while log.len() > cp {
+            if let Some(undo) = log.pop() {
+                match undo {
+                    VariableUndo::SetValue { var_idx, prev_val, prev_state } => {
+                        if let Some(var) = self.variables.get_mut(var_idx) {
+                            var.current_value = prev_val.clone();
+                            var.state.set(prev_state);
+                            if let Some((top_val, top_state)) = var.instance_stack.last_mut() {
+                                *top_val = prev_val;
+                                top_state.set(prev_state);
+                            }
+                        }
+                    }
+                    VariableUndo::PushInstance { var_idx, prev_curr, prev_state } => {
+                        if let Some(var) = self.variables.get_mut(var_idx) {
+                            var.instance_stack.pop();
+                            var.current_value = prev_curr;
+                            var.state.set(prev_state);
+                        }
+                    }
+                    VariableUndo::PopInstance { var_idx, popped_val, popped_state, prev_curr, prev_state } => {
+                        if let Some(var) = self.variables.get_mut(var_idx) {
+                            var.instance_stack.push((popped_val, Cell::new(popped_state)));
+                            var.current_value = prev_curr;
+                            var.state.set(prev_state);
+                        }
+                    }
+                    VariableUndo::StateChange { var_idx, prev_state } => {
+                        if let Some(var) = self.variables.get(var_idx) {
+                            var.state.set(prev_state);
+                            if let Some((_, top_state)) = var.instance_stack.last() {
+                                top_state.set(prev_state);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Defines a new variable or updates an existing definition in the map.
@@ -178,10 +278,12 @@ impl VariableMap {
     ) -> DFDLResult<()> {
         let clean = name.local_name.trim_start_matches('$');
         let local = clean.split(':').next_back().unwrap_or(clean);
-        if let Some(var) = self.variables.iter_mut().find(|v| {
+        let var_idx = self.variables.iter().position(|v| {
             let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
             v_local == local || v.name.local_name == clean || v.name.local_name == name.local_name
-        }) {
+        });
+        if let Some(var) = var_idx.and_then(|idx| self.variables.get_mut(idx)) {
+            let var_idx = var_idx.unwrap_or(0);
             let value = var.var_type.coerce_value(&value).unwrap_or(value);
             if is_parsing && var.direction == VariableDirection::UnparseOnly {
                 let msg = format!(
@@ -215,6 +317,11 @@ impl VariableMap {
                         );
                         return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                     }
+                    self.undo_log.borrow_mut().push(VariableUndo::SetValue {
+                        var_idx,
+                        prev_val: var.current_value.clone(),
+                        prev_state: state,
+                    });
                     var.current_value = Some(value.clone());
                     var.state.set(VariableState::Set);
                     if let Some((top_val, top_state)) = var.instance_stack.last_mut() {
@@ -230,6 +337,11 @@ impl VariableMap {
                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                 }
                 VariableState::Undefined | VariableState::Defined | VariableState::Evaluating => {
+                    self.undo_log.borrow_mut().push(VariableUndo::SetValue {
+                        var_idx,
+                        prev_val: var.current_value.clone(),
+                        prev_state: state,
+                    });
                     var.current_value = Some(value.clone());
                     var.state.set(VariableState::Set);
                     if let Some((top_val, top_state)) = var.instance_stack.last_mut() {
@@ -315,10 +427,17 @@ impl VariableMap {
     ) -> DFDLResult<()> {
         let clean = name.local_name.trim_start_matches('$');
         let local = clean.split(':').next_back().unwrap_or(clean);
-        if let Some(var) = self.variables.iter_mut().find(|v| {
+        if let Some((var_idx, var)) = self.variables.iter_mut().enumerate().find(|(_, v)| {
             let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
             v_local == local || v.name.local_name == clean || v.name.local_name == name.local_name
         }) {
+            let prev_curr = var.current_value.clone();
+            let prev_state = var.state.get();
+            self.undo_log.borrow_mut().push(VariableUndo::PushInstance {
+                var_idx,
+                prev_curr,
+                prev_state,
+            });
             let coerced_value = value.map(|v| var.var_type.coerce_value(&v).unwrap_or(v));
             let (effective, st) = if let Some(v) = coerced_value {
                 (Some(v), VariableState::Defined)
@@ -338,10 +457,17 @@ impl VariableMap {
                 (None, VariableState::Undefined)
             };
             self.define_variable(name.clone(), DfdlSimpleType::String, effective.clone());
-            if let Some(var) = self.variables.iter_mut().find(|v| {
+            if let Some((var_idx, var)) = self.variables.iter_mut().enumerate().find(|(_, v)| {
                 let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
                 v_local == local || v.name.local_name == clean || v.name.local_name == name.local_name
             }) {
+                let prev_curr = var.current_value.clone();
+                let prev_state = var.state.get();
+                self.undo_log.borrow_mut().push(VariableUndo::PushInstance {
+                    var_idx,
+                    prev_curr,
+                    prev_state,
+                });
                 var.current_value = effective.clone();
                 var.state.set(st);
                 var.instance_stack.push((effective, Cell::new(st)));
@@ -354,12 +480,22 @@ impl VariableMap {
     pub fn pop_variable_instance(&mut self, name: &QName) {
         let clean = name.local_name.trim_start_matches('$');
         let local = clean.split(':').next_back().unwrap_or(clean);
-        if let Some(var) = self.variables.iter_mut().find(|v| {
+        if let Some((var_idx, var)) = self.variables.iter_mut().enumerate().find(|(_, v)| {
             let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
             v_local == local || v.name.local_name == clean || v.name.local_name == name.local_name
         }) {
             if var.instance_stack.len() > 1 {
-                var.instance_stack.pop();
+                if let Some((popped_val, popped_state_cell)) = var.instance_stack.pop() {
+                    let prev_curr = var.current_value.clone();
+                    let prev_state = var.state.get();
+                    self.undo_log.borrow_mut().push(VariableUndo::PopInstance {
+                        var_idx,
+                        popped_val,
+                        popped_state: popped_state_cell.get(),
+                        prev_curr,
+                        prev_state,
+                    });
+                }
             }
             if let Some((top_val, top_state)) = var.instance_stack.last() {
                 var.current_value = top_val.clone();
@@ -391,7 +527,7 @@ impl VariableMap {
     pub fn get_variable_validated(&self, name: &str, is_parsing: bool) -> DFDLResult<DfdlValue> {
         let clean = name.trim_start_matches('$');
         let local = clean.split(':').next_back().unwrap_or(clean);
-        if let Some(var) = self.variables.iter().find(|v| {
+        if let Some((var_idx, var)) = self.variables.iter().enumerate().find(|(_, v)| {
             let v_local = v.name.local_name.split(':').next_back().unwrap_or(&v.name.local_name);
             v_local == local || v.name.local_name == clean || v.name.local_name == local
         }) {
@@ -435,6 +571,10 @@ impl VariableMap {
                     Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg))
                 }
                 VariableState::Defined | VariableState::ReadDefault | VariableState::Set => {
+                    self.undo_log.borrow_mut().push(VariableUndo::StateChange {
+                        var_idx,
+                        prev_state: state,
+                    });
                     var.state.set(VariableState::Read);
                     if let Some((_, top_state)) = var.instance_stack.last() {
                         top_state.set(VariableState::Read);

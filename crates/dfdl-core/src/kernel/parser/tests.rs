@@ -3018,6 +3018,8 @@
         grp_props.asserts.push(crate::schema::ir::CompiledAssert {
             test_kind: crate::schema::ir::TestKind::Expression,
             test_expr: "fn:true()".into(),
+            test_ast: None,
+            compiled_regex: None,
             message: Some("assert failed".into()),
             failure_type: crate::schema::ir::FailureType::ProcessingError,
         });

@@ -327,6 +327,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         elem_name: Option<&str>,
         namespaces: Option<&[(alloc::string::String, alloc::string::String)]>,
     ) -> DFDLResult<String> {
+        let trimmed = delim_str.trim();
+        if !trimmed.starts_with('{') || trimmed.starts_with("{{") {
+            let val = if let Some(stripped) = trimmed.strip_prefix("{{") {
+                alloc::format!("{{{stripped}")
+            } else {
+                alloc::string::String::from(delim_str)
+            };
+            return Ok(val);
+        }
         let prop = crate::schema::ir::DfdlProp::parse_str(delim_str)?;
         self.evaluate_prop_at(&prop, builder, elem_name, namespaces)
     }

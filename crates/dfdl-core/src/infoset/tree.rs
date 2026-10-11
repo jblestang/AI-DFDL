@@ -501,6 +501,27 @@ impl InfosetBuilder {
         &self.doc
     }
 
+    /// Looks up an already-parsed sibling element directly in the immediate parent container.
+    ///
+    /// This enables O(1) zero-allocation lookup for relative path expressions like `../fieldName`.
+    #[must_use]
+    pub fn find_sibling_in_parent(&self, name: &str) -> Option<&InfosetElement> {
+        let parent = self.stack.last()?;
+        for child in parent.children.iter().rev() {
+            let InfosetNode::Element(ref elem) = child;
+            let clean_elem = elem
+                .name
+                .local_name
+                .split(':')
+                .next_back()
+                .unwrap_or(&elem.name.local_name);
+            if clean_elem == name || elem.name.local_name == name {
+                return Some(elem);
+            }
+        }
+        None
+    }
+
     /// Returns active [`InfosetDocument`] representation, incorporating active element stack.
     #[must_use]
     pub fn active_doc(&self) -> InfosetDocument {

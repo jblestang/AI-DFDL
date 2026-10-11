@@ -73,6 +73,12 @@ impl<'a> ByteSource for SliceByteSource<'a> {
     fn remaining_bytes(&self) -> usize {
         self.data.len().saturating_sub(self.position)
     }
+
+    fn peek_slice(&self, max_bytes: usize) -> Option<&[u8]> {
+        let rem = self.data.get(self.position..)?;
+        let len = rem.len().min(max_bytes);
+        rem.get(..len)
+    }
 }
 
 /// Wraps an underlying [`ByteSource`] with a strict maximum byte boundary.
@@ -209,6 +215,12 @@ impl<S: ByteSource> ByteSource for BoundedSource<S> {
             .unwrap_or(self.start_pos);
         let elapsed = current_pos.saturating_sub(self.start_pos);
         self.max_bytes.saturating_sub(elapsed)
+    }
+
+    fn peek_slice(&self, max_bytes: usize) -> Option<&[u8]> {
+        let rem = self.remaining_bytes();
+        let allowed = max_bytes.min(rem);
+        self.inner.peek_slice(allowed)
     }
 }
 

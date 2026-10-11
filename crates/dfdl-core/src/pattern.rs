@@ -32,6 +32,15 @@ pub struct DfdlRegex {
     lookahead_groups: Vec<usize>,
 }
 
+impl PartialEq for DfdlRegex {
+    fn eq(&self, other: &Self) -> bool {
+        self.re.as_str() == other.re.as_str()
+            && self.lookahead_groups == other.lookahead_groups
+    }
+}
+
+impl Eq for DfdlRegex {}
+
 /// Rewrites positive look-ahead groups; returns the new pattern and the capture
 /// indices of the inserted markers, or an error message for unsupported syntax.
 #[allow(clippy::arithmetic_side_effects)]

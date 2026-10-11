@@ -93,6 +93,22 @@ impl<S: ByteSource> BitReader<S> {
         self.bit_limit
     }
 
+    /// Peeks up to `max_bytes` directly from the underlying byte source if the bit buffer is byte-aligned.
+    #[inline]
+    #[must_use]
+    pub fn peek_bytes(&self, max_bytes: usize) -> Option<&[u8]> {
+        if self.bits_in_buf != 0 {
+            return None;
+        }
+        let allowed = if let Some(limit) = self.bit_limit {
+            let rem_bits = limit.saturating_sub(self.position().0);
+            max_bytes.min(rem_bits / 8)
+        } else {
+            max_bytes
+        };
+        self.source.peek_slice(allowed)
+    }
+
     /// Reads up to 64 bits from the stream as an unsigned integer value.
     pub fn read_bits(&mut self, num_bits: usize) -> DFDLResult<u64> {
         if num_bits == 0 {

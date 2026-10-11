@@ -490,17 +490,32 @@ pub enum FailureType {
 }
 
 /// Compiled DFDL assertion declaration (§15).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct CompiledAssert {
     /// Kind of test (`Expression` or `Pattern`).
     pub test_kind: TestKind,
     /// Test expression or pattern string.
     pub test_expr: String,
+    /// Pre-compiled expression Abstract Syntax Tree if `test_kind` is Expression.
+    pub test_ast: Option<crate::expr::ast::ExprAst>,
+    /// Pre-compiled DFDL regular expression if `test_kind` is Pattern.
+    pub compiled_regex: Option<crate::pattern::DfdlRegex>,
     /// Optional failure diagnostic message string.
     pub message: Option<String>,
     /// Failure type (`ProcessingError` or `RecoverableError`).
     pub failure_type: FailureType,
 }
+
+impl PartialEq for CompiledAssert {
+    fn eq(&self, other: &Self) -> bool {
+        self.test_kind == other.test_kind
+            && self.test_expr == other.test_expr
+            && self.message == other.message
+            && self.failure_type == other.failure_type
+    }
+}
+
+impl Eq for CompiledAssert {}
 
 /// DFDL textNumberCheckPolicy property (§13.7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -1004,6 +1019,10 @@ pub struct ResolvedProperties {
     pub occurs_count_prop: Option<DfdlProp<usize>>,
     /// Optional choice branch discriminator expression string if specified.
     pub discriminator: Option<String>,
+    /// Pre-compiled choice branch discriminator expression AST.
+    pub discriminator_ast: Option<crate::expr::ast::ExprAst>,
+    /// Pre-compiled choice branch discriminator regular expression (if `discriminator_test_kind` is Pattern).
+    pub discriminator_regex: Option<crate::pattern::DfdlRegex>,
     /// Test kind for discriminator (Expression or Pattern).
     pub discriminator_test_kind: TestKind,
     /// Optional failure message for discriminator.
@@ -1101,6 +1120,8 @@ pub struct ResolvedProperties {
     pub facets: SimpleTypeFacets,
     /// Optional choice dispatch key expression string (`dfdl:choiceDispatchKey`) (§15).
     pub choice_dispatch_key: Option<String>,
+    /// Pre-compiled choice dispatch key expression AST.
+    pub choice_dispatch_key_ast: Option<crate::expr::ast::ExprAst>,
     /// Optional choice branch key string (`dfdl:choiceBranchKey`) (§15).
     pub choice_branch_key: Option<String>,
     /// Optional choice branch key ranges string (`dfdlx:choiceBranchKeyRanges`).
@@ -1547,6 +1568,8 @@ impl Default for ResolvedProperties {
             occurs_count_expr: None,
             occurs_count_prop: None,
             discriminator: None,
+            discriminator_ast: None,
+            discriminator_regex: None,
             discriminator_test_kind: TestKind::default(),
             discriminator_message: None,
             nil_kind: NilKind::default(),
@@ -1594,6 +1617,7 @@ impl Default for ResolvedProperties {
             text_standard_base: 10,
             facets: SimpleTypeFacets::default(),
             choice_dispatch_key: None,
+            choice_dispatch_key_ast: None,
             choice_branch_key: None,
             choice_branch_key_ranges: None,
             empty_element_parse_policy: EmptyElementParsePolicy::default(),
@@ -1725,6 +1749,12 @@ impl CompiledSchema {
     /// Resolves a term by `NodeId` from the schema graph arena.
     #[must_use]
     pub fn get_term(&self, id: NodeId) -> Option<&CompiledTerm> {
+        let idx = id.0 as usize;
+        if let Some(term) = self.terms.get(idx) {
+            if term.id == id {
+                return Some(term);
+            }
+        }
         self.terms.iter().find(|t| t.id == id)
     }
 
@@ -2369,6 +2399,8 @@ mod tests {
         root_props.asserts.push(CompiledAssert {
             test_kind: TestKind::Expression,
             test_expr: "{ fn:true() }".into(),
+            test_ast: None,
+            compiled_regex: None,
             message: None,
             failure_type: FailureType::ProcessingError,
         });

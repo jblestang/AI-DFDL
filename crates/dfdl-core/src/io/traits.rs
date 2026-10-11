@@ -50,6 +50,12 @@ pub trait ByteSource {
 
     /// Returns the remaining available bytes in the source if known.
     fn remaining_bytes(&self) -> usize;
+
+    /// Peeks up to `max_bytes` without advancing the position, if supported by the source.
+    fn peek_slice(&self, max_bytes: usize) -> Option<&[u8]> {
+        let _ = max_bytes;
+        None
+    }
 }
 
 /// Abstract trait for byte-oriented data sinks.

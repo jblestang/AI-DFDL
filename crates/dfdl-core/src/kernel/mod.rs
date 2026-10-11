@@ -770,6 +770,8 @@ mod tests {
             asserts: alloc::vec![crate::schema::ir::CompiledAssert {
                 test_kind: crate::schema::ir::TestKind::Expression,
                 test_expr: alloc::string::String::from("{ 10 gt 5 }"),
+                test_ast: None,
+                compiled_regex: None,
                 message: Some(alloc::string::String::from("Value must be > 5")),
                 failure_type: crate::schema::ir::FailureType::ProcessingError,
             }],
@@ -817,6 +819,8 @@ mod tests {
             asserts: alloc::vec![crate::schema::ir::CompiledAssert {
                 test_kind: crate::schema::ir::TestKind::Expression,
                 test_expr: alloc::string::String::from("{ 10 lt 5 }"), // Fails!
+                test_ast: None,
+                compiled_regex: None,
                 message: Some(alloc::string::String::from("Value must be > 5")),
                 failure_type: crate::schema::ir::FailureType::ProcessingError,
             }],
@@ -863,12 +867,16 @@ mod tests {
                 crate::schema::ir::CompiledAssert {
                     test_kind: crate::schema::ir::TestKind::Expression,
                     test_expr: alloc::string::String::from("{ 10 gt 5 }"),
+                    test_ast: None,
+                    compiled_regex: None,
                     message: Some(alloc::string::String::from("Rule 1 ok")),
                     failure_type: crate::schema::ir::FailureType::ProcessingError,
                 },
                 crate::schema::ir::CompiledAssert {
                     test_kind: crate::schema::ir::TestKind::Expression,
                     test_expr: alloc::string::String::from("{ 5 gt 10 }"),
+                    test_ast: None,
+                    compiled_regex: None,
                     message: Some(alloc::string::String::from("Rule 2 failed")),
                     failure_type: crate::schema::ir::FailureType::ProcessingError,
                 },

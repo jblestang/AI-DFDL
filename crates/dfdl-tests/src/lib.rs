@@ -1828,6 +1828,9 @@ mod tests {
         let mut unparse_failure_clusters: std::collections::BTreeMap<String, usize> =
             std::collections::BTreeMap::new();
         let mut unparse_sample_tests: Vec<String> = Vec::new();
+        let mut infoset_clusters: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        let mut infoset_sample_tests: Vec<String> = Vec::new();
         let mut error_msg_sample_tests: Vec<String> = Vec::new();
         let mut other_sample_tests: Vec<String> = Vec::new();
 
@@ -2054,6 +2057,14 @@ mod tests {
                                 }
                             } else if msg.contains("infoset mismatch") {
                                 cat_infoset_mismatch = cat_infoset_mismatch.saturating_add(1);
+                                let file_name = std::path::Path::new(&p_str)
+                                    .file_name()
+                                    .map(|s| s.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| p_str.to_string());
+                                *infoset_clusters.entry(file_name).or_insert(0usize) += 1;
+                                if infoset_sample_tests.len() < 30 {
+                                    infoset_sample_tests.push(format!("{} in {}", msg, p_str));
+                                }
                             } else if msg.contains("unparse failed")
                                 || msg.contains("unparse output bytes mismatch")
                             {
@@ -2329,6 +2340,17 @@ mod tests {
         eprintln!("\n--- OTHER UNCATEGORIZED SAMPLE TESTS ({} collected) ---", other_sample_tests.len());
         for (idx, sample) in other_sample_tests.iter().enumerate() {
             eprintln!("[Other Sample {}] {}", idx + 1, sample);
+        }
+
+        eprintln!("\n--- TOP INFOSET MISMATCH CLUSTERS (BY TDML FILE) ---");
+        let mut sorted_infoset: Vec<_> = infoset_clusters.into_iter().collect();
+        sorted_infoset.sort_by_key(|a| std::cmp::Reverse(a.1));
+        for (file, count) in sorted_infoset.iter() {
+            eprintln!("{:65} : {} test cases", file, count);
+        }
+        eprintln!("\n--- INFOSET MISMATCH SAMPLE TESTS ({} collected) ---", infoset_sample_tests.len());
+        for (idx, sample) in infoset_sample_tests.iter().enumerate() {
+            eprintln!("[InfosetMismatch Sample {}] {}", idx + 1, sample);
         }
 
         eprintln!("\n--- SAMPLE PARSE FAILURE DIAGNOSTICS ---");

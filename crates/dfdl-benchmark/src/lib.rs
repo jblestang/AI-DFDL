@@ -26,6 +26,10 @@ use dfdl_core::types::QName;
 use dfdl_schema::SchemaCompiler;
 use dfdl_xml::{XmlEvent, XmlReader};
 
+/// Hand-written native Rust encoder and decoder for FakeTDL messages.
+pub mod native;
+pub use native::*;
+
 /// Embedded FakeTDL schemas.
 pub mod schemas {
     /// Root fakeTDL schema defining `fakeTDL` and `fakeTDLFile` elements.
@@ -515,6 +519,36 @@ pub fn format_benchmark_table(results: &[BenchmarkResult]) -> String {
     out
 }
 
+/// Formats a comparison between interpreted and native benchmark results into an ASCII table.
+#[must_use]
+pub fn format_comparison_table(
+    pairs: &[(&str, &BenchmarkResult, &BenchmarkResult)],
+) -> String {
+    let mut out = String::new();
+    let sep = "+----------------------------------+-------------------+-------------------+--------------+---------------------+\n";
+    out.push_str(sep);
+    out.push_str("| Operation                        | Interpreted Mean  | Native Mean       | Speedup      | Native Throughput   |\n");
+    out.push_str(sep);
+
+    for (label, interp, native) in pairs {
+        let interp_secs = interp.mean.as_secs_f64().max(1e-12);
+        let native_secs = native.mean.as_secs_f64().max(1e-12);
+        let speedup = interp_secs / native_secs;
+
+        out.push_str(&format!(
+            "| {:<32} | {:>17} | {:>17} | {:>10.1}x | {:>15.0} o/s |\n",
+            label,
+            format_duration(interp.mean),
+            format_duration(native.mean),
+            speedup,
+            native.ops_per_sec,
+        ));
+    }
+
+    out.push_str(sep);
+    out
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
@@ -581,5 +615,43 @@ mod tests {
         assert!(res.min <= res.mean);
         assert!(res.mean <= res.max);
         assert!(res.ops_per_sec > 0.0);
+    }
+
+    #[test]
+    fn test_native_track_msg_01_roundtrip() {
+        let msg = FakeTdlMessage::decode(data::TEST_MSG_01_DAT).expect("native decode msg_01");
+        if let FakeTdlMessage::Track(t) = &msg {
+            assert_eq!(&t.source, b"AG123");
+            assert_eq!(t.send_time, TimeOfDay::new(1, 2, 3));
+            assert!(!t.must_ack);
+            assert_eq!(t.message_id, 1);
+            assert_eq!(&t.track_num, b"UU777");
+            assert_eq!(t.point_type, TrackPointType::Waypoint);
+            assert_eq!(t.quality, TrackPointQuality::Actual);
+            assert_eq!(t.course, 75);
+            assert_eq!(t.speed, 200);
+        }
+        assert!(matches!(msg, FakeTdlMessage::Track(_)));
+        let encoded = msg.encode();
+        assert_eq!(encoded.as_slice(), data::TEST_MSG_01_DAT);
+    }
+
+    #[test]
+    fn test_native_track_good_01_roundtrip() {
+        let msg = FakeTdlMessage::decode(data::TEST_TRACK_GOOD_01_DAT).expect("native decode good_01");
+        let encoded = msg.encode();
+        assert_eq!(encoded.as_slice(), data::TEST_TRACK_GOOD_01_DAT);
+    }
+
+    #[test]
+    fn test_native_file_01_roundtrip() {
+        let file = FakeTdlFile::decode(data::TEST_FILE_01_DAT).expect("native decode file_01");
+        assert_eq!(file.messages.len(), 3);
+        assert!(matches!(file.messages.first(), Some(FakeTdlMessage::Track(_))));
+        assert!(matches!(file.messages.get(1), Some(FakeTdlMessage::Identity(_))));
+        assert!(matches!(file.messages.get(2), Some(FakeTdlMessage::Ack(_))));
+
+        let encoded = file.encode();
+        assert_eq!(encoded.as_slice(), data::TEST_FILE_01_DAT);
     }
 }

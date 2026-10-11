@@ -847,11 +847,30 @@ impl PropertyStore {
         message: Option<&str>,
         failure_type: crate::schema::ir::FailureType,
     ) {
+        let test_ast = if test_kind == crate::schema::ir::TestKind::Expression {
+            crate::expr::parse_expr(test_expr).ok()
+        } else {
+            None
+        };
+        let compiled_regex = if test_kind == crate::schema::ir::TestKind::Pattern {
+            let anchored = if let Some(stripped) = test_expr.strip_prefix('^') {
+                alloc::format!("^(?:{})", stripped)
+            } else {
+                alloc::format!("^(?:{})", test_expr)
+            };
+            crate::pattern::DfdlRegex::new(&anchored)
+                .or_else(|_| crate::pattern::DfdlRegex::new(test_expr))
+                .ok()
+        } else {
+            None
+        };
         let _ = try_push(
             &mut self.asserts,
             CompiledAssert {
                 test_kind,
                 test_expr: test_expr.to_string(),
+                test_ast,
+                compiled_regex,
                 message: message.map(String::from),
                 failure_type,
             },
@@ -1420,11 +1439,30 @@ impl PropertyStore {
             } else {
                 crate::schema::ir::TestKind::Expression
             };
+            let test_ast = if test_kind == crate::schema::ir::TestKind::Expression {
+                crate::expr::parse_expr(test_expr).ok()
+            } else {
+                None
+            };
+            let compiled_regex = if test_kind == crate::schema::ir::TestKind::Pattern {
+                let anchored = if let Some(stripped) = test_expr.strip_prefix('^') {
+                    alloc::format!("^(?:{})", stripped)
+                } else {
+                    alloc::format!("^(?:{})", test_expr)
+                };
+                crate::pattern::DfdlRegex::new(&anchored)
+                    .or_else(|_| crate::pattern::DfdlRegex::new(test_expr))
+                    .ok()
+            } else {
+                None
+            };
             let _ = try_push(
                 &mut asserts,
                 CompiledAssert {
                     test_kind,
                     test_expr: test_expr.to_string(),
+                    test_ast,
+                    compiled_regex,
                     message: None,
                     failure_type: crate::schema::ir::FailureType::ProcessingError,
                 },
@@ -1987,6 +2025,48 @@ impl PropertyStore {
                 }
             });
 
+        let discriminator_ast = if let Some(ref expr) = discriminator {
+            if discriminator_test_kind == crate::schema::ir::TestKind::Expression {
+                let trimmed = expr.trim();
+                if !trimmed.is_empty() {
+                    crate::expr::parse_expr(trimmed).ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let discriminator_regex = if let Some(ref expr) = discriminator {
+            if discriminator_test_kind == crate::schema::ir::TestKind::Pattern {
+                let trimmed = expr.trim();
+                let anchored = if let Some(stripped) = trimmed.strip_prefix('^') {
+                    alloc::format!("^(?:{})", stripped)
+                } else {
+                    alloc::format!("^(?:{})", trimmed)
+                };
+                crate::pattern::DfdlRegex::new(&anchored)
+                    .or_else(|_| crate::pattern::DfdlRegex::new(trimmed))
+                    .ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let choice_dispatch_key_ast = if let Some(ref expr) = choice_dispatch_key {
+            let trimmed = expr.trim();
+            if !trimmed.is_empty() {
+                crate::expr::parse_expr(trimmed).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Ok(ResolvedProperties {
             representation: rep,
             byte_order,
@@ -2024,6 +2104,8 @@ impl PropertyStore {
             occurs_count_expr,
             occurs_count_prop,
             discriminator,
+            discriminator_ast,
+            discriminator_regex,
             discriminator_test_kind,
             discriminator_message,
             nil_kind,
@@ -2074,6 +2156,7 @@ impl PropertyStore {
             text_standard_base,
             facets,
             choice_dispatch_key,
+            choice_dispatch_key_ast,
             choice_branch_key,
             choice_branch_key_ranges,
             empty_element_parse_policy,

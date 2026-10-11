@@ -647,6 +647,39 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let max_occurs = match term.properties.occurs_count_kind {
             OccursCountKind::Expression => {
                 let eval_ast_fn = |ast: &crate::expr::ast::ExprAst, this: &mut Self| -> DFDLResult<usize> {
+                    if let crate::expr::ast::ExprAst::Path(ref path) = ast {
+                        let steps = path.steps();
+                        if let (Some(step0), Some(step1)) = (steps.first(), steps.get(1)) {
+                            if steps.len() == 2
+                                && step0.is_parent()
+                                && !step1.is_parent()
+                                && !step1.is_self()
+                                && step1.predicate_expr.is_none()
+                            {
+                                let sibling_name = step1.local_name();
+                                if let Some(elem) = builder.find_sibling_in_parent(sibling_name) {
+                                if let crate::infoset::state::ElementState::Value(ref val) = elem.state {
+                                    match val {
+                                        DfdlValue::Int(v) if *v >= 0 => return Ok(*v as usize),
+                                        DfdlValue::Long(v) if *v >= 0 => return Ok(*v as usize),
+                                        DfdlValue::UnsignedLong(v) => return Ok(*v as usize),
+                                        DfdlValue::UnsignedInt(v) => return Ok(*v as usize),
+                                        DfdlValue::UnsignedShort(v) => return Ok(*v as usize),
+                                        DfdlValue::UnsignedByte(v) => return Ok(*v as usize),
+                                        DfdlValue::Short(v) if *v >= 0 => return Ok(*v as usize),
+                                        DfdlValue::Byte(v) if *v >= 0 => return Ok(*v as usize),
+                                        DfdlValue::String(ref s) => {
+                                            if let Ok(num) = s.trim().parse::<usize>() {
+                                                return Ok(num);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                     let mut current_path = builder.current_path();
                     let clean_name = elem
                         .name
@@ -748,7 +781,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 self.current_occurs_index = occurrences.saturating_add(1);
                 let builder_cp = builder.checkpoint();
                 let reader_cp = self.reader.checkpoint();
-                let vmap_cp = self.variable_map.clone();
+                let vmap_cp = self.variable_map.checkpoint();
                 let val_err_cp = self.validation_errors.len();
                 match self.parse_single_element_occurrence(term, elem, builder, false, false) {
                     Ok(()) => {
@@ -757,7 +790,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     Err(e) => {
                         self.reader.rollback(reader_cp)?;
                         builder.rollback(builder_cp);
-                        self.variable_map = vmap_cp;
+                        self.variable_map.rollback(vmap_cp);
                         self.validation_errors.truncate(val_err_cp);
                         if count >= elem.min_occurs && e.kind != DFDLErrorKind::SchemaDefinition {
                             break;
@@ -803,7 +836,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
             let reader_cp = self.reader.checkpoint();
             let builder_cp = builder.checkpoint();
-            let vmap_cp = self.variable_map.clone();
+            let vmap_cp = self.variable_map.checkpoint();
             let val_err_cp = self.validation_errors.len();
             let bo_cp = self.reader.bit_order();
             let delims_cp = self.in_scope_delimiters.clone();
@@ -979,7 +1012,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             // For arrays (maxOccurs > 1 or unbounded), additional occurrences may follow
                             // separated by delimiters (e.g. under separatorSuppressionPolicy="anyEmpty").
                             builder.rollback(builder_cp);
-                            self.variable_map = vmap_cp;
+                            self.variable_map.rollback(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             total_element_count = total_element_count.saturating_add(1);
@@ -1055,7 +1088,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         self.reader.set_bit_order(bo_cp);
                         builder.rollback(builder_cp);
-                        self.variable_map = vmap_cp;
+                        self.variable_map.rollback(vmap_cp);
                         self.validation_errors.truncate(val_err_cp);
                         self.current_occurs_index = 1;
                         break;
@@ -1069,7 +1102,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         if let Some(sep) = sep_opt {
                             if !sep.is_empty() && self.peek_literal_delimiter(sep) {
                                 builder.rollback(builder_cp);
-                                self.variable_map = vmap_cp;
+                                self.variable_map.rollback(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                                 slots_processed = slots_processed.saturating_add(1);
                                 let _ = self.match_literal_delimiter(sep);
@@ -1078,7 +1111,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         if (sep_consumed || slots_processed > 0) && self.reader.is_eof() {
                             builder.rollback(builder_cp);
-                            self.variable_map = vmap_cp;
+                            self.variable_map.rollback(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             self.current_occurs_index = 1;
@@ -1107,7 +1140,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         {
                             self.reader.rollback(pre_elem_cp)?;
                             builder.rollback(builder_cp);
-                            self.variable_map = vmap_cp;
+                            self.variable_map.rollback(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
                             slots_processed = slots_processed.saturating_add(1);
@@ -1127,7 +1160,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 self.reader.rollback(reader_cp)?;
                             }
                             builder.rollback(builder_cp);
-                            self.variable_map = vmap_cp;
+                            self.variable_map.rollback(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
                             self.in_scope_delimiters = delims_cp.clone();
@@ -1138,7 +1171,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         } else {
                             self.reader.rollback(reader_cp)?;
                             builder.rollback(builder_cp);
-                            self.variable_map = vmap_cp;
+                            self.variable_map.rollback(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
                             self.in_scope_delimiters = delims_cp.clone();
@@ -1150,7 +1183,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                     self.reader.rollback(reader_cp)?;
                     builder.rollback(builder_cp);
-                    self.variable_map = vmap_cp;
+                    self.variable_map.rollback(vmap_cp);
                     self.validation_errors.truncate(val_err_cp);
                     self.in_scope_delimiters = delims_cp;
                     self.in_scope_terminators = terms_cp;
@@ -1406,7 +1439,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
-                        let vmap_cp = self.variable_map.clone();
+                        let vmap_cp = self.variable_map.checkpoint();
                         let val_err_cp = self.validation_errors.len();
 
                         match self.parse_single_unordered_element_occurrence(
@@ -1422,7 +1455,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 if new_reader_cp == reader_cp && cur_count >= elem.min_occurs {
                                     let _ = self.reader.rollback(reader_cp);
                                     builder.rollback(builder_cp);
-                                    self.variable_map = vmap_cp;
+                                    self.variable_map.rollback(vmap_cp);
                                     self.validation_errors.truncate(val_err_cp);
                                     continue;
                                 }
@@ -1436,7 +1469,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             Err(_) => {
                                 let _ = self.reader.rollback(reader_cp);
                                 builder.rollback(builder_cp);
-                                self.variable_map = vmap_cp;
+                                self.variable_map.rollback(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                             }
                         }
@@ -1444,7 +1477,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     _ => {
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
-                        let vmap_cp = self.variable_map.clone();
+                        let vmap_cp = self.variable_map.checkpoint();
                         let val_err_cp = self.validation_errors.len();
                         let group_res = (|| -> DFDLResult<()> {
                             if let Some(sep) = sep_opt {
@@ -1478,7 +1511,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             Err(_) => {
                                 let _ = self.reader.rollback(reader_cp);
                                 builder.rollback(builder_cp);
-                                self.variable_map = vmap_cp;
+                                self.variable_map.rollback(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                             }
                         }
@@ -2066,12 +2099,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     && !term.properties.facets.rep_values.is_empty()
                 {
                     let rep_st = term.properties.rep_simple_type.unwrap_or(*st);
-                    let mut rep_props = term.properties.clone();
-                    rep_props.facets = crate::schema::ir::SimpleTypeFacets::default();
                     let wire_res = self.parse_simple_value(
                         rep_st,
                         Some(&elem_pname),
-                        &rep_props,
+                        &term.properties,
                         builder,
                     )?;
                     let wire_str = alloc::format!("{}", wire_res);
@@ -2313,35 +2344,59 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             if assert_item.test_kind != crate::schema::ir::TestKind::Pattern {
                 continue;
             }
-            let reader_cp = self.reader.checkpoint();
-            let mut bytes = Vec::new();
-            for _ in 0..1024 {
+            let pat_trimmed = assert_item.test_expr.trim();
+            if pat_trimmed == "." || pat_trimmed == "^." {
                 if self.reader.is_eof() {
-                    break;
+                    let msg = assert_item
+                        .message
+                        .as_deref()
+                        .unwrap_or("Assertion failure: unexpected EOF for pattern '.'");
+                    return Err(DFDLError::new(DFDLErrorKind::Validation, msg));
                 }
-                if let Ok(b) = self.reader.read_bits(8) {
-                    let _ = try_push(&mut bytes, b as u8);
-                } else {
-                    break;
-                }
+                continue;
             }
-            let _ = self.reader.rollback(reader_cp);
-            let raw_text_peek =
-                crate::encoding::decode_text_bytes(&bytes, &term.properties.encoding)
-                    .unwrap_or_default();
 
-            let anchored_pat = if let Some(stripped) = assert_item.test_expr.strip_prefix('^') {
-                alloc::format!("^(?:{})", stripped)
+            let mut stack_buf = [0u8; 256];
+            let peek_slice: &[u8] = if let Some(slice) = self.reader.peek_bytes(4096) {
+                slice
             } else {
-                alloc::format!("^(?:{})", assert_item.test_expr)
+                let reader_cp = self.reader.checkpoint();
+                let mut count: usize = 0;
+                for slot in stack_buf.iter_mut() {
+                    if self.reader.is_eof() {
+                        break;
+                    }
+                    if let Ok(b) = self.reader.read_bits(8) {
+                        *slot = b as u8;
+                        count = count.saturating_add(1);
+                    } else {
+                        break;
+                    }
+                }
+                let _ = self.reader.rollback(reader_cp);
+                stack_buf.get(..count).unwrap_or(&[])
             };
 
-            let is_true = if let Ok(re) = crate::pattern::DfdlRegex::new(&anchored_pat) {
-                re.is_match(&raw_text_peek)
-            } else if let Ok(re) = crate::pattern::DfdlRegex::new(&assert_item.test_expr) {
+            let raw_text_peek =
+                crate::encoding::decode_text_bytes(peek_slice, &term.properties.encoding)
+                    .unwrap_or_default();
+
+            let is_true = if let Some(ref re) = assert_item.compiled_regex {
                 re.is_match(&raw_text_peek)
             } else {
-                false
+                let anchored_pat = if let Some(stripped) = pat_trimmed.strip_prefix('^') {
+                    alloc::format!("^(?:{})", stripped)
+                } else {
+                    alloc::format!("^(?:{})", pat_trimmed)
+                };
+
+                if let Ok(re) = crate::pattern::DfdlRegex::new(&anchored_pat) {
+                    re.is_match(&raw_text_peek)
+                } else if let Ok(re) = crate::pattern::DfdlRegex::new(pat_trimmed) {
+                    re.is_match(&raw_text_peek)
+                } else {
+                    false
+                }
             };
 
             if !is_true {
@@ -2393,8 +2448,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     if disc_expr.trim().is_empty() {
                         true
                     } else {
-                        let ast = crate::expr::parse_expr(disc_expr)?;
-                        match crate::expr::eval_expr(&ast, &mut ctx) {
+                        let dynamic_ast;
+                        let ast = match term.properties.discriminator_ast.as_ref() {
+                            Some(a) => a,
+                            None => {
+                                dynamic_ast = crate::expr::parse_expr(disc_expr)?;
+                                &dynamic_ast
+                            }
+                        };
+                        match crate::expr::eval_expr(ast, &mut ctx) {
                             Ok(val) => val.effective_boolean_value(),
                             Err(e) if e.kind == DFDLErrorKind::SchemaDefinition && !e.message.as_str().contains("does not exist") => {
                                 return Err(e);
@@ -2404,8 +2466,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     }
                 }
                 crate::schema::ir::TestKind::Pattern => {
-                    if disc_expr.trim().is_empty() {
+                    let disc_trimmed = disc_expr.trim();
+                    if disc_trimmed.is_empty() {
                         true
+                    } else if disc_trimmed == "." || disc_trimmed == "^." {
+                        !self.reader.is_eof()
                     } else {
                         let text_to_match = if let Some(elem) = active_doc
                             .find_element_with_context(&current_path, self.current_occurs_index)
@@ -2421,37 +2486,50 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             String::new()
                         };
 
-                        let reader_cp = self.reader.checkpoint();
-                        let mut bytes = Vec::new();
-                        for _ in 0..1024 {
-                            if self.reader.is_eof() {
-                                break;
-                            }
-                            if let Ok(b) = self.reader.read_bits(8) {
-                                let _ = try_push(&mut bytes, b as u8);
-                            } else {
-                                break;
-                            }
-                        }
-                        let _ = self.reader.rollback(reader_cp);
-                        let raw_text_peek =
-                            crate::encoding::decode_text_bytes(&bytes, &term.properties.encoding)
-                                .unwrap_or_default();
-
-                        let anchored_pat = if let Some(stripped) = disc_expr.strip_prefix('^') {
-                            alloc::format!("^(?:{})", stripped)
+                        let mut stack_buf = [0u8; 256];
+                        let peek_slice: &[u8] = if let Some(slice) = self.reader.peek_bytes(4096) {
+                            slice
                         } else {
-                            alloc::format!("^(?:{})", disc_expr)
+                            let reader_cp = self.reader.checkpoint();
+                            let mut count: usize = 0;
+                            for slot in stack_buf.iter_mut() {
+                                if self.reader.is_eof() {
+                                    break;
+                                }
+                                if let Ok(b) = self.reader.read_bits(8) {
+                                    *slot = b as u8;
+                                    count = count.saturating_add(1);
+                                } else {
+                                    break;
+                                }
+                            }
+                            let _ = self.reader.rollback(reader_cp);
+                            stack_buf.get(..count).unwrap_or(&[])
                         };
 
-                        if let Ok(re) = crate::pattern::DfdlRegex::new(&anchored_pat) {
-                            re.is_match(&raw_text_peek)
-                                || (!text_to_match.is_empty() && re.is_match(&text_to_match))
-                        } else if let Ok(re) = crate::pattern::DfdlRegex::new(disc_expr) {
+                        let raw_text_peek =
+                            crate::encoding::decode_text_bytes(peek_slice, &term.properties.encoding)
+                                .unwrap_or_default();
+
+                        if let Some(ref re) = term.properties.discriminator_regex {
                             re.is_match(&raw_text_peek)
                                 || (!text_to_match.is_empty() && re.is_match(&text_to_match))
                         } else {
-                            false
+                            let anchored_pat = if let Some(stripped) = disc_trimmed.strip_prefix('^') {
+                                alloc::format!("^(?:{})", stripped)
+                            } else {
+                                alloc::format!("^(?:{})", disc_trimmed)
+                            };
+
+                            if let Ok(re) = crate::pattern::DfdlRegex::new(&anchored_pat) {
+                                re.is_match(&raw_text_peek)
+                                    || (!text_to_match.is_empty() && re.is_match(&text_to_match))
+                            } else if let Ok(re) = crate::pattern::DfdlRegex::new(disc_trimmed) {
+                                re.is_match(&raw_text_peek)
+                                    || (!text_to_match.is_empty() && re.is_match(&text_to_match))
+                            } else {
+                                false
+                            }
                         }
                     }
                 }
@@ -2518,8 +2596,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 continue;
             }
 
-            let ast = crate::expr::parse_expr(&assert_item.test_expr)?;
-            let val = crate::expr::eval_expr(&ast, &mut ctx)?;
+            let dynamic_ast;
+            let ast = match assert_item.test_ast.as_ref() {
+                Some(a) => a,
+                None => {
+                    dynamic_ast = crate::expr::parse_expr(&assert_item.test_expr)?;
+                    &dynamic_ast
+                }
+            };
+            let val = crate::expr::eval_expr(ast, &mut ctx)?;
             let is_true = val.effective_boolean_value();
 
             if !is_true {
@@ -2929,7 +3014,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 validate_string_as_xml(s)?;
             }
         }
-        if self.validation_mode != ValidationMode::Off && props.facets.has_facets() {
+        if self.validation_mode != ValidationMode::Off
+            && props.facets.has_facets()
+            && props.rep_type.is_none()
+            && props.rep_simple_type.is_none()
+        {
             if let Err(e) = props.facets.validate_value_detailed(&val) {
                 let name = elem_name.unwrap_or("element");
                 let msg_str = e.message.as_str();

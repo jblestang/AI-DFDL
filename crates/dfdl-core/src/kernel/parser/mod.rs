@@ -1104,8 +1104,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
 
                 let choice_res = (|| -> DFDLResult<()> {
-                    if let Some(ref dispatch_expr) = term.properties.choice_dispatch_key {
-                        let ast = crate::expr::parse_expr(dispatch_expr)?;
+                    if term.properties.choice_dispatch_key_ast.is_some()
+                        || term.properties.choice_dispatch_key.is_some()
+                    {
+                        let dynamic_ast;
+                        let ast = match term.properties.choice_dispatch_key_ast.as_ref() {
+                            Some(a) => a,
+                            None => {
+                                let expr_str = term
+                                    .properties
+                                    .choice_dispatch_key
+                                    .as_deref()
+                                    .unwrap_or("");
+                                dynamic_ast = crate::expr::parse_expr(expr_str)?;
+                                &dynamic_ast
+                            }
+                        };
                         let current_path = builder.current_path();
                         let active_doc = builder.active_doc();
                         let reader_cell = core::cell::RefCell::new(&mut self.reader);
@@ -1124,7 +1138,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         .with_namespaces(&term.properties.in_scope_namespaces)
                         .with_lookahead(Some(&la_fn))
                         .with_enclosing_lengths(&self.enclosing_complex_elements);
-                        let val = crate::expr::eval_expr(&ast, &mut ctx)?;
+                        let val = crate::expr::eval_expr(ast, &mut ctx)?;
                         let key_str = match val {
                             DfdlValue::String(s) => s,
                             DfdlValue::Int(n) => alloc::format!("{}", n),
@@ -1235,7 +1249,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     for &branch_id in &choice.branches {
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
-                        let vmap_cp = self.variable_map.clone();
+                        let vmap_cp = self.variable_map.checkpoint();
                         let val_err_cp = self.validation_errors.len();
                         let delims_cp = self.in_scope_delimiters.clone();
                         let terms_cp = self.in_scope_terminators.clone();
@@ -1273,7 +1287,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                             self.pou_stack.pop();
                                             self.reader.rollback(reader_cp)?;
                                             builder.rollback(builder_cp);
-                                            self.variable_map = vmap_cp;
+                                            self.variable_map.rollback(vmap_cp);
                                             self.validation_errors.truncate(val_err_cp);
                                             self.in_scope_delimiters = delims_cp;
                                             self.in_scope_terminators = terms_cp;
@@ -1284,7 +1298,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                         }
                                         self.reader.rollback(reader_cp)?;
                                         builder.rollback(builder_cp);
-                                        self.variable_map = vmap_cp;
+                                        self.variable_map.rollback(vmap_cp);
                                         self.validation_errors.truncate(val_err_cp);
                                         self.in_scope_delimiters = delims_cp;
                                         self.in_scope_terminators = terms_cp;
@@ -1304,7 +1318,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                                 self.pou_stack.pop();
                                                 self.reader.rollback(reader_cp)?;
                                                 builder.rollback(builder_cp);
-                                                self.variable_map = vmap_cp;
+                                                self.variable_map.rollback(vmap_cp);
                                                 self.validation_errors.truncate(val_err_cp);
                                                 self.in_scope_delimiters = delims_cp;
                                                 self.in_scope_terminators = terms_cp;
@@ -1317,7 +1331,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                             last_choice_error = Some(e);
                                             self.reader.rollback(reader_cp)?;
                                             builder.rollback(builder_cp);
-                                            self.variable_map = vmap_cp;
+                                            self.variable_map.rollback(vmap_cp);
                                             self.validation_errors.truncate(val_err_cp);
                                             self.in_scope_delimiters = delims_cp;
                                             self.in_scope_terminators = terms_cp;
@@ -1336,7 +1350,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     self.pou_stack.pop();
                                     self.reader.rollback(reader_cp)?;
                                     builder.rollback(builder_cp);
-                                    self.variable_map = vmap_cp;
+                                    self.variable_map.rollback(vmap_cp);
                                     self.validation_errors.truncate(val_err_cp);
                                     self.in_scope_delimiters = delims_cp;
                                     self.in_scope_terminators = terms_cp;
@@ -1349,7 +1363,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 last_choice_error = Some(e);
                                 self.reader.rollback(reader_cp)?;
                                 builder.rollback(builder_cp);
-                                self.variable_map = vmap_cp;
+                                self.variable_map.rollback(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                                 self.in_scope_delimiters = delims_cp;
                                 self.in_scope_terminators = terms_cp;

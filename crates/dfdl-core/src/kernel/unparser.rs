@@ -1501,8 +1501,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                 }
                 return Ok(());
             }
-            let mut local_props;
-            let mut has_local = false;
+            let mut local_props: Option<crate::schema::ir::ResolvedProperties> = None;
             if let Some(ast) = term.properties.encoding_prop.expr_ast() {
                 let mut ctx = self.make_expr_context();
                 let val = crate::expr::eval_expr(ast, &mut ctx)?;
@@ -1522,49 +1521,50 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     );
                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                 }
-                local_props = term.properties.clone();
-                local_props.encoding = dyn_encoding;
-                if let Some(ref fb) = local_props.fill_byte_raw {
+                let mut lp = term.properties.clone();
+                lp.encoding = dyn_encoding;
+                if let Some(ref fb) = lp.fill_byte_raw {
                     if !fb.starts_with('%') && fb.chars().count() == 1 {
                         if let Some(ch) = fb.chars().next() {
-                        let enc_upper = local_props.encoding.to_ascii_uppercase();
-                        if enc_upper.contains("6-BIT")
-                            || enc_upper.contains("5-BIT")
-                            || enc_upper.contains("7-BIT")
-                            || enc_upper.contains("BIT-PACKED")
-                        {
-                            let msg = alloc::format!(
-                                "Runtime Schema Definition Error: fillByte property requires a single-byte character for encoding '{}', but '{}' is not a byte-sized encoding",
-                                local_props.encoding, local_props.encoding
-                            );
-                            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-                        }
-                        if local_props.encoding.eq_ignore_ascii_case("UTF-8") && ch.len_utf8() > 1 {
-                            let msg = alloc::format!(
-                                "Runtime Schema Definition Error: fillByte property must be a single-byte character for encoding '{}', but '{}' takes {} bytes",
-                                local_props.encoding, ch, ch.len_utf8()
-                            );
-                            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                            let enc_upper = lp.encoding.to_ascii_uppercase();
+                            if enc_upper.contains("6-BIT")
+                                || enc_upper.contains("5-BIT")
+                                || enc_upper.contains("7-BIT")
+                                || enc_upper.contains("BIT-PACKED")
+                            {
+                                let msg = alloc::format!(
+                                    "Runtime Schema Definition Error: fillByte property requires a single-byte character for encoding '{}', but '{}' is not a byte-sized encoding",
+                                    lp.encoding, lp.encoding
+                                );
+                                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                            }
+                            if lp.encoding.eq_ignore_ascii_case("UTF-8") && ch.len_utf8() > 1 {
+                                let msg = alloc::format!(
+                                    "Runtime Schema Definition Error: fillByte property must be a single-byte character for encoding '{}', but '{}' takes {} bytes",
+                                    lp.encoding, ch, ch.len_utf8()
+                                );
+                                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                            }
                         }
                     }
                 }
-                }
-                has_local = true;
-            } else {
-                local_props = term.properties.clone();
+                local_props = Some(lp);
             }
             if let Some(ast) = term.properties.byte_order_prop.expr_ast() {
                 let mut ctx = self.make_expr_context();
                 if let Ok(val) = crate::expr::eval_expr(ast, &mut ctx) {
-                    local_props.byte_order =
-                        crate::expr::properties::parse_byte_order(&alloc::format!("{}", val))?;
-                    has_local = true;
+                    let bo = crate::expr::properties::parse_byte_order(&alloc::format!("{}", val))?;
+                    let mut lp = match local_props {
+                        Some(p) => p,
+                        None => term.properties.clone(),
+                    };
+                    lp.byte_order = bo;
+                    local_props = Some(lp);
                 }
             }
-            let props = if has_local {
-                &local_props
-            } else {
-                &term.properties
+            let props = match local_props {
+                Some(ref lp) => lp,
+                None => &term.properties,
             };
 
             if let Some(ref term_str) = props.terminator {
