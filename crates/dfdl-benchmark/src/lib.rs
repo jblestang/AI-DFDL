@@ -549,6 +549,39 @@ pub fn format_comparison_table(
     out
 }
 
+/// Formats a 3-way comparison between Raw DFDL, DFDL-VM, and Native Rust benchmark results into an ASCII table.
+#[must_use]
+pub fn format_three_way_comparison_table(
+    rows: &[(&str, &BenchmarkResult, &BenchmarkResult, &BenchmarkResult)],
+) -> String {
+    let mut out = String::new();
+    let sep = "+----------------------------------+-------------------+-------------------+-------------------+--------------+--------------+\n";
+    out.push_str(sep);
+    out.push_str("| Operation                        | Raw DFDL (Core)   | DFDL-VM           | Native Rust       | VM Speedup   | Native / VM  |\n");
+    out.push_str(sep);
+
+    for (label, raw, vm, native) in rows {
+        let raw_secs = raw.mean.as_secs_f64().max(1e-12);
+        let vm_secs = vm.mean.as_secs_f64().max(1e-12);
+        let native_secs = native.mean.as_secs_f64().max(1e-12);
+        let vm_speedup = raw_secs / vm_secs;
+        let native_vs_vm = vm_secs / native_secs;
+
+        out.push_str(&format!(
+            "| {:<32} | {:>17} | {:>17} | {:>17} | {:>10.1}x | {:>10.1}x |\n",
+            label,
+            format_duration(raw.mean),
+            format_duration(vm.mean),
+            format_duration(native.mean),
+            vm_speedup,
+            native_vs_vm,
+        ));
+    }
+
+    out.push_str(sep);
+    out
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
@@ -653,5 +686,56 @@ mod tests {
 
         let encoded = file.encode();
         assert_eq!(encoded.as_slice(), data::TEST_FILE_01_DAT);
+    }
+
+    #[test]
+    fn test_vm_compiled_from_schema_msg_01() {
+        use dfdl_vm::{BytecodeCompiler, DomBuilderSink, VmInterpreter};
+        let schema = compile_faketdl_schema("fakeTDL").expect("compile fakeTDL");
+        let prog = BytecodeCompiler::compile(&schema).expect("compile VM bytecode");
+        let mut reader = BitReader::new(
+            SliceByteSource::new(data::TEST_MSG_01_DAT),
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        let mut vm = VmInterpreter::new();
+        let mut sink = DomBuilderSink::new(&prog.symbols);
+        vm.execute(&prog, &mut reader, &mut sink).expect("VM execute failed");
+        let doc = sink.into_document().expect("DOM doc failed");
+        validate_infoset(&doc, data::TEST_MSG_01_XML).expect("XML validation failed");
+    }
+
+    #[test]
+    fn test_vm_compiled_from_schema_track_good_01() {
+        use dfdl_vm::{BytecodeCompiler, DomBuilderSink, VmInterpreter};
+        let schema = compile_faketdl_schema("fakeTDL").expect("compile fakeTDL");
+        let prog = BytecodeCompiler::compile(&schema).expect("compile VM bytecode");
+        let mut reader = BitReader::new(
+            SliceByteSource::new(data::TEST_TRACK_GOOD_01_DAT),
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        let mut vm = VmInterpreter::new();
+        let mut sink = DomBuilderSink::new(&prog.symbols);
+        vm.execute(&prog, &mut reader, &mut sink).expect("VM execute failed");
+        let doc = sink.into_document().expect("DOM doc failed");
+        validate_infoset(&doc, data::TEST_TRACK_GOOD_01_XML).expect("XML validation failed");
+    }
+
+    #[test]
+    fn test_vm_compiled_from_schema_file_01() {
+        use dfdl_vm::{BytecodeCompiler, DomBuilderSink, VmInterpreter};
+        let schema = compile_faketdl_schema("fakeTDLFile").expect("compile fakeTDLFile");
+        let prog = BytecodeCompiler::compile(&schema).expect("compile VM bytecode");
+        let mut reader = BitReader::new(
+            SliceByteSource::new(data::TEST_FILE_01_DAT),
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        let mut vm = VmInterpreter::new();
+        let mut sink = DomBuilderSink::new(&prog.symbols);
+        vm.execute(&prog, &mut reader, &mut sink).expect("VM execute failed");
+        let doc = sink.into_document().expect("DOM doc failed");
+        validate_infoset(&doc, data::TEST_FILE_01_XML).expect("XML validation failed");
     }
 }

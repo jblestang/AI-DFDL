@@ -9,6 +9,7 @@ members = [
     "crates/dfdl-tests",
     "crates/dfdl-fuzz",
     "crates/dfdl-benchmark",
+    "crates/dfdl-vm",
 ]
 
 [workspace.lints.rust]

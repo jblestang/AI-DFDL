@@ -10,10 +10,12 @@ license = "MIT OR Apache-2.0"
 dfdl-core = { path = "../dfdl-core", features = ["std"] }
 dfdl-schema = { path = "../dfdl-schema" }
 dfdl-xml = { path = "../dfdl-xml" }
+dfdl-vm = { path = "../dfdl-vm" }
 
 [[bin]]
 name = "dfdl-benchmark"
 path = "src/main.rs"
+test = false
 
 [lints]
 workspace = true

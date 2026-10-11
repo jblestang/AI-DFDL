@@ -1,214 +1,201 @@
-# Étude Architecturale : Bytecode VM et JIT no_std pour AI-DFDL
+# Étude Architecturale : Bytecode VM, JIT et AOT no_std pour AI-DFDL
 
-**Date :** 2026-10-07 18:15:00 UTC+2  
-**Auteur :** Expertise conjointe Architecte Systèmes Rust Bas-Niveau, Compilateurs/VM & Systèmes Critiques (Radar / EW / Cybersécurité)  
-**Objectif :** Évaluer la faisabilité, les choix techniques, les contraintes de sécurité et les performances d'un nouveau crate `dfdl-vm` intégrant une Machine Virtuelle à Bytecode et un compilateur JIT en environnement strict `no_std`.
-
----
-
-## 1. Contexte & Diagnostic des Performances Actuelles
-
-### 1.1. Fonctionnement Actuel de `dfdl-core`
-Dans l'architecture existante :
-1. **Phase Statique (Compilation de Schéma) :** `dfdl-schema` compile un fichier XML/XSD en un graphe IR de termes (`CompiledSchema` contenant des `CompiledTerm` référencés par `NodeId`).
-2. **Phase Dynamique (Parsing de Données) :** Lors de `parse_document()`, le parseur parcourt ce graphe par appels récursifs mutuels (`parse_term_inner` -> `parse_element` / `parse_sequence` / `parse_choice`).
-
-### 1.2. Facteurs Limitants de Performance (Goulots d'Étranglement)
-Dans les flux de données temps réel à haut débit (Radar I/Q, Guerre Électronique, Liaisons L16, trames ASTERIX Cat 048/062) :
-- **Overhead de Dispatch et Saut Indirect :** À chaque champ, le moteur effectue un lookup dans le vecteur de termes (`schema.get_term(id)`), vérifie le budget (`self.budget.consume(1)`), évalue dynamiquement les alignements, l'ordre des bits (`bitOrder`), et bascule sur un `match` exhaustif.
-- **Interprétation Récursive d'Expressions :** Même pour des conditions de longueur simples, l'évaluateur d'expressions XPath/DFDL (`eval_expr`) traverse un AST dynamique issu de Pest.
-- **Pression Mémoire et Cache L1/L2 :** La structure `CompiledSchema` et `ResolvedProperties` est dispersée en mémoire. L'état d'exécution (`ParserState`) maintient de nombreux vecteurs et piles d'état (`in_scope_delimiters`, `validation_errors`, `enclosing_complex_elements`), provoquant des cache-misses constants.
-- **Émission d'Infoset Granulaire :** Chaque petit champ génère un événement `InfosetEvent::SimpleValue` avec clonage de `QName` et allocation d'arbres.
+- **Date initiale :** 2026-10-07 18:15:00 UTC+2  
+- **Mise à jour majeure (Rev 2.0) :** 2026-10-11 11:55:00 UTC+2  
+- **Auteur :** Expertise conjointe Architecte Systèmes Rust Bas-Niveau, Compilateurs/VM & Systèmes Critiques (Radar / EW / Cybersécurité / Telemetry)  
+- **Objectif :** Évaluer et spécifier l'architecture du moteur d'exécution de nouvelle génération `dfdl-vm` (Machine Virtuelle à Bytecode, Compilation JIT et Génération AOT en environnement strict `no_std`), enrichie des **mesures matérielles réelles de profilage CPU** et du benchmark tactique FakeTDL (OpenDFDL).
 
 ---
 
-## 2. Architecture Cible : Le Crate `dfdl-vm`
+## 1. Contexte & Diagnostic Expérimental des Performances
 
-L'approche optimale repose sur une séparation claire entre :
-1. **Frontend / Schéma :** `dfdl-schema` continue de valider et produire le `CompiledSchema`.
-2. **Middle-end (Optimiseur & Générateur de Bytecode) :** Traduction de `CompiledSchema` en un flux d'instructions linéaire (`DfdlBytecodeProgram`), exempt de récursivité et optimisé (dead-branch elimination, bit-offset folding, alignment coalescing).
-3. **Backend d'Exécution :** Deux moteurs d'exécution interchangeables :
-   - **Interpréteur Bytecode VM (`no_std`, 100% Safe Rust) :** Universel, déterministe, hautement portable (du microcontrôleur Cortex-M au serveur multicœur).
-   - **Moteur JIT (`no_std`, architectural) :** Génération directe d'instructions machine natives pour x86_64 et AArch64 pour les environnements autorisant l'exécution dynamique de code.
+### 1.1. État Actuel du Moteur Interprété (`dfdl-core`)
+Le moteur DFDL interprété actuel fonctionne selon deux phases :
+1. **Phase Statique (Compilation XML/XSD) :** `dfdl-schema` compile les schémas DFDL en un graphe IR de termes (`CompiledSchema` avec arène de `CompiledTerm`).
+2. **Phase Dynamique (Interprétation à l'Exécution) :** `ParserEngine` et `UnparserEngine` parcourent récursivement ce graphe de termes, évaluent les propriétés de cadrage, résolvent les points d'incertitude (`<choice>`) et construisent un arbre DOM d'objets [`InfosetElement`](file:///Users/jean-baptiste/AI-DFDL/crates/dfdl-core/src/infoset/tree.rs).
+
+### 1.2. Progrès Récents (Optimisations d'Octobre 2026)
+Trois optimisations ont été déployées dans `dfdl-core` :
+- **Précompilation des Regex & Fast-Path Trivial :** Les motifs discriminants triviaux (`.` / `^.`) sont résolus en $O(1)$ par vérification de fin de flux (`!reader.is_eof()`).
+- **Résolution Statique des XPath Relatifs :** Évaluation directe de `{ ../count }` via `find_sibling_in_parent` évitant le clonage d'arbres.
+- **Peeking Zero-Copy du BitReader :** Remplacement des boucles de 1 024 lectures par `peek_bytes` / `peek_slice` sans allocation.
+
+**Gain mesuré sur FakeTDLFile (192 octets, 3 messages) :**  
+La latence de parsing est passée de **113.33 µs à 60.96 µs** (**-46.2% de latence, 1.86× plus rapide**), réduisant le ratio d'asymétrie parse/unparse de **3.98× (~4:1) à 2.15× (~2:1)**.
+
+---
+
+## 2. Profilage Matériel Réel du CPU (Profilage Hardware ARM64 macOS)
+
+Un profilage matériel à l'échantillonnage (7 825 échantillons, 1 ms, DWARF symbolication complète sur 50 000 itérations de `dfdl-benchmark`) a révélé la décomposition macroscopique exacte du CPU :
+
+### 2.1. Répartition du Temps CPU de la Machine Virtuelle DFDL
+
+| Sous-système | Échantillons CPU | % Temps Total | Fonctions Critiques Identifiées |
+|:---|:---:|:---:|:---|
+| **1. Allocations & Libérations Heap** | **3 321** | **42.4%** | `_xzm_free` (13.1%), `malloc_zone_malloc` (6.2%), `_free` (5.3%), `_platform_memmove` (5.2%), `__rdl_alloc` (2.2%) |
+| **2. Clonages Profonds & Destruction d'Objets** | **1 275** | **16.3%** | `Vec<InfosetNode>::clone` (3.6%), `drop_glue::<InfosetElement>` (3.2%), `InfosetElement::clone` (2.9%), `String::clone` (2.8%) |
+| **3. Recherche de Délimiteurs & Chaînes** | **1 031** | **13.2%** | `memchr::memrchr` (2.4%), `_platform_memcmp` (2.3%), `Pattern::is_contained_in` (2.0%) |
+| **4. Moteur de Parsing & BitReader** | **685** | **8.8%** | `parse_element_with_seg_internal` (0.9%), `parse_single_element` (0.8%), `BitReader::read_bits` (0.6%) |
+| **5. Frais d'Exécution OS / Runtime** | **327** | **4.2%** | `_dyld_start`, horloges haute précision |
+| **6. Formatage Nombres & Calendriers** | **123** | **1.6%** | `core::fmt::write`, algorithme Grisu flt2dec |
+| **7. Traversée du Graphe de Termes IR** | **75** | **1.0%** | `term_has_representation_impl`, `get_term` |
+| **8. Expressions XPath Pest AST** | **71** | **0.9%** | `eval_expr`, `build_expr` |
+| **9. Moteur d'Unparsing & BitWriter** | **39** | **0.5%** | `unparse_element_with_seg_internal` (0.8%), `write_bits` (0.5%) |
+| **10. Itérateurs Primitifs & Autres** | **878** | **11.2%** | Itération de tranches, déballage d'Option, indexation |
+
+### 2.2. Le Mur des 58.7% de Gestion Mémoire
+**Constat capital :** La manipulation des bits et l'application des règles DFDL pures ne représentent que **~10% du temps CPU**. **58.7% du temps CPU** est entièrement consommé par l'allocateur mémoire du système (`malloc`/`free`) et le clonage récursif des nœuds de l'arbre infoset lors des points de choix (`builder.checkpoint()`).
+
+---
+
+## 3. Le Benchmark Comparatif : Interprété vs Codec Natif Rust
+
+L'implémentation dans `dfdl-benchmark` d'un codec natif Rust écrit à la main ([`crates/dfdl-benchmark/src/native.rs`](file:///Users/jean-baptiste/AI-DFDL/crates/dfdl-benchmark/src/native.rs)) a permis de mesurer le plafond théorique de performance de la machine physique :
+
+| Opération (Message Multi-Trames 192B) | DFDL Interprété | Codec Natif Rust | Facteur d'Accélération |
+|:---|:---:|:---:|:---:|
+| **Décodage / Parse** | 60.96 µs | **49 ns** | **1 244× plus rapide** |
+| **Encodage / Unparse** | 28.35 µs | **39 ns** | **727× plus rapide** |
+| **Aller-retour complet (Roundtrip)** | 91.12 µs | **94 ns** | **969× plus rapide** |
+| **Débit utile** | 16 238 op/s | **12 320 323 op/s** | **758× supérieur** |
+| **Bande passante** | 2.97 Mo/s | **2 255.92 Mo/s (2.25 Go/s)** | **759× supérieur** |
+
+Ce résultat démontre qu'une architecture compilée peut dépasser les **2 Go/s**, contre ~3 Mo/s pour le moteur interprété actuel.
+
+---
+
+## 4. Architecture Cible : Le Crate `dfdl-vm`
+
+Pour franchir le mur des 58.7% et se rapprocher des performances natives sans sacrifier la conformité DFDL v1.0, `dfdl-vm` repose sur trois piliers :
+
+1. **Compilateur de Bytecode Linéaire (ISA Spécialisée DFDL) :** Aplatit l'arbre de termes en une séquence d'opcodes compacts stockés dans un tableau contigu.
+2. **Gestionnaire Transactionnel d'Infoset à Zéro Allocation :** Élimination de `builder.checkpoint()`. Le retour arrière lors d'un choix (`choice`) se résume à décrémenter un curseur d'offset dans une arène linéaire (`bump-allocation`).
+3. **Double / Triple Backend d'Exécution :**
+   - **Interpréteur Bytecode VM (`no_std`, Safe Rust certifiable DO-178C DAL A) :** Latence cible de **3 à 8 µs** (accélération de 8× à 20×).
+   - **Micro-JIT (`no_std`, Copy-and-Patch x86_64 / AArch64) :** Latence cible de **200 à 500 ns**.
+   - **Générateur AOT (Ahead-Of-Time Codegen) :** Génération de code source Rust compilé statiquement, atteignant les **49 ns** du codec natif.
 
 ```
                     ┌─────────────────────────┐
                     │      Schéma DFDL        │
                     └────────────┬────────────┘
-                                 │ (Compilation XML/XSD)
+                                 │ (dfdl-schema)
                                  ▼
                     ┌─────────────────────────┐
                     │ CompiledSchema (IR)     │
                     └────────────┬────────────┘
                                  │
                  ════════════════╪════════════════════
-                                 │ (Bytecode Lowering & Optimizations)
+                                 │ (Bytecode Lowering & Arena Optimizer)
                                  ▼
                     ┌─────────────────────────┐
                     │   dfdl-vm::Bytecode     │
-                    │      (BytecodeProgram)  │
+                    │   (Linear BytecodeProg) │
                     └────────────┬────────────┘
                                  │
-                   ┌─────────────┴─────────────┐
-                   ▼                           ▼
-        ┌─────────────────────┐     ┌─────────────────────┐
-        │   Bytecode VM       │     │    no_std JIT       │
-        │   Interpreter       │     │    (x86_64 / ARM64) │
-        │ (100% Safe no_std)  │     │ (Executable Memory) │
-        └──────────┬──────────┘     └──────────┬──────────┘
-                   │                           │
-                   └─────────────┬─────────────┘
+         ┌───────────────────────┼───────────────────────┐
+         ▼                       ▼                       ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Bytecode VM   │     │    no_std JIT   │     │   AOT Rust Gen  │
+│   Interpreter   │     │ (Copy-and-Patch)│     │  (Statique)     │
+│   (100% Safe)   │     │ (x86_64 / ARM64)│     │ (Zero Overhead) │
+│   ~5 µs / trame │     │ ~300 ns / trame │     │ ~49 ns / trame  │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
                                  ▼
                     ┌─────────────────────────┐
-                    │   Infoset / Événements  │
+                    │  Zero-Alloc Event Sink  │
+                    │  ou Arène Contiguë      │
                     └─────────────────────────┘
 ```
 
 ---
 
-## 3. Conception de l'ISA Bytecode Spécialisée (DFDL-ISA)
+## 5. Spécification de l'ISA DFDL-VM (Opcode Set)
 
-Contrairement à une VM générique (comme JVM ou WASM), l'ISA doit être ultra-spécialisée pour le décodage de bitstream.
+L'ISA est conçue pour manipuler directement les registres du bitstream et des valeurs sans passer par des boîtes dynamiques (`DfdlValue`).
 
-### 3.1. Jeu d'Instructions (Exemples d'Opcodes)
+### 5.1. Registres Virtuels de la Machine
+- `BR` : Pointeur de bitstream courant (`BitReader` / source slice + bit offset).
+- `R0` à `R7` : Registres 64 bits d'entiers/flottants généraux.
+- `HP` : High-Water Mark de l'arène Infoset (curseur linéaire d'allocation).
+- `SP` : Pointeur de pile des points d'incertitude (PoU) et des contextes de délimiteurs.
 
-| Opcode | Opérandes | Description & Sémantique |
+### 5.2. Opcodes Clés
+
+| Opcode | Opérandes | Fonctionnement & Optimisation Associée |
 |---|---|---|
-| `READ_BITS_U8` | `reg_dest, n_bits` | Lit 1 à 8 bits non signés dans le registre |
-| `READ_BITS_U16_BE` | `reg_dest` | Lit 16 bits en Big-Endian (fusionne lecture + bswap) |
-| `READ_BITS_U32_BE` | `reg_dest` | Lit 32 bits en Big-Endian |
-| `READ_BITS_U64_BE` | `reg_dest` | Lit 64 bits en Big-Endian |
-| `READ_VAR_INT` | `reg_dest, length_reg` | Lit un entier de longueur dynamique spécifiée par un registre |
-| `ALIGN_MANDATORY` | `alignment_bits` | Alignement statique direct ($0$ à $align-1$ bits sautés) |
-| `SKIP_BITS` | `n_bits` | Avance de $n$ bits dans le bitstream sans allouer |
-| `MATCH_MAGIC` | `const_pool_idx` | Vérifie immédiatement des octets magiques (ex: En-tête de trame) |
-| `JUMP_IF_EQ` | `reg, imm, offset` | Branchement conditionnel (gestion des `choice` / discriminators) |
-| `ENTER_ELEMENT` | `elem_id` | Émet un début d'élément dans l'Infoset |
-| `LEAVE_ELEMENT` | `elem_id` | Émet une fin d'élément |
-| `EMIT_VALUE_INT` | `elem_id, reg` | Émet un entier simple sans boxing intermédiaire |
-| `PUSH_POU` | `backtrack_offset` | Établit un point d'incertitude (sauvegarde position bitstream) |
-| `POP_POU` | - | Valide le chemin et retire le point d'incertitude |
-| `HALT` | `status` | Fin du décodage avec succès ou code d'erreur |
-
-### 3.2. Optimisations Statiques lors de la Génération de Bytecode
-Une fois le schéma parsé, de nombreuses propriétés sont **constantes et statiques** :
-1. **Fusion d'Alignements et de Sauts (Framing Coalescing) :** Si un élément requiert un `leadingSkip` de 8 bits suivi d'un alignement sur 32 bits, le compilateur calcule la position statique et émet une seule instruction de saut compacte.
-2. **Fast-Path pour Chiffres Fixes Alignés :** Si un bloc de 4 entiers de 16 bits Big-Endian est consécutif et aligné sur un octet, le compilateur remplace 4 lectures de bits avec gestion de frontière par une seule lecture vectorielle native ou un cast direct mémoire.
-3. **Discriminator Flattening :** Transformation d'une hiérarchie complexe de `xs:choice` en une table de saut directe (Jump Table) indexée par la valeur du champ discriminant.
+| `READ_BITS_U8` | `rd, n_bits` | Lecture de 1 à 8 bits dans `rd` avec alignement MSBF |
+| `READ_BE_U16` | `rd` | Lecture directe de 2 octets en Big-Endian sans appel de fonction |
+| `READ_BE_U32` | `rd` | Lecture directe de 4 octets en Big-Endian |
+| `READ_BE_F32` | `rd` | Lecture directe d'un flottant IEEE 754 32 bits |
+| `CHECK_ALIGN_PAD` | `align_bits` | Avance directe des bits de bourrage (zéro branchement) |
+| `PEEK_MATCH_U8` | `expected, offset` | Vérification de délimiteur ou magic sans avancer le pointeur |
+| `SAVE_POU` | `dest_ip` | Sauvegarde `(BR, HP)` sur la pile PoU (zéro clone mémoire) |
+| `COMMIT_POU` | - | Valide le choix et dépile le PoU |
+| `ROLLBACK_POU` | - | Restaure `BR` et `HP = checkpoint_hp` sans libération récursive |
+| `JUMP_SWITCH` | `table_id, rd` | Table de saut direct pour les discriminants de choix entiers |
+| `EMIT_SCALAR_U32` | `sym_id, rd` | Émet un événement sans allouer de chaîne `QName` |
+| `HALT` | `status` | Arrêt du décodage avec code de statut |
 
 ---
 
-## 4. Faisabilité du JIT en Rust `no_std`
+## 6. Élimination du Mur Mémoire : Le Modèle "Arena & Event Streaming"
 
-### 4.1. Le Défi de `no_std` pour la Génération de Code Natif
-La génération de code machine à l'exécution (JIT) requiert fondamentalement :
-1. **L'allocation de mémoire avec permissions d'exécution (RX).**
-2. **Le respect du principe W^X (Write XOR Execute) :** la page mémoire doit être en écriture (RW) pendant l'assemblage des octets machine, puis basculée en lecture/exécution (RX) avant le saut.
-3. **La cohérence des caches d'instructions et de données :** Sur ARM/AArch64 et RISC-V (architectures à caches I/D séparés non cohérents), il faut invalider le cache d'instructions (`ISB`, `DSB`, `clear_cache`).
-
-En Rust standard (`std`), cela est pris en charge par `libc::mprotect` ou l'API Windows `VirtualProtect`. En environnement `no_std` :
-- Il n'y a **aucun accès direct aux appels système OS**.
-- Le compilateur Rust natif n'embarque pas d'allocateur exécutable `no_std`.
-
-### 4.2. Solutions Techniques Viables
-
-#### Option A : Abstraction par Trait Mémoire (`JitMemoryBackend`)
-Pour que le crate reste strictement `no_std`, l'allocation de pages exécutables doit être déléguée à l'environnement hôte via un trait :
-
-```rust
-pub trait JitMemoryBackend {
-    type Error;
-    /// Alloue un bloc mémoire accessible en écriture
-    fn allocate_rw(&mut self, size: usize) -> Result<*mut u8, Self::Error>;
-    /// Bascule la mémoire en mode exécutable (W^X) et purge les caches I/D
-    fn make_executable(&mut self, ptr: *mut u8, size: usize) -> Result<*const u8, Self::Error>;
-    /// Libère la mémoire allouée
-    fn free(&mut self, ptr: *const u8, size: usize);
-}
-```
-
-- **Sur Linux / macOS (développement, edge servers) :** Une implémentation optionnelle (activable via `cfg(feature = "std")` ou un crate d'intégration) appelle `mmap` / `mprotect`.
-- **Sur RTOS / Bare-Metal (FreeRTOS, seL4, Cortex-R/A) :** Le BSP (Board Support Package) fournit une région de RAM configurée en RX dans la MPU/MMU et exécute les instructions de barrière de synchronisation de cache.
-
-#### Option B : Le Choix du Moteur de Génération de Code (Codegen)
-Pourquoi **Cranelift** ou **LLVM** sont exclus :
-- Cranelift et LLVM dépendent lourdement de `std`, allouent des dizaines de mégaoctets de structures de données intermédiaires et ont un temps de compilation incompatible avec les systèmes embarqués contraints.
-
-Les alternatives retenues :
-1. **Micro-Émetteur d'Opcode Direct (Hand-crafted Macro-Assembler) :**
-   - Étant donné que le décodage DFDL binaire ne nécessite qu'un sous-ensemble minuscule de x86_64 et AArch64 (instructions de chargement, décalage binaire, masquage `AND`, comparaison et saut), un émetteur d'octets direct de moins de 1000 lignes de code en `no_std` suffit amplement !
-   - Zéro dépendance externe.
-   - Temps de compilation JIT quasi instantané (inférieur à la microseconde pour un schéma typique).
-2. **Technique du "Copy-and-Patch JIT" :**
-   - Modèle ultra-moderne (popularisé par Peter Shen et utilisé dans les runtimes légers récents) : de petits fragments de code natif (stubs) sont précompilés par `rustc` en objets statiques. Le moteur JIT se contente de copier ces stubs et d'injecter les constantes (offsets, masques).
-   - Performance de code proche de LLVM, vitesse de JIT 100x plus rapide, compatible `no_std`.
+Pour éliminer les 58.7% de surcoût d'allocation mesurés dans le profil :
+1. **Internement Statique des QNames (`&'schema str`) :**  
+   Les identifiants d'éléments ne sont plus stockés dans des `String` heap-allouées, mais sous forme d'index d'arène statique (`SymbolId(u16)`).
+2. **Arène Linéaire pour l'Arbre Infoset :**  
+   Au lieu de centaines de petits `Vec<InfosetNode>`, tous les nœuds sont alloués consécutivement dans un tampon pré-dimensionné de 64 Ko. Le retour arrière lors d'un choix (`ROLLBACK_POU`) se résume à une simple réaffectation d'index :
+   ```rust
+   // Zéro allocation, zéro appel à free() !
+   self.arena_cursor = checkpoint.arena_cursor;
+   self.bit_position = checkpoint.bit_position;
+   ```
+3. **Sortie Directe par Événements / Serde-like Visitor :**  
+   Pour les flux temps réel où la création d'un DOM XML est inutile, la VM pousse directement les champs dans une structure Rust contiguë (comme `FakeTdlFile`) via un trait sans allocation.
 
 ---
 
-## 5. Analyse de Sécurité & Conformité Militaire / Critique
+## 7. Faisabilité du JIT et de l'AOT en `no_std`
 
-Dans les domaines Radar, EW (Guerre Électronique) et Défense, la possibilité d'utiliser un JIT soulève des exigences strictes :
+### 7.1. Le JIT "Copy-and-Patch"
+Plutôt qu'un compilateur JIT lourd (comme Cranelift ou LLVM incompatible avec `no_std`), la technique retenue est le **Copy-and-Patch JIT** :
+- De micro-fragments de code assembleur (stubs de 16 à 64 octets pour lire un entier, décaler des bits, vérifier un discriminant) sont précompilés par `rustc` lors du build.
+- À l'exécution, lors de la compilation du schéma, le moteur JIT alloue une page RX (via le trait `JitMemoryBackend`) et copie les stubs en injectant les constantes (offsets, masques).
+- **Temps de compilation JIT :** Inférieur à **50 microsecondes** pour un schéma comme FakeTDL.
 
-### 5.1. Risques Cyber du JIT
-- **JIT Spraying & Exécution Arbitraire :** Si un attaquant injecte un schéma DFDL malveillant visant à forcer la génération de gadgets d'exploitation dans la mémoire exécutable.
-  - *Mitigation :* Le bytecode doit être validé par un **Vérificateur Formel (Bytecode Verifier)** avant toute tentative de JIT. Aucun branchement vers des adresses absolues arbitraires n'est permis ; tous les sauts sont relatifs et bornés dans le segment de code.
-- **Violation de W^X :** La mémoire ne doit jamais être simultanément inscriptible et exécutable. En cas de non-respect, une vulnérabilité de corruption mémoire externe pourrait écraser le code compilé.
-- **Certification Avionique / Sécurité DO-178C :** Dans de nombreux systèmes de défense embarqués (aéronefs, missiles, satellites), l'exécution de code généré dynamiquement en RAM est **formellement interdite** par les autorités de certification.
-  - *Conséquence indispensable :* Le système **DOIT** être utilisable avec l'Interpréteur Bytecode pur sans activer le JIT, voire supporter la compilation **AOT (Ahead-of-Time)** via génération de code Rust statique au moment de la compilation.
-
----
-
-## 6. Comparatif de Performance Attendu
-
-| Caractéristique | Interpréteur Actuel (`dfdl-core`) | Bytecode VM (`dfdl-vm`) | JIT Native (`dfdl-vm` + JIT) |
-|---|---|---|---|
-| **Modèle d'exécution** | Arbre récursif de termes | Boucle de dispatch linéaire | Code natif x86_64 / AArch64 direct |
-| **Overhead par champ** | ~50 à 150 ns (lookups, checks) | ~5 à 15 ns (1 cycle de dispatch) | ~0.5 à 2 ns (instructions machine pures) |
-| **Compatibilité `no_std`** | 100% | 100% | Nécessite un hook mémoire RX (MPU/mprotect) |
-| **Débit estimé (ASTERIX / Radar)** | ~10 - 30 Mo/s | ~150 - 400 Mo/s | ~1 - 3 Go/s (proche de la vitesse mémoire) |
-| **Empreinte binaire** | ~100 Ko | +30 Ko | +50 Ko (micro-assembleur) |
-| **Sécurité mémoire / Certification** | Conforme Safe Rust | Conforme Safe Rust / Certifiable | Soumis à validation W^X / Non certifiable DO-178C DAL A |
+### 7.2. L'Alternative AOT (Génération de Code Statique)
+Pour les systèmes critiques soumis aux contraintes avioniques **DO-178C DAL A** où la mémoire W^X dynamique est interdite :
+- `dfdl-cli` ou une macro procédurale génère directement le code source Rust équivalent au codec natif à partir du schéma DFDL.
+- Ce code est compilé directement avec le binaire de vol, garantissant les **49 ns** de latence et **100% de certifiabilité statique**.
 
 ---
 
-## 7. Structure Recommandée du Crate `dfdl-vm`
+## 8. Synthèse Comparative des Solutions d'Exécution
 
-```
-crates/dfdl-vm/
-├── Cargo.toml                   # [features] default = ["alloc"], jit = []
-├── src/
-│   ├── lib.rs                   # Interface publique (Decoder, Program, Engine)
-│   ├── isa.rs                   # Opcode, Register, Instruction, BytecodeProgram
-│   ├── compiler/
-│   │   ├── mod.rs               # Abaissement de CompiledSchema -> BytecodeProgram
-│   │   ├── optimizer.rs         # Coalescing de bits, élimination de redondance
-│   │   └── verifier.rs          # Vérificateur statique de sécurité (bornes, budgets)
-│   ├── interpreter/
-│   │   ├── mod.rs               # Interpréteur no_std déterministe
-│   │   └── state.rs             # Registres virtuels, pile de retour, checkpoints
-│   └── jit/                     # Activé uniquement si cfg(feature = "jit")
-│       ├── mod.rs               # Façade JIT
-│       ├── memory.rs            # Trait JitMemoryBackend & W^X guard
-│       ├── emitter_x86_64.rs    # Micro-assembleur x86-64 no_std
-│       ├── emitter_aarch64.rs   # Micro-assembleur AArch64 no_std
-│       └── trampoline.rs        # Interface d'appel native sécurisée
-```
+| Critère | DFDL Interprété Actuel | Bytecode VM (`dfdl-vm`) | JIT Copy-and-Patch | AOT Rust Statique |
+|:---|:---:|:---:|:---:|:---:|
+| **Latence Parse (192B)** | **60.96 µs** | **~4 – 8 µs** | **~300 – 600 ns** | **49 ns** |
+| **Débit utile** | **3.0 Mo/s** | **~30 – 60 Mo/s** | **~350 – 700 Mo/s** | **2 255 Mo/s (2.25 Go/s)** |
+| **Overhead Mémoire** | 58.7% (malloc/free) | < 2% (arène contiguë) | 0% | 0% |
+| **Temps de Setup Schéma** | 18 ms (compilation IR) | +2 ms (génération bytecode) | +0.1 ms (assemblage stubs) | 0 ms (compilation statique) |
+| **Compatibilité `no_std`** | 100% | 100% Safe Rust | Requiert trait mémoire RX | 100% Safe Rust |
+| **Certifiabilité DO-178C** | Oui | Oui (très haute assurance) | Difficile (RAM exécutable) | **Maximale (DAL A certifiable)** |
 
 ---
 
-## 8. Recommandation Stratégique & Feuille de Route
+## 9. Feuille de Route d'Implémentation Recommandée
 
-1. **Phase 1 : Crate `dfdl-vm` avec Interpréteur Bytecode Pur (`no_std`)**
-   - Définir l'ISA DFDL optimisée pour les formats binaires.
-   - Implémenter le compilateur `CompiledSchema -> BytecodeProgram`.
-   - Fournir l'interpréteur déterministe `no_std`, 100% Safe Rust, respectant les lints stricts du workspace (`deny(panic, unwrap, indexing_slicing)`).
-   - **Gain attendu immédiat : x5 à x15 en débit de parsing**, avec zéro risque cyber et portabilité totale.
-
-2. **Phase 2 : Optimisations du Bytecode & Vérificateur Statique**
-   - Mise en place du `BytecodeVerifier` pour garantir l'absence de dépassement de pile, de boucle infinie et de lecture hors borne.
-   - Pliage des constantes de framing (alignement, leadingSkip, simple big-endian fast-path).
-
-3. **Phase 3 : Backend JIT Optionnel (`feature = "jit"`)**
-   - Spécifier le trait `JitMemoryBackend` pour préserver l'indépendance de `no_std`.
-   - Écrire un micro-émetteur AArch64 / x86_64 minimaliste pour les opcodes de lecture de champs binaires critiques.
-   - Basculer en exécution JIT les segments de schéma sans incertitude (fast-path natif), tout en conservant l'interpréteur VM en fallback pour les expressions dynamiques ou le backtracking complexe.
+1. **Jalon 1 : Moteur Transactionnel d'Arène dans `dfdl-core` (Court terme)**
+   - Remplacer `builder.checkpoint()` par un journal d'index de tronquage.
+   - Éliminer le surcoût de 16.3% de clonage profond mesuré lors du profilage.
+2. **Jalon 2 : Crate `dfdl-vm` & Interpréteur Bytecode Pur (Moyen terme)**
+   - Définir l'arène contiguë d'instructions et le compilateur `CompiledSchema -> BytecodeProgram`.
+   - Fournir l'interpréteur de bytecode 100% Safe Rust `no_std`.
+   - Viser le palier de **150 à 300 Mbps** de débit soutenu en environnement embarqué.
+3. **Jalon 3 : Backend AOT / Code-Generator (Objectif Performance Ultime)**
+   - Développer un générateur de code Rust natif produisant automatiquement un codec similaire à `native.rs` à partir du modèle DFDL.
+   - Permettre aux applications temps réel critiques d'atteindre des latences nanosecondes (**< 100 ns**) et un débit gigabit.

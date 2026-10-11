@@ -172,12 +172,75 @@ impl<S: ByteSource> BitReader<S> {
 
     /// Skips the specified number of bits in the reader.
     pub fn skip_bits(&mut self, mut bits: usize) -> DFDLResult<()> {
+        if bits == 0 {
+            return Ok(());
+        }
+
+        if let Some(limit) = self.bit_limit {
+            if self.position().0.saturating_add(bits) > limit {
+                return Err(DFDLError::new_static(
+                    DFDLErrorKind::Parse,
+                    "Insufficient binary data to skip bits",
+                ));
+            }
+        }
+
+        // Drain any partial buffer bits first
+        if self.bits_in_buf > 0 {
+            let take = bits.min(self.bits_in_buf);
+            self.bits_in_buf = self.bits_in_buf.saturating_sub(take);
+            bits = bits.saturating_sub(take);
+        }
+
+        // Fast-path: skip whole bytes directly on source when byte-aligned
+        if bits >= 8 {
+            let whole_bytes = bits / 8;
+            let whole_bits = whole_bytes.saturating_mul(8);
+            let cur = self.source.position();
+            let target = cur
+                .checked_add(crate::types::BitOffset(whole_bits))
+                .ok_or_else(|| {
+                    DFDLError::new(DFDLErrorKind::Parse, "Bit position overflow during skip")
+                })?;
+            self.source.set_position(target)?;
+            bits = bits.saturating_sub(whole_bits);
+        }
+
         while bits > 0 {
             let chunk = bits.min(64);
             let _ = self.read_bits(chunk)?;
             bits = bits.saturating_sub(chunk);
         }
         Ok(())
+    }
+
+    /// Reads exactly `buf.len()` bytes into `buf`.
+    ///
+    /// If the reader is byte-aligned, delegates directly to the underlying [`ByteSource::read_bytes`] for maximum throughput.
+    /// Otherwise, extracts bytes bit-by-bit.
+    pub fn read_bytes(&mut self, buf: &mut [u8]) -> DFDLResult<()> {
+        if buf.is_empty() {
+            return Ok(());
+        }
+
+        let total_bits = buf.len().saturating_mul(8);
+        if let Some(limit) = self.bit_limit {
+            if self.position().0.saturating_add(total_bits) > limit {
+                return Err(DFDLError::new_static(
+                    DFDLErrorKind::Parse,
+                    "Insufficient binary data for byte block",
+                ));
+            }
+        }
+
+        if self.bits_in_buf == 0 {
+            self.source.read_bytes(buf)
+        } else {
+            for b in buf.iter_mut() {
+                *b = self.read_bits(8)? as u8;
+            }
+            Ok(())
+        }
     }
 
     /// Aligns reader to next whole byte boundary, discarding any unread bits in current byte.
