@@ -1048,7 +1048,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                 }
                 return Ok(alloc::format!("{}-{}-{}", yyyy, mm, dd));
-            } else if pat == "HHmmss" && d.len() >= 6 {
+            } else if (pat == "HHmmss" || pat == "hhmmss") && d.len() >= 6 {
                 let s = &d[d.len() - 6..];
                 let hh = &s[0..2];
                 let mm = &s[2..4];

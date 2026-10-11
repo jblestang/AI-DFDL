@@ -1,0 +1,19 @@
+[package]
+name = "dfdl-benchmark"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Benchmarking and validation harness for AI-DFDL using FakeTDL military messaging assets"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", features = ["std"] }
+dfdl-schema = { path = "../dfdl-schema" }
+dfdl-xml = { path = "../dfdl-xml" }
+
+[[bin]]
+name = "dfdl-benchmark"
+path = "src/main.rs"
+
+[lints]
+workspace = true

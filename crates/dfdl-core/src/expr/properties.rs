@@ -258,7 +258,16 @@ fn validate_dfdl_property_entities(key: &str, value: &str) -> DFDLResult<()> {
                     let norm_key = key.trim_start_matches("dfdl:");
                     let allows_byte_entity = matches!(
                         norm_key,
-                        "fillByte" | "nilValue" | "initiator" | "terminator" | "separator"
+                        "fillByte"
+                            | "nilValue"
+                            | "initiator"
+                            | "terminator"
+                            | "separator"
+                            | "textStringPadCharacter"
+                            | "textNumberPadCharacter"
+                            | "textBooleanPadCharacter"
+                            | "textCalendarPadCharacter"
+                            | "textPadChar"
                     );
                     if !allows_byte_entity {
                         let msg = alloc::format!(

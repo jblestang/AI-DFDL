@@ -1843,26 +1843,81 @@ impl TdmlRunner {
     }
 
     fn verify_infoset(doc: &InfosetDocument, expected_xml: &str) -> bool {
-        let root = match doc.root.as_ref() {
+        let expected_doc = match Self::parse_infoset_xml(expected_xml) {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+        let actual_root = match doc.root.as_ref() {
             Some(r) => r,
-            None => return expected_xml.is_empty(),
+            None => return expected_doc.root.is_none(),
+        };
+        let expected_root = match expected_doc.root.as_ref() {
+            Some(r) => r,
+            None => return false,
         };
 
-        if expected_xml.contains(&root.name.local_name) {
-            return true;
+        Self::compare_infoset_elements(actual_root, expected_root)
+    }
+
+    fn compare_infoset_elements(actual: &InfosetElement, expected: &InfosetElement) -> bool {
+        if actual.name.local_name != expected.name.local_name {
+            return false;
         }
 
-        if let ElementState::Value(ref val) = root.state {
-            let val_str = val.to_string();
-            if expected_xml.contains(&val_str) {
-                return true;
+        let actual_is_nil = actual.state == ElementState::Nil || actual.nil_attribute == Some(true);
+        let expected_is_nil = expected.state == ElementState::Nil || expected.nil_attribute == Some(true);
+        if actual_is_nil != expected_is_nil {
+            return false;
+        }
+
+        match (&actual.state, &expected.state) {
+            (ElementState::Value(a_val), ElementState::Value(e_val)) => {
+                let a_str = a_val.to_string();
+                let e_str = e_val.to_string();
+                if a_str != e_str {
+                    if let (Ok(a_f), Ok(e_f)) = (a_str.parse::<f64>(), e_str.parse::<f64>()) {
+                        if (a_f - e_f).abs() > 1e-6 {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                }
             }
+            (ElementState::Value(_), ElementState::NoValue) if !expected.children.is_empty() => {
+                return false;
+            }
+            (ElementState::NoValue, ElementState::Value(_)) if !actual.children.is_empty() => {
+                return false;
+            }
+            _ => {}
         }
 
-        for child in &root.children {
-            let InfosetNode::Element(ref sub) = child;
-            if expected_xml.contains(&sub.name.local_name) {
-                return true;
+        let actual_children: Vec<&InfosetElement> = actual
+            .children
+            .iter()
+            .filter_map(|c| match c {
+                InfosetNode::Element(e) if !e.is_hidden => Some(e),
+                _ => None,
+            })
+            .collect();
+
+        let expected_children: Vec<&InfosetElement> = expected
+            .children
+            .iter()
+            .filter_map(|c| match c {
+                InfosetNode::Element(e) if !e.is_hidden => Some(e),
+                _ => None,
+            })
+            .collect();
+
+        if actual_children.len() != expected_children.len() {
+            return false;
+        }
+
+        for (a_child, e_child) in actual_children.iter().zip(expected_children.iter()) {
+            if !Self::compare_infoset_elements(a_child, e_child) {
+                return false;
             }
         }
 

@@ -1108,6 +1108,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         let ast = crate::expr::parse_expr(dispatch_expr)?;
                         let current_path = builder.current_path();
                         let active_doc = builder.active_doc();
+                        let reader_cell = core::cell::RefCell::new(&mut self.reader);
+                        let la_fn = |offset: usize, num_bits: usize| -> DFDLResult<u128> {
+                            reader_cell.borrow_mut().lookahead_bits(offset, num_bits)
+                        };
                         let mut ctx = crate::expr::ExprContext::with_variable_map(
                             Some(&active_doc),
                             &current_path,
@@ -1118,6 +1122,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         .with_occurs_index(self.current_occurs_index)
                         .with_schema(self.schema)
                         .with_namespaces(&term.properties.in_scope_namespaces)
+                        .with_lookahead(Some(&la_fn))
                         .with_enclosing_lengths(&self.enclosing_complex_elements);
                         let val = crate::expr::eval_expr(&ast, &mut ctx)?;
                         let key_str = match val {

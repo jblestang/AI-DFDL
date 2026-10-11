@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<schema
+  xmlns="http://www.w3.org/2001/XMLSchema"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+  xmlns:fakeTDL="urn:com.owlcyberdefense.fakeTDL"
+  targetNamespace="urn:com.owlcyberdefense.fakeTDL">
+
+  <!--
+  It is a DFDL best practice to define the various message/record types as
+  global complexTypes and global groups, and to do so in a separate DFDL schema file that
+  (a) has a target namespace for the format
+  (b) does not define any global elements
+
+  The above schema element is the way to define a DFDL schema that has a
+  target namespace. A unique prefix is bound to the target namespace, and uses of the
+  schema should reuse this same prefix definition for consistency. It does not need to be
+  a very short prefix as it won't be typed very often.
+
+  The above schema element also uses a default namespace to avoid all the "xs:" clutter
+  that would otherwise be needed on every XSD/DFDL keyword. This makes the schema more readable.
+
+  It is generally good practice to avoid declaring global elements in DFDL schemas
+  that have target namespaces. Doing so avoids the need for namespace
+  prefix definitions in the XML instance documents used when parsing/unparsing data.
+
+  In DFDL schemas, it is best practice to declare global elements only in
+  schemas that have no target namespace. (See the fakeTDL.dfdl.xsd file.)
+  -->
+
+  <include schemaLocation="fakeTDL-base.dfdl.xsd" />
+  <include schemaLocation="fakeTDL-field-types.dfdl.xsd"/>
+
+  <annotation>
+    <appinfo source="http://www.ogf.org/dfdl/">
+
+      <dfdl:format  ref="fakeTDL:baseFormat" />
+
+    </appinfo>
+  </annotation>
+
+  <complexType name="fakeTDLType">
+    <sequence>
+      <!--
+      We would really like to make the choice below use dfdl:initiatedContent="yes"
+      with each choice branch having a distinct 1-character dfdl:initiator.
+      But unfortunately, Daffodil 3.10.0 and prior do not optimize this into a
+      constant-time dispatch. Rather, it will try each branch in sequence, which
+      is linear in the number of branches. We only have 3, but in a real TDL
+      there would be dozens of message types.
+
+      So instead we use a choice-by-dispatch, which is constant time, but
+      we use a Daffodil extension of DFDL: the dfdlx:lookAhead() function.
+      -->
+      <choice dfdl:choiceDispatchKey="{ xs:string(dfdlx:lookAhead(0, 8)) }">
+        <!--
+        In the above choiceDispatchKey expression, it would be nice if DFDL or Daffodil provided
+        a way to convert this lookAhead() integer value to a character (T, D, or A) based on Unicode codepoint values.
+        But there is no such iToA-like function in DFDL v1.0 nor Daffodil extensions (as of Daffodil 3.10.0 and prior)
+        so we have to just use the ascii code as a decimal number for the choice dispatch.
+        -->
+        <element name="track" type="fakeTDL:trackMessageType" dfdl:initiator="T" dfdl:choiceBranchKey="84"/>
+        <element name="identity" type="fakeTDL:identityMessageType" dfdl:initiator="D" dfdl:choiceBranchKey="68"/>
+        <element name="ack" type="fakeTDL:ackMessageType" dfdl:initiator="A" dfdl:choiceBranchKey="65"/>
+        <!--
+        dfdl:choiceDispatchKey selects the branch with the matching dfdl:choiceBranchKey
+        in constant time (using a hash table lookup). It avoids any point of uncertainty
+        in the parsing. So this is the technique of choice in Daffodil (as of 3.10.0 or prior version).
+        -->
+      </choice>
+    </sequence>
+  </complexType>
+
+  <group name="everyMessageFields">
+    <sequence>
+      <element name="source" type="fakeTDL:unitNumber"/>
+      <element name="sendTime" type="fakeTDL:timeOfDay"/>
+    </sequence>
+  </group>
+
+  <complexType name="trackMessageType">
+    <sequence>
+      <group ref="fakeTDL:everyMessageFields"/>
+      <group ref="fakeTDL:ackRelated"/>
+      <element name="sourceLat" type="fakeTDL:latitude_degrees"/>
+      <element name="sourceLon" type="fakeTDL:longitude_degrees"/>
+      <element name="sourceElev" type="fakeTDL:elevation_25FeetMSL"/>
+      <element name="trackNum" type="fakeTDL:unitNumber"/>
+      <element name="time" type="fakeTDL:timeOfDay"/>
+      <element name="lat" type="fakeTDL:latitude_degrees"/>
+      <element name="lon" type="fakeTDL:longitude_degrees"/>
+      <element name="elev" type="fakeTDL:elevation_25FeetMSL"/>
+      <element name="pointType" type="fakeTDL:trackPointType"/>
+      <element name="quality" type="fakeTDL:trackPointQuality"/>
+      <element name="course" type="fakeTDL:course_integerDegrees"/>
+      <element name="speed" type="fakeTDL:speed_dataMilesPerHour"/>
+    </sequence>
+  </complexType>
+
+  <!--
+  This is just factoring out two fields that are in both track and ident
+  messages
+  -->
+  <group name="ackRelated">
+    <sequence>
+      <element name="mustAck" type="fakeTDL:mustAck"/>
+      <element name="messageID" type="fakeTDL:messageID"/>
+    </sequence>
+  </group>
+
+  <complexType name="identityMessageType">
+    <sequence>
+      <group ref="fakeTDL:everyMessageFields"/>
+      <group ref="fakeTDL:ackRelated"/>
+      <element name="trackNum" type="fakeTDL:unitNumber"/>
+      <element name="time" type="fakeTDL:timeOfDay"/>
+      <element name="iff" type="fakeTDL:IFF"/>
+      <element name="cat" type="fakeTDL:category"/>
+      <element name="type" type="fakeTDL:entityTypeDetail"/> <!-- 26 bytes to an including here -->
+      <element name="desc" type="fakeTDL:identDescription"/> <!-- leaves 38 chars for description -->
+    </sequence>
+  </complexType>
+
+  <complexType name="ackMessageType">
+    <sequence>
+      <group ref="fakeTDL:everyMessageFields"/>
+      <!-- acks themselves don't have the "ackRelated" fields -->
+      <element name="dest" type="fakeTDL:unitNumber"/>
+      <!--
+      our 64-byte messages have 9 bytes of common fields, then 5 more for dest field
+      so we have 64-14, or 50 bytes left to put messageIDs, each of which is 4 bytes.
+      so we can fit up to 12 messageIDs.
+      -->
+      <element name="ackID">
+        <complexType>
+          <sequence>
+            <element name="count"
+                     dfdl:outputValueCalc='{ fn:count(../item) }'>
+              <simpleType>
+                <restriction base="xs:unsignedShort">
+                  <minInclusive value="1"/>
+                  <maxInclusive value="12"/>
+                </restriction>
+              </simpleType>
+            </element>
+            <!--
+            A common DFDL idiom is to have a named element representing the entire array,
+            and the items of the array have a generic name like "item".
+            -->
+            <element name="item" type="fakeTDL:messageID"
+                     minOccurs="1" maxOccurs="12"
+                     dfdl:occursCountKind="expression"
+                     dfdl:occursCount='{ ../count }'>
+            </element>
+          </sequence>
+        </complexType>
+      </element>
+    </sequence>
+  </complexType>
+
+</schema>

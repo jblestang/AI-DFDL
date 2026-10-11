@@ -2770,7 +2770,123 @@ fn remap_pua_to_raw_chars(text: &str) -> alloc::string::String {
             DfdlValue::DateTime(s)
             | DfdlValue::Date(s)
             | DfdlValue::Time(s) => {
-                for &byte in s.as_bytes() {
+                self.unparse_binary_calendar(s, props)
+            }
+        }
+    }
+
+    fn unparse_binary_calendar(
+        &mut self,
+        s_val: &str,
+        props: &ResolvedProperties,
+    ) -> DFDLResult<()> {
+        let requested_bytes = self.resolve_explicit_length(props)?.map(|len| match props.length_units {
+            crate::schema::ir::LengthUnits::Bits => len.saturating_add(7) / 8,
+            _ => len,
+        });
+
+        match props.binary_calendar_rep {
+            crate::schema::ir::BinaryCalendarRep::Bcd
+            | crate::schema::ir::BinaryCalendarRep::Ibm4690Packed => {
+                let formatted = if let Some(ref pat) = props.calendar_pattern {
+                    if !pat.is_empty() {
+                        let lang = match props.calendar_language_prop.as_ref() {
+                            Some(crate::schema::ir::DfdlProp::Constant(c)) => Some(c.clone()),
+                            Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
+                                let mut ctx = self.make_expr_context();
+                                crate::expr::eval_expr(ast, &mut ctx).ok().map(|v| alloc::format!("{}", v))
+                            }
+                            None => props.calendar_language.clone(),
+                        };
+                        let tz = match props.calendar_time_zone_prop.as_ref() {
+                            Some(crate::schema::ir::DfdlProp::Constant(c)) => Some(c.clone()),
+                            Some(crate::schema::ir::DfdlProp::Expression { ast, .. }) => {
+                                let mut ctx = self.make_expr_context();
+                                crate::expr::eval_expr(ast, &mut ctx).ok().map(|v| alloc::format!("{}", v))
+                            }
+                            None => props.calendar_time_zone.clone(),
+                        };
+                        crate::kernel::parser::calendar::format_calendar_with_pattern(
+                            s_val,
+                            pat,
+                            lang.as_deref(),
+                            tz.as_deref(),
+                        )?
+                    } else {
+                        s_val.chars().filter(|c| c.is_ascii_digit()).collect()
+                    }
+                } else {
+                    s_val.chars().filter(|c| c.is_ascii_digit()).collect()
+                };
+
+                let mut digits: Vec<u8> = formatted
+                    .bytes()
+                    .filter(|b| b.is_ascii_digit())
+                    .map(|b| b - b'0')
+                    .collect();
+
+                if let Some(target_b) = requested_bytes {
+                    let target_digits = target_b.saturating_mul(2);
+                    while digits.len() < target_digits {
+                        digits.insert(0, 0);
+                    }
+                } else if !digits.len().is_multiple_of(2) {
+                    digits.insert(0, 0);
+                }
+
+                for chunk in digits.chunks(2) {
+                    let high = chunk.first().copied().unwrap_or(0);
+                    let low = chunk.get(1).copied().unwrap_or(0);
+                    let b = (high << 4) | (low & 0x0F);
+                    self.writer.write_bits(b as u64, 8)?;
+                }
+                Ok(())
+            }
+            crate::schema::ir::BinaryCalendarRep::Packed => {
+                let formatted = if let Some(ref pat) = props.calendar_pattern {
+                    if !pat.is_empty() {
+                        let lang = props.calendar_language.clone();
+                        let tz = props.calendar_time_zone.clone();
+                        crate::kernel::parser::calendar::format_calendar_with_pattern(
+                            s_val,
+                            pat,
+                            lang.as_deref(),
+                            tz.as_deref(),
+                        )?
+                    } else {
+                        s_val.chars().filter(|c| c.is_ascii_digit()).collect()
+                    }
+                } else {
+                    s_val.chars().filter(|c| c.is_ascii_digit()).collect()
+                };
+
+                let mut digits: Vec<u8> = formatted
+                    .bytes()
+                    .filter(|b| b.is_ascii_digit())
+                    .map(|b| b - b'0')
+                    .collect();
+
+                digits.push(0x0C);
+                if let Some(target_b) = requested_bytes {
+                    let target_digits = target_b.saturating_mul(2);
+                    while digits.len() < target_digits {
+                        digits.insert(0, 0);
+                    }
+                } else if !digits.len().is_multiple_of(2) {
+                    digits.insert(0, 0);
+                }
+
+                for chunk in digits.chunks(2) {
+                    let high = chunk.first().copied().unwrap_or(0);
+                    let low = chunk.get(1).copied().unwrap_or(0);
+                    let b = (high << 4) | (low & 0x0F);
+                    self.writer.write_bits(b as u64, 8)?;
+                }
+                Ok(())
+            }
+            crate::schema::ir::BinaryCalendarRep::BinarySeconds
+            | crate::schema::ir::BinaryCalendarRep::BinaryMilliseconds => {
+                for &byte in s_val.as_bytes() {
                     self.writer.write_bits(byte as u64, 8)?;
                 }
                 Ok(())
