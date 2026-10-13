@@ -131,6 +131,32 @@ pub unsafe extern "C" fn dfdl_free_string(s: *mut c_char) {
     }
 }
 
+/// Returns a freshly allocated C string containing registered schema fields in JSON format.
+/// The caller must free this string by calling [`dfdl_free_string`].
+///
+/// # Safety
+/// `schema_path` must be a valid, null-terminated UTF-8 C string.
+#[no_mangle]
+pub unsafe extern "C" fn dfdl_get_schema_fields(schema_path: *const c_char) -> *mut c_char {
+    if schema_path.is_null() {
+        return std::ptr::null_mut();
+    }
+    let schema_cstr = match CStr::from_ptr(schema_path).to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let content = match std::fs::read_to_string(schema_cstr) {
+        Ok(s) => s,
+        Err(e) => {
+            let err_json = format!("{{\"error\": \"{}\"}}", e);
+            return CString::new(err_json).map_or(std::ptr::null_mut(), CString::into_raw);
+        }
+    };
+    let registry = crate::schema_meta::SchemaMetadataRegistry::from_schema_xml(&content);
+    let json = registry.to_fields_json();
+    CString::new(json).map_or(std::ptr::null_mut(), CString::into_raw)
+}
+
 /// Decodes an ASCII hex string into raw bytes.
 fn decode_hex(hex: &str) -> Option<Vec<u8>> {
     let clean = hex.trim();

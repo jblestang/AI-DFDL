@@ -26,6 +26,7 @@ SUBCOMMANDS:
     decode          Decodes a PCAP capture file using a DFDL schema
     dissect-hex     Dissects a raw hexadecimal payload and prints JSON tree
     inspect-schema  Extracts and displays all metadata and units from a DFDL schema
+    schema-fields   Extracts schema fields as JSON for dynamic Wireshark dissector
     generate-lua    Generates a generic Wireshark Lua dissector script
 
 OPTIONS:
@@ -61,6 +62,7 @@ fn main() -> ExitCode {
         "decode" => handle_decode(rest_args),
         "dissect-hex" => handle_dissect_hex(rest_args),
         "inspect-schema" => handle_inspect_schema(rest_args),
+        "schema-fields" => handle_schema_fields(rest_args),
         "generate-lua" => handle_generate_lua(rest_args),
         "--help" | "-h" | "help" => {
             print_help();
@@ -330,6 +332,51 @@ fn handle_inspect_schema(args: &[String]) -> ExitCode {
         }
     }
 
+    ExitCode::SUCCESS
+}
+
+fn handle_schema_fields(args: &[String]) -> ExitCode {
+    let mut schema_path = None;
+
+    let mut i = 0;
+    while i < args.len() {
+        match args.get(i).map(String::as_str) {
+            Some("--schema") => {
+                i = match i.checked_add(1) {
+                    Some(idx) => idx,
+                    None => break,
+                };
+                schema_path = args.get(i).cloned();
+            }
+            Some(arg) if !arg.starts_with("--") && schema_path.is_none() => {
+                schema_path = Some(arg.to_string());
+            }
+            _ => {}
+        }
+        i = match i.checked_add(1) {
+            Some(idx) => idx,
+            None => break,
+        };
+    }
+
+    let schema_file = match schema_path {
+        Some(s) => s,
+        None => {
+            eprintln!("Error: --schema is required");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let xml = match std::fs::read_to_string(&schema_file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to read schema {schema_file}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let registry = SchemaMetadataRegistry::from_schema_xml(&xml);
+    println!("{}", registry.to_fields_json());
     ExitCode::SUCCESS
 }
 

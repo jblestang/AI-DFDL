@@ -276,7 +276,7 @@ fn escape_xml(input: &str, out: &mut String) {
 }
 
 /// Escapes JSON string characters.
-fn escape_json_str(input: &str, out: &mut String) {
+pub fn escape_json_str(input: &str, out: &mut String) {
     out.push('"');
     for c in input.chars() {
         match c {

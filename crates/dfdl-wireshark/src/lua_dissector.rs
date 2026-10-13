@@ -1,14 +1,12 @@
 //! Generic Wireshark Lua Dissector Plugin Generator.
 //!
-//! Generates a Wireshark Lua plugin script that integrates directly with Wireshark
-//! GUI and TShark (`tshark -X lua_script:dfdl_dissector.lua -r capture.pcap`).
+//! Generates a 100% schema-agnostic Wireshark Lua plugin script that integrates
+//! directly with Wireshark GUI and TShark (`tshark -X lua_script:dfdl_dissector.lua -r capture.pcap`).
 //!
 //! Enables loading and switching DFDL schemas directly from within Wireshark via:
 //! - Wireshark Preferences: `Edit -> Preferences -> Protocols -> DFDL`
-//! - Field registration with overlay tooltips (`ProtoField` descriptions)
-//! - Clean, compact tree formatting with zero cluttered inline documentation text.
-
-use crate::schema_meta::{FieldMetadata, SchemaMetadataRegistry};
+//! - Dynamic field registration from the loaded XSD: zero hardcoded fields or protocol rules.
+//! - Interactive overlay tooltips (`ProtoField` descriptions) and clean, uncluttered tree items.
 
 /// Configuration parameters for generating a generic Wireshark Lua dissector.
 #[derive(Debug, Clone)]
@@ -62,7 +60,7 @@ impl LuaDissectorConfig {
     }
 }
 
-/// Generates a standalone, preference-driven Wireshark Lua dissector script with overlay tooltips.
+/// Generates a standalone, preference-driven Wireshark Lua dissector script with dynamic schema introspection.
 #[must_use]
 pub fn generate_lua_dissector(config: &LuaDissectorConfig) -> String {
     let ports_str = if config.udp_ports.is_empty() {
@@ -75,33 +73,6 @@ pub fn generate_lua_dissector(config: &LuaDissectorConfig) -> String {
             .collect::<Vec<_>>()
             .join(",")
     };
-
-    let mut proto_fields_lua = String::new();
-    let mut fields_list_lua = String::new();
-
-    if let Ok(content) = std::fs::read_to_string(&config.schema_path) {
-        let registry = SchemaMetadataRegistry::from_schema_xml(&content);
-        for (_name, meta) in registry.iter() {
-            let field_label = if !meta.description.is_empty() && meta.description != meta.name {
-                format!("{} ({})", meta.description, meta.name)
-            } else {
-                meta.name.clone()
-            };
-            let tooltip = build_tooltip_escaped(meta);
-            proto_fields_lua.push_str(&format!(
-                "    [\"{}\"] = ProtoField.string(\"{}.{}\", \"{}\", base.NONE, nil, 0, \"{}\"),\n",
-                meta.name,
-                config.protocol_id,
-                meta.name,
-                escape_lua_string(&field_label),
-                escape_lua_string(&tooltip)
-            ));
-            if !fields_list_lua.is_empty() {
-                fields_list_lua.push_str(", ");
-            }
-            fields_list_lua.push_str(&format!("proto_fields[\"{}\"]", meta.name));
-        }
-    }
 
     let cli_bin_str = config
         .cli_bin_path
@@ -129,6 +100,10 @@ pub fn generate_lua_dissector(config: &LuaDissectorConfig) -> String {
 -- Generic DFDL Wireshark Dissector
 -- Allows loading and changing DFDL schemas from within Wireshark GUI
 -- Configure via: Edit -> Preferences -> Protocols -> {title}
+--
+-- Completely schema-agnostic: zero hardcoded fields or protocol rules.
+-- Field names, labels, descriptions, and tooltips are retrieved dynamically
+-- from the configured DFDL XML Schema (.dfdl.xsd).
 -- ============================================================================
 
 local proto = Proto("{proto_id}", "{title}")
@@ -138,10 +113,9 @@ proto.prefs.schema_path = Pref.string("DFDL Schema Path (.dfdl.xsd)", "{schema}"
 proto.prefs.ports = Pref.range("UDP Port(s)", "{ports_str}", "UDP ports to dissect with this DFDL schema", 65535)
 proto.prefs.cli_path = Pref.string("dfdl-wireshark Binary", "{cli_bin_str}", "Command name or full path to dfdl-wireshark executable")
 
--- Dynamically registered fields with overlay tooltips
-local proto_fields = {{
-{proto_fields_lua}}}
-proto.fields = {{ {fields_list_lua} }}
+-- Dynamically registered fields table (populated from the loaded XSD at runtime)
+local proto_fields = {{}}
+local fields_list = {{}}
 
 local native_dfdl = nil
 local dylib_candidates = {{
@@ -257,44 +231,7 @@ local function decode_json(s)
     return val
 end
 
--- Recursively populates Wireshark tree nodes with overlay tooltips
-local function populate_node(tree_item, tvb, node)
-    if not node then return end
-
-    local sub_item
-    local pf = proto_fields[node.name]
-
-    if pf and (not node.children or #node.children == 0) then
-        local display_val = node.converted
-        if not display_val or display_val == "" then
-            display_val = node.raw or ""
-        end
-        sub_item = tree_item:add(pf, tvb(0, 0), tostring(display_val))
-        local item_label = node.label
-        if not item_label or item_label == "" then
-            local prefix = node.name
-            if node.description and node.description ~= "" and node.description ~= node.name then
-                prefix = string.format("%s (%s)", node.description, node.name)
-            end
-            item_label = string.format("%s: %s", prefix, tostring(display_val))
-        end
-        sub_item:set_text(item_label)
-    else
-        local label = node.label or node.name or "Item"
-        if (not node.label or node.label == node.name) and node.description and node.description ~= "" and node.description ~= node.name then
-            label = string.format("%s (%s)", node.description, node.name)
-        end
-        sub_item = tree_item:add(proto, tvb(), label)
-    end
-
-    if node.children and #node.children > 0 then
-        for _, child in ipairs(node.children) do
-            populate_node(sub_item, tvb, child)
-        end
-    end
-end
-
--- Resolves the effective schema path from Preferences, environment, or hardcoded default
+-- Resolves the effective schema path from Preferences, environment, or default
 local function get_effective_schema()
     local p = proto.prefs.schema_path
     if p and p ~= "" then
@@ -340,6 +277,96 @@ local function find_cli_bin()
         end
     end
     return "dfdl-wireshark"
+end
+
+-- Dynamically registers ProtoFields by querying the schema metadata from the loaded XSD
+local function register_fields_from_schema(schema_file)
+    if not schema_file or schema_file == "" then return end
+
+    local fields_json = nil
+    if native_dfdl and native_dfdl.get_schema_fields then
+        fields_json = native_dfdl.get_schema_fields(schema_file)
+    end
+
+    if not fields_json or fields_json == "" then
+        local cli = find_cli_bin()
+        local cmd = string.format("%s schema-fields --schema '%s' 2>/dev/null", cli, schema_file)
+        local handle = io.popen(cmd)
+        if handle then
+            fields_json = handle:read("*a")
+            handle:close()
+        end
+    end
+
+    if not fields_json or fields_json == "" then
+        -- Fast pure Lua fallback: scan element names directly from the XSD file
+        local f = io.open(schema_file, "r")
+        if f then
+            local xsd_text = f:read("*a")
+            f:close()
+            for elem_name in string.gmatch(xsd_text, '<xs:element%s+name="([%w_]+)"') do
+                if not proto_fields[elem_name] then
+                    proto_fields[elem_name] = ProtoField.string(string.format("%s.%s", "{proto_id}", elem_name), elem_name, base.NONE, nil, 0, "")
+                    table.insert(fields_list, proto_fields[elem_name])
+                end
+            end
+        end
+        return
+    end
+
+    local fields_data = decode_json(fields_json)
+    if fields_data and type(fields_data) == "table" then
+        for _, item in ipairs(fields_data) do
+            local name = item.name
+            local label = item.label or name
+            local tooltip = item.tooltip or ""
+            if name and not proto_fields[name] then
+                proto_fields[name] = ProtoField.string(string.format("%s.%s", "{proto_id}", name), label, base.NONE, nil, 0, tooltip)
+                table.insert(fields_list, proto_fields[name])
+            end
+        end
+    end
+end
+
+-- Dynamically load and register fields from the effective XSD at startup
+register_fields_from_schema(get_effective_schema())
+proto.fields = fields_list
+
+-- Recursively populates Wireshark tree nodes with overlay tooltips
+local function populate_node(tree_item, tvb, node)
+    if not node then return end
+
+    local sub_item
+    local pf = proto_fields[node.name]
+
+    if pf and (not node.children or #node.children == 0) then
+        local display_val = node.converted
+        if not display_val or display_val == "" then
+            display_val = node.raw or ""
+        end
+        sub_item = tree_item:add(pf, tvb(0, 0), tostring(display_val))
+        local item_label = node.label
+        if not item_label or item_label == "" then
+            local prefix = node.name
+            if node.description and node.description ~= "" and node.description ~= node.name then
+                prefix = string.format("%s (%s)", node.description, node.name)
+            end
+            item_label = string.format("%s: %s", prefix, tostring(display_val))
+        end
+        sub_item:set_text(item_label)
+    else
+        local label = node.label or node.name or "Item"
+        if (not node.label or node.label == node.name) and node.description and node.description ~= "" and node.description ~= node.name then
+            label = string.format("%s (%s)", node.description, node.name)
+        end
+        sub_item = tree_item:add(proto, tvb(), label)
+    end
+
+    if node.children and #node.children > 0 then
+        for _, child in ipairs(node.children) do
+            populate_node(sub_item, tvb, child)
+        end
+    end
 end
 
 -- Main protocol dissector function
@@ -432,50 +459,7 @@ register_postdissector(proto)
         schema = config.schema_path,
         proto_id = config.protocol_id,
         ports_str = ports_str,
-        proto_fields_lua = proto_fields_lua,
-        fields_list_lua = fields_list_lua,
         dylib_candidates_lua = dylib_candidates_lua,
         cli_bin_str = cli_bin_str,
     )
-}
-
-/// Builds an escaped, single-line tooltip description from field metadata.
-fn build_tooltip_escaped(meta: &FieldMetadata) -> String {
-    let mut parts = Vec::new();
-    if !meta.description.is_empty() {
-        parts.push(meta.description.clone());
-    }
-    if !meta.item_ref.is_empty() {
-        parts.push(format!("Item: {}", meta.item_ref));
-    }
-    if !meta.unit.is_empty() {
-        parts.push(format!("Unit: {}", meta.unit));
-    }
-    if !meta.resolution_str.is_empty() {
-        parts.push(format!("Resolution: {}", meta.resolution_str));
-    }
-    if !meta.lsb_str.is_empty() {
-        parts.push(format!("LSB: {}", meta.lsb_str));
-    }
-    if !meta.documentation.is_empty() && meta.documentation != meta.description {
-        let clean_doc = meta.documentation.replace(['\n', '\r'], " ");
-        parts.push(clean_doc);
-    }
-    parts.join(" | ")
-}
-
-/// Escapes characters for safe inclusion inside a Lua double-quoted string literal.
-fn escape_lua_string(s: &str) -> String {
-    let mut out = String::new();
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push(' '),
-            '\r' => {},
-            '\t' => out.push(' '),
-            other => out.push(other),
-        }
-    }
-    out
 }

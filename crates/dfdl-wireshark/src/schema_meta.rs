@@ -389,6 +389,70 @@ impl SchemaMetadataRegistry {
 
         registry
     }
+
+    /// Formats an escaped, single-line tooltip description from field metadata.
+    #[must_use]
+    pub fn build_field_tooltip(meta: &FieldMetadata) -> String {
+        let mut parts = Vec::new();
+        if !meta.description.is_empty() {
+            parts.push(meta.description.clone());
+        }
+        if !meta.item_ref.is_empty() {
+            parts.push(format!("Item: {}", meta.item_ref));
+        }
+        if !meta.unit.is_empty() {
+            parts.push(format!("Unit: {}", meta.unit));
+        }
+        if !meta.resolution_str.is_empty() {
+            parts.push(format!("Resolution: {}", meta.resolution_str));
+        }
+        if !meta.lsb_str.is_empty() {
+            parts.push(format!("LSB: {}", meta.lsb_str));
+        }
+        if !meta.documentation.is_empty() {
+            let single_line = meta
+                .documentation
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            parts.push(single_line);
+        }
+        parts.join(" | ")
+    }
+
+    /// Serializes registered fields into a JSON array for dynamic Lua / FFI dissectors.
+    #[must_use]
+    pub fn to_fields_json(&self) -> String {
+        let mut out = String::from("[");
+        let mut first = true;
+        for (name, meta) in &self.entries {
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            let label = if !meta.description.is_empty() && &meta.description != name {
+                format!("{} ({})", meta.description, name)
+            } else {
+                name.clone()
+            };
+            let tooltip = Self::build_field_tooltip(meta);
+
+            out.push('{');
+            out.push_str("\"name\":");
+            crate::dissector::escape_json_str(name, &mut out);
+            out.push_str(",\"label\":");
+            crate::dissector::escape_json_str(&label, &mut out);
+            out.push_str(",\"description\":");
+            crate::dissector::escape_json_str(&meta.description, &mut out);
+            out.push_str(",\"unit\":");
+            crate::dissector::escape_json_str(&meta.unit, &mut out);
+            out.push_str(",\"tooltip\":");
+            crate::dissector::escape_json_str(&tooltip, &mut out);
+            out.push('}');
+        }
+        out.push(']');
+        out
+    }
 }
 
 /// Strips namespace prefix from type name (e.g. `ast:TimeOfDayType` -> `TimeOfDayType`).
