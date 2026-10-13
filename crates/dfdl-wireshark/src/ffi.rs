@@ -177,3 +177,306 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
 
     Some(bytes)
 }
+
+type LuaState = *mut std::ffi::c_void;
+type LuaCFunction = unsafe extern "C" fn(LuaState) -> std::os::raw::c_int;
+
+#[cfg(target_os = "macos")]
+const RTLD_DEFAULT: *mut std::ffi::c_void = -2isize as *mut std::ffi::c_void;
+#[cfg(not(target_os = "macos"))]
+const RTLD_DEFAULT: *mut std::ffi::c_void = std::ptr::null_mut();
+
+extern "C" {
+    fn dlsym(
+        handle: *mut std::ffi::c_void,
+        symbol: *const std::os::raw::c_char,
+    ) -> *mut std::ffi::c_void;
+}
+
+struct LuaApi {
+    createtable: unsafe extern "C" fn(LuaState, std::os::raw::c_int, std::os::raw::c_int),
+    pushcclosure: unsafe extern "C" fn(LuaState, LuaCFunction, std::os::raw::c_int),
+    setfield: unsafe extern "C" fn(LuaState, std::os::raw::c_int, *const std::os::raw::c_char),
+    tolstring: unsafe extern "C" fn(
+        LuaState,
+        std::os::raw::c_int,
+        *mut usize,
+    ) -> *const std::os::raw::c_char,
+    pushlstring: unsafe extern "C" fn(
+        LuaState,
+        *const std::os::raw::c_char,
+        usize,
+    ) -> *const std::os::raw::c_char,
+    pushnil: unsafe extern "C" fn(LuaState),
+}
+
+static LUA_API: std::sync::OnceLock<Option<LuaApi>> = std::sync::OnceLock::new();
+
+fn get_lua_api() -> Option<&'static LuaApi> {
+    LUA_API
+        .get_or_init(|| unsafe {
+            let p_createtable = dlsym(RTLD_DEFAULT, c"lua_createtable".as_ptr());
+            let p_pushcclosure = dlsym(RTLD_DEFAULT, c"lua_pushcclosure".as_ptr());
+            let p_setfield = dlsym(RTLD_DEFAULT, c"lua_setfield".as_ptr());
+            let p_tolstring = dlsym(RTLD_DEFAULT, c"lua_tolstring".as_ptr());
+            let p_pushlstring = dlsym(RTLD_DEFAULT, c"lua_pushlstring".as_ptr());
+            let p_pushnil = dlsym(RTLD_DEFAULT, c"lua_pushnil".as_ptr());
+
+            if p_createtable.is_null()
+                || p_pushcclosure.is_null()
+                || p_setfield.is_null()
+                || p_tolstring.is_null()
+                || p_pushlstring.is_null()
+                || p_pushnil.is_null()
+            {
+                return None;
+            }
+
+            Some(LuaApi {
+                createtable: std::mem::transmute::<
+                    *mut std::ffi::c_void,
+                    unsafe extern "C" fn(LuaState, std::os::raw::c_int, std::os::raw::c_int),
+                >(p_createtable),
+                pushcclosure: std::mem::transmute::<
+                    *mut std::ffi::c_void,
+                    unsafe extern "C" fn(LuaState, LuaCFunction, std::os::raw::c_int),
+                >(p_pushcclosure),
+                setfield: std::mem::transmute::<
+                    *mut std::ffi::c_void,
+                    unsafe extern "C" fn(
+                        LuaState,
+                        std::os::raw::c_int,
+                        *const std::os::raw::c_char,
+                    ),
+                >(p_setfield),
+                tolstring: std::mem::transmute::<
+                    *mut std::ffi::c_void,
+                    unsafe extern "C" fn(
+                        LuaState,
+                        std::os::raw::c_int,
+                        *mut usize,
+                    ) -> *const std::os::raw::c_char,
+                >(p_tolstring),
+                pushlstring: std::mem::transmute::<
+                    *mut std::ffi::c_void,
+                    unsafe extern "C" fn(
+                        LuaState,
+                        *const std::os::raw::c_char,
+                        usize,
+                    ) -> *const std::os::raw::c_char,
+                >(p_pushlstring),
+                pushnil: std::mem::transmute::<
+                    *mut std::ffi::c_void,
+                    unsafe extern "C" fn(LuaState),
+                >(p_pushnil),
+            })
+        })
+        .as_ref()
+}
+
+unsafe extern "C" fn lua_dissect_hex(state: LuaState) -> std::os::raw::c_int {
+    let Some(api) = get_lua_api() else {
+        return 0;
+    };
+    let mut schema_len = 0;
+    let schema_ptr = (api.tolstring)(state, 1, &mut schema_len);
+    let mut hex_len = 0;
+    let hex_ptr = (api.tolstring)(state, 2, &mut hex_len);
+
+    if schema_ptr.is_null() || hex_ptr.is_null() {
+        (api.pushnil)(state);
+        return 1;
+    }
+
+    let schema_str = match std::str::from_utf8(std::slice::from_raw_parts(
+        schema_ptr as *const u8,
+        schema_len,
+    )) {
+        Ok(s) => s,
+        Err(_) => {
+            (api.pushnil)(state);
+            return 1;
+        }
+    };
+    let hex_str =
+        match std::str::from_utf8(std::slice::from_raw_parts(hex_ptr as *const u8, hex_len)) {
+            Ok(s) => s,
+            Err(_) => {
+                (api.pushnil)(state);
+                return 1;
+            }
+        };
+
+    let bytes = match decode_hex(hex_str) {
+        Some(b) => b,
+        None => {
+            (api.pushnil)(state);
+            return 1;
+        }
+    };
+
+    let engine = match get_or_compile_engine(schema_str) {
+        Ok(e) => e,
+        Err(e) => {
+            let err_json = format!("{{\"error\": \"{}\"}}", e.replace('"', "\\\""));
+            (api.pushlstring)(
+                state,
+                err_json.as_ptr() as *const std::os::raw::c_char,
+                err_json.len(),
+            );
+            return 1;
+        }
+    };
+
+    let json = match engine.dissect_payload_to_json(&bytes) {
+        Ok(j) => j,
+        Err(e) => {
+            let err_json = format!("{{\"error\": \"{}\"}}", e.replace('"', "\\\""));
+            (api.pushlstring)(
+                state,
+                err_json.as_ptr() as *const std::os::raw::c_char,
+                err_json.len(),
+            );
+            return 1;
+        }
+    };
+
+    (api.pushlstring)(
+        state,
+        json.as_ptr() as *const std::os::raw::c_char,
+        json.len(),
+    );
+    1
+}
+
+unsafe extern "C" fn lua_dissect_bytes(state: LuaState) -> std::os::raw::c_int {
+    let Some(api) = get_lua_api() else {
+        return 0;
+    };
+    let mut schema_len = 0;
+    let schema_ptr = (api.tolstring)(state, 1, &mut schema_len);
+    let mut bytes_len = 0;
+    let bytes_ptr = (api.tolstring)(state, 2, &mut bytes_len);
+
+    if schema_ptr.is_null() || bytes_ptr.is_null() {
+        (api.pushnil)(state);
+        return 1;
+    }
+
+    let schema_str = match std::str::from_utf8(std::slice::from_raw_parts(
+        schema_ptr as *const u8,
+        schema_len,
+    )) {
+        Ok(s) => s,
+        Err(_) => {
+            (api.pushnil)(state);
+            return 1;
+        }
+    };
+    let bytes = std::slice::from_raw_parts(bytes_ptr as *const u8, bytes_len);
+
+    let engine = match get_or_compile_engine(schema_str) {
+        Ok(e) => e,
+        Err(e) => {
+            let err_json = format!("{{\"error\": \"{}\"}}", e.replace('"', "\\\""));
+            (api.pushlstring)(
+                state,
+                err_json.as_ptr() as *const std::os::raw::c_char,
+                err_json.len(),
+            );
+            return 1;
+        }
+    };
+
+    let json = match engine.dissect_payload_to_json(bytes) {
+        Ok(j) => j,
+        Err(e) => {
+            let err_json = format!("{{\"error\": \"{}\"}}", e.replace('"', "\\\""));
+            (api.pushlstring)(
+                state,
+                err_json.as_ptr() as *const std::os::raw::c_char,
+                err_json.len(),
+            );
+            return 1;
+        }
+    };
+
+    (api.pushlstring)(
+        state,
+        json.as_ptr() as *const std::os::raw::c_char,
+        json.len(),
+    );
+    1
+}
+
+unsafe extern "C" fn lua_get_schema_fields(state: LuaState) -> std::os::raw::c_int {
+    let Some(api) = get_lua_api() else {
+        return 0;
+    };
+    let mut schema_len = 0;
+    let schema_ptr = (api.tolstring)(state, 1, &mut schema_len);
+
+    if schema_ptr.is_null() {
+        (api.pushnil)(state);
+        return 1;
+    }
+
+    let schema_str = match std::str::from_utf8(std::slice::from_raw_parts(
+        schema_ptr as *const u8,
+        schema_len,
+    )) {
+        Ok(s) => s,
+        Err(_) => {
+            (api.pushnil)(state);
+            return 1;
+        }
+    };
+
+    let content = match std::fs::read_to_string(schema_str) {
+        Ok(s) => s,
+        Err(e) => {
+            let err_json = format!("{{\"error\": \"{}\"}}", e);
+            (api.pushlstring)(
+                state,
+                err_json.as_ptr() as *const std::os::raw::c_char,
+                err_json.len(),
+            );
+            return 1;
+        }
+    };
+
+    let registry = crate::schema_meta::SchemaMetadataRegistry::from_schema_xml(&content);
+    let json = registry.to_fields_json();
+    (api.pushlstring)(
+        state,
+        json.as_ptr() as *const std::os::raw::c_char,
+        json.len(),
+    );
+    1
+}
+
+/// Lua module entry point for `require("dfdl_wireshark")` or `package.loadlib`.
+///
+/// Registers `dissect_hex`, `dissect_bytes`, and `get_schema_fields` in the returned module table.
+///
+/// # Safety
+/// `state` must be a valid, non-null pointer to a Lua state.
+#[no_mangle]
+pub unsafe extern "C" fn luaopen_dfdl_wireshark(state: LuaState) -> std::os::raw::c_int {
+    let Some(api) = get_lua_api() else {
+        return 0;
+    };
+
+    (api.createtable)(state, 0, 3);
+
+    (api.pushcclosure)(state, lua_dissect_hex, 0);
+    (api.setfield)(state, -2, c"dissect_hex".as_ptr());
+
+    (api.pushcclosure)(state, lua_dissect_bytes, 0);
+    (api.setfield)(state, -2, c"dissect_bytes".as_ptr());
+
+    (api.pushcclosure)(state, lua_get_schema_fields, 0);
+    (api.setfield)(state, -2, c"get_schema_fields".as_ptr());
+
+    1
+}

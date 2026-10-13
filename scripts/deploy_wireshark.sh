@@ -63,17 +63,20 @@ RELEASE_DYLIB=""
 if [ "${OS_NAME}" = "Darwin" ]; then
     RELEASE_DYLIB="${REPO_ROOT}/target/release/libdfdl_wireshark.dylib"
     if [ -f "${RELEASE_DYLIB}" ]; then
+        cp -f "${RELEASE_DYLIB}" "${PLUGIN_DIR}/dfdl_wireshark.so"
         cp -f "${RELEASE_DYLIB}" "${PLUGIN_DIR}/dfdl-wireshark.so"
         cp -f "${RELEASE_DYLIB}" "${PLUGIN_DIR}/libdfdl_wireshark.dylib"
-        echo "    Copied: ${RELEASE_DYLIB} -> ${PLUGIN_DIR}/dfdl-wireshark.so"
+        echo "    Copied: ${RELEASE_DYLIB} -> ${PLUGIN_DIR}/dfdl_wireshark.so"
     else
         echo "WARNING: ${RELEASE_DYLIB} not found; CLI fallback mode will be used."
     fi
 elif [ "${OS_NAME}" = "Linux" ]; then
     RELEASE_DYLIB="${REPO_ROOT}/target/release/libdfdl_wireshark.so"
     if [ -f "${RELEASE_DYLIB}" ]; then
+        cp -f "${RELEASE_DYLIB}" "${PLUGIN_DIR}/dfdl_wireshark.so"
         cp -f "${RELEASE_DYLIB}" "${PLUGIN_DIR}/dfdl-wireshark.so"
-        echo "    Copied: ${RELEASE_DYLIB} -> ${PLUGIN_DIR}/dfdl-wireshark.so"
+        cp -f "${RELEASE_DYLIB}" "${PLUGIN_DIR}/libdfdl_wireshark.so"
+        echo "    Copied: ${RELEASE_DYLIB} -> ${PLUGIN_DIR}/dfdl_wireshark.so"
     else
         echo "WARNING: ${RELEASE_DYLIB} not found; CLI fallback mode will be used."
     fi

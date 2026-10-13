@@ -17,6 +17,7 @@ proto.prefs.cli_path = Pref.string("dfdl-wireshark Binary", "/Users/jean-baptist
 
 -- Dynamically registered fields table (populated from the loaded XSD at runtime)
 local proto_fields = {}
+local proto_field_types = {}
 local fields_list = {}
 
 local native_dfdl = nil
@@ -226,9 +227,25 @@ local function register_fields_from_schema(schema_file)
             local name = item.name
             local label = item.label or name
             local tooltip = item.tooltip or ""
+            local ptype = item.proto_type or "string"
             if name and not proto_fields[name] then
-                proto_fields[name] = ProtoField.string(string.format("%s.%s", "dfdl", name), label, base.NONE, nil, 0, tooltip)
-                table.insert(fields_list, proto_fields[name])
+                proto_field_types[name] = ptype
+                proto_field_types[string.lower(name)] = ptype
+                local field
+                if ptype == "double" then
+                    field = ProtoField.double(string.format("%s.%s", "dfdl", name), label)
+                elseif ptype == "uint32" or ptype == "uint" then
+                    field = ProtoField.uint32(string.format("%s.%s", "dfdl", name), label, base.DEC)
+                elseif ptype == "int32" or ptype == "int" then
+                    field = ProtoField.int32(string.format("%s.%s", "dfdl", name), label, base.DEC)
+                elseif ptype == "bool" then
+                    field = ProtoField.bool(string.format("%s.%s", "dfdl", name), label)
+                else
+                    field = ProtoField.string(string.format("%s.%s", "dfdl", name), label, base.NONE, nil, 0, tooltip)
+                end
+                proto_fields[name] = field
+                proto_fields[string.lower(name)] = field
+                table.insert(fields_list, field)
             end
         end
     end
@@ -238,26 +255,59 @@ end
 register_fields_from_schema(get_effective_schema())
 proto.fields = fields_list
 
--- Recursively populates Wireshark tree nodes with overlay tooltips
+-- Recursively populates Wireshark tree nodes with overlay tooltips and wire highlights
 local function populate_node(tree_item, tvb, node)
     if not node then return end
 
+    local item_tvb
+    local tvb_len = tvb:len()
+    if node.length and node.length > 0 and node.offset and (node.offset + node.length <= tvb_len) then
+        item_tvb = tvb(node.offset, node.length)
+    elseif node.offset and node.offset < tvb_len then
+        item_tvb = tvb(node.offset, 1)
+    else
+        item_tvb = tvb(0, 0)
+    end
+
     local sub_item
-    local pf = proto_fields[node.name]
+    local pf = proto_fields[node.name] or proto_fields[string.lower(node.name)]
+    local ptype = proto_field_types[node.name] or proto_field_types[string.lower(node.name)] or "string"
 
     if pf and (not node.children or #node.children == 0) then
-        local display_val = node.converted
-        if not display_val or display_val == "" then
-            display_val = node.raw or ""
+        local num_val = nil
+        if ptype == "double" then
+            if node.converted and node.converted ~= "" then
+                num_val = tonumber(string.match(node.converted, "([%-%+]?%d+%.?%d*)"))
+            end
+            if not num_val then
+                num_val = tonumber(node.raw)
+            end
+        elseif ptype == "uint32" or ptype == "int32" then
+            if node.converted and node.converted ~= "" then
+                num_val = tonumber(string.match(node.converted, "([%-%+]?%d+)"))
+            end
+            if not num_val then
+                num_val = tonumber(node.raw)
+            end
         end
-        sub_item = tree_item:add(pf, tvb(0, 0), tostring(display_val))
+
+        if num_val and (ptype == "uint32" or ptype == "int32" or ptype == "double") then
+            sub_item = tree_item:add(pf, item_tvb, num_val)
+        else
+            local display_val = node.converted
+            if not display_val or display_val == "" then
+                display_val = node.raw or ""
+            end
+            sub_item = tree_item:add(pf, item_tvb, tostring(display_val))
+        end
+
         local item_label = node.label
         if not item_label or item_label == "" then
             local prefix = node.name
             if node.description and node.description ~= "" and node.description ~= node.name then
                 prefix = string.format("%s (%s)", node.description, node.name)
             end
-            item_label = string.format("%s: %s", prefix, tostring(display_val))
+            item_label = string.format("%s: %s", prefix, tostring(node.converted or node.raw or ""))
         end
         sub_item:set_text(item_label)
     else
@@ -265,7 +315,7 @@ local function populate_node(tree_item, tvb, node)
         if (not node.label or node.label == node.name) and node.description and node.description ~= "" and node.description ~= node.name then
             label = string.format("%s (%s)", node.description, node.name)
         end
-        sub_item = tree_item:add(proto, tvb(), label)
+        sub_item = tree_item:add(proto, item_tvb, label)
     end
 
     if node.children and #node.children > 0 then
@@ -304,12 +354,16 @@ function proto.dissector(tvb, pinfo, tree)
         return
     end
 
-    local hex_data = tostring(payload_tvb:bytes():tohex())
     local json_str = nil
 
-    if native_dfdl and native_dfdl.dissect_hex then
+    if native_dfdl and native_dfdl.dissect_bytes then
+        local raw_bytes = payload_tvb:raw()
+        json_str = native_dfdl.dissect_bytes(active_schema, raw_bytes)
+    elseif native_dfdl and native_dfdl.dissect_hex then
+        local hex_data = tostring(payload_tvb:bytes():tohex())
         json_str = native_dfdl.dissect_hex(active_schema, hex_data)
     else
+        local hex_data = tostring(payload_tvb:bytes():tohex())
         local cli = find_cli_bin()
         local cmd = string.format("%s dissect-hex --schema '%s' %s 2>/dev/null", cli, active_schema, hex_data)
         local handle = io.popen(cmd)
@@ -321,7 +375,17 @@ function proto.dissector(tvb, pinfo, tree)
 
     local tree_data = decode_json(json_str)
     if tree_data and tree_data.root then
-        local root_tree = tree:add(proto, payload_tvb(), string.format("DFDL (DFDL Engine) (%d bytes)", payload_tvb:len()))
+        if tree_data.protocol and tree_data.protocol ~= "" then
+            pinfo.cols.protocol = tree_data.protocol
+        else
+            pinfo.cols.protocol = "dfdl"
+        end
+
+        if tree_data.summary and tree_data.summary ~= "" then
+            pinfo.cols.info = tree_data.summary
+        end
+
+        local root_tree = tree:add(proto, payload_tvb(), string.format("%s (%d bytes)", tree_data.protocol or "DFDL (DFDL Engine)", payload_tvb:len()))
         populate_node(root_tree, payload_tvb, tree_data.root)
     end
 end

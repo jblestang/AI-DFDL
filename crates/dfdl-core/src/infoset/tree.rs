@@ -20,7 +20,7 @@ pub enum InfosetNode {
 }
 
 /// Element Information Item in an owned Infoset tree.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct InfosetElement {
     /// Qualified Name of the element item.
     pub name: QName,
@@ -32,6 +32,18 @@ pub struct InfosetElement {
     pub is_hidden: bool,
     /// Explicit xsi:nil attribute value if present in infoset.
     pub nil_attribute: Option<bool>,
+    /// Optional bit offset and length `(start_bit, bit_length)` in the binary input stream.
+    pub location: Option<(usize, usize)>,
+}
+
+impl PartialEq for InfosetElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.state == other.state
+            && self.children == other.children
+            && self.is_hidden == other.is_hidden
+            && self.nil_attribute == other.nil_attribute
+    }
 }
 
 impl InfosetElement {
@@ -45,6 +57,7 @@ impl InfosetElement {
             children: Vec::new(),
             is_hidden: false,
             nil_attribute: None,
+            location: None,
         }
     }
 
@@ -58,6 +71,7 @@ impl InfosetElement {
             children: Vec::new(),
             is_hidden: false,
             nil_attribute: None,
+            location: None,
         }
     }
 
@@ -749,6 +763,17 @@ impl InfosetBuilder {
                     Ok(())
                 }
             }
+        }
+    }
+
+    /// Sets the bit location `(start_bit, bit_length)` of the most recently inserted child element.
+    pub fn set_last_element_location(&mut self, start_bit: usize, bit_length: usize) {
+        if let Some(parent) = self.stack.last_mut() {
+            if let Some(InfosetNode::Element(ref mut elem)) = parent.children.last_mut() {
+                elem.location = Some((start_bit, bit_length));
+            }
+        } else if let Some(ref mut root) = self.doc.root {
+            root.location = Some((start_bit, bit_length));
         }
     }
 }

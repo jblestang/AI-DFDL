@@ -33,6 +33,8 @@ pub struct FieldMetadata {
     pub min_inclusive: Option<f64>,
     /// Optional maximum allowed value.
     pub max_inclusive: Option<f64>,
+    /// Wireshark proto field type: `uint32`, `int32`, `double`, `string`, `bool`.
+    pub proto_type: String,
     /// Enumeration mapping from numeric value to human-readable label.
     pub enum_map: HashMap<i64, String>,
 }
@@ -52,6 +54,7 @@ impl FieldMetadata {
             scale_factor: 1.0,
             min_inclusive: None,
             max_inclusive: None,
+            proto_type: "string".to_string(),
             enum_map: HashMap::new(),
         }
     }
@@ -248,6 +251,14 @@ impl SchemaMetadataRegistry {
                         if let Some(v) = attributes.iter().find(|a| a.name.local_name == "value") {
                             current_max = v.value.trim().parse::<f64>().ok();
                         }
+                    } else if in_decl && local == "restriction" {
+                        if let Some(b) = attributes.iter().find(|a| a.name.local_name == "base") {
+                            let base_type = clean_type_name(b.value.as_ref());
+                            if current_type.is_empty() {
+                                current_type = base_type.clone();
+                            }
+                            registry.link_element_type(&current_name, &base_type);
+                        }
                     }
                 }
                 XmlEvent::Text { ref content, .. } => {
@@ -316,6 +327,8 @@ impl SchemaMetadataRegistry {
                                 extract_concise_description(&doc_clean)
                             };
 
+                            let ptype = infer_proto_type(&current_type, scale);
+
                             let meta = FieldMetadata {
                                 name: current_name.clone(),
                                 item_ref: current_item.clone(),
@@ -327,6 +340,7 @@ impl SchemaMetadataRegistry {
                                 scale_factor: scale,
                                 min_inclusive: current_min,
                                 max_inclusive: current_max,
+                                proto_type: ptype,
                                 enum_map: current_enums.clone(),
                             };
                             registry.insert(meta);
@@ -370,6 +384,9 @@ impl SchemaMetadataRegistry {
                         && (type_meta.scale_factor - 1.0).abs() >= f64::EPSILON
                     {
                         elem_meta.scale_factor = type_meta.scale_factor;
+                    }
+                    if elem_meta.proto_type == "string" && type_meta.proto_type != "string" {
+                        elem_meta.proto_type = type_meta.proto_type;
                     }
                     if elem_meta.documentation.is_empty() {
                         elem_meta.documentation = type_meta.documentation;
@@ -425,11 +442,12 @@ impl SchemaMetadataRegistry {
     pub fn to_fields_json(&self) -> String {
         let mut out = String::from("[");
         let mut first = true;
-        for (name, meta) in &self.entries {
+        for meta in self.entries.values() {
             if !first {
                 out.push(',');
             }
             first = false;
+            let name = &meta.name;
             let label = if !meta.description.is_empty() && &meta.description != name {
                 format!("{} ({})", meta.description, name)
             } else {
@@ -446,12 +464,34 @@ impl SchemaMetadataRegistry {
             crate::dissector::escape_json_str(&meta.description, &mut out);
             out.push_str(",\"unit\":");
             crate::dissector::escape_json_str(&meta.unit, &mut out);
+            out.push_str(",\"proto_type\":");
+            crate::dissector::escape_json_str(&meta.proto_type, &mut out);
             out.push_str(",\"tooltip\":");
             crate::dissector::escape_json_str(&tooltip, &mut out);
             out.push('}');
         }
         out.push(']');
         out
+    }
+}
+
+/// Infers Wireshark ProtoField type based on XML Schema type and scale factor.
+fn infer_proto_type(type_name: &str, scale_factor: f64) -> String {
+    let lower = type_name.to_lowercase();
+    if (scale_factor - 1.0).abs() >= f64::EPSILON
+        || lower.contains("double")
+        || lower.contains("float")
+        || lower.contains("decimal")
+    {
+        "double".to_string()
+    } else if lower.contains("unsigned") || lower.contains("nonnegative") {
+        "uint32".to_string()
+    } else if lower.contains("int") || lower.contains("short") || lower.contains("byte") || lower.contains("integer") {
+        "int32".to_string()
+    } else if lower.contains("bool") {
+        "bool".to_string()
+    } else {
+        "string".to_string()
     }
 }
 

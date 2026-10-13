@@ -2074,6 +2074,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
         }
 
+        let elem_start_bit = self.reader.position().0;
         let res = match &elem.type_ir {
             crate::schema::ir::CompiledType::Simple(st) => {
                 let simple_term = if let Some(ref term_raw) = term.properties.terminator {
@@ -2146,13 +2147,18 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         let _ = crate::util::try_push(&mut self.validation_errors, DFDLError::new(DFDLErrorKind::Validation, &msg));
                     }
                 }
-                builder.push_event_with_hidden(
+                let push_res = builder.push_event_with_hidden(
                     InfosetEvent::SimpleValue {
                         name: elem.name.clone(),
                         value,
                     },
                     is_hidden,
-                )
+                );
+                if push_res.is_ok() {
+                    let elem_end_bit = self.reader.position().0;
+                    builder.set_last_element_location(elem_start_bit, elem_end_bit.saturating_sub(elem_start_bit));
+                }
+                push_res
             }
             crate::schema::ir::CompiledType::Complex(child_id) => {
                 let complex_len = self.evaluate_length_property(
@@ -2296,6 +2302,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         },
                         is_hidden,
                     )?;
+                    let end_bit = self.reader.position().0;
+                    builder.set_last_element_location(start_bit, end_bit.saturating_sub(start_bit));
                 }
                 child_res
             }

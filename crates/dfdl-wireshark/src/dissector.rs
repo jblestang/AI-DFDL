@@ -28,6 +28,14 @@ pub struct DissectionNode {
     pub resolution: String,
     /// Detailed documentation tooltip.
     pub documentation: String,
+    /// Byte offset in the raw packet data.
+    pub offset: usize,
+    /// Byte length in the raw packet data.
+    pub length: usize,
+    /// Bit offset in the raw packet data.
+    pub bit_offset: usize,
+    /// Bit length in the raw packet data.
+    pub bit_length: usize,
     /// Nested child fields or sub-records.
     pub children: Vec<DissectionNode>,
 }
@@ -85,6 +93,33 @@ impl DissectionNode {
             label_prefix
         };
 
+        let (bit_offset, bit_length) = elem.location.unwrap_or((0, 0));
+        let offset = bit_offset / 8;
+        let length = if bit_length > 0 {
+            let end_bit = bit_offset.saturating_add(bit_length);
+            let end_byte = end_bit.div_ceil(8);
+            end_byte.saturating_sub(offset)
+        } else {
+            0
+        };
+
+        // If this is a parent node whose length is 0, span the bounding box of its children
+        let mut final_offset = offset;
+        let mut final_length = length;
+        if final_length == 0 && !children.is_empty() {
+            let valid_children: Vec<_> = children.iter().filter(|c| c.length > 0).collect();
+            if let Some(first) = valid_children.first() {
+                let start = valid_children.iter().map(|c| c.offset).min().unwrap_or(first.offset);
+                let end = valid_children
+                    .iter()
+                    .map(|c| c.offset.saturating_add(c.length))
+                    .max()
+                    .unwrap_or_else(|| first.offset.saturating_add(first.length));
+                final_offset = start;
+                final_length = end.saturating_sub(start);
+            }
+        }
+
         Self {
             name,
             description,
@@ -94,6 +129,10 @@ impl DissectionNode {
             unit,
             resolution,
             documentation: tooltip,
+            offset: final_offset,
+            length: final_length,
+            bit_offset,
+            bit_length,
             children,
         }
     }
@@ -179,6 +218,14 @@ impl DissectionNode {
         escape_json_str(&self.resolution, out);
         out.push_str(",\"documentation\":");
         escape_json_str(&self.documentation, out);
+        out.push_str(",\"offset\":");
+        out.push_str(&self.offset.to_string());
+        out.push_str(",\"length\":");
+        out.push_str(&self.length.to_string());
+        out.push_str(",\"bit_offset\":");
+        out.push_str(&self.bit_offset.to_string());
+        out.push_str(",\"bit_length\":");
+        out.push_str(&self.bit_length.to_string());
         out.push_str(",\"children\":[");
         for (i, child) in self.children.iter().enumerate() {
             if i > 0 {
@@ -219,6 +266,102 @@ impl DissectionTree {
         }
     }
 
+    /// Generates a concise, informative 1-line summary of the packet for Wireshark's Info column.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        let Some(ref root) = self.root else {
+            return self.protocol_name.clone();
+        };
+
+        // Find records: either direct children of root, or root itself if it has no record children
+        let records: Vec<&DissectionNode> = if root.children.iter().any(|c| c.name.to_lowercase().contains("record")) {
+            root.children.iter().filter(|c| c.name.to_lowercase().contains("record")).collect()
+        } else if !root.children.is_empty() {
+            root.children.iter().collect()
+        } else {
+            vec![root]
+        };
+
+        if records.is_empty() {
+            return self.protocol_name.clone();
+        }
+
+        let mut record_summaries = Vec::new();
+        for rec in &records {
+            let mut cat_str = String::new();
+            let mut highlights = Vec::new();
+
+            // Recursively search for key summary fields within this record
+            fn find_highlights(node: &DissectionNode, cat: &mut String, highlights: &mut Vec<String>) {
+                let lower = node.name.to_lowercase();
+                if cat.is_empty() && (lower == "category" || lower == "cat" || lower == "cat_number") {
+                    let val = if !node.converted_value.is_empty() {
+                        &node.converted_value
+                    } else {
+                        &node.raw_value
+                    };
+                    if let Ok(num) = val.trim().parse::<u32>() {
+                        *cat = format!("Cat {:03}", num);
+                    } else if !val.is_empty() {
+                        *cat = format!("Cat {}", val);
+                    }
+                } else if highlights.len() < 4 {
+                    // Look for key identifiers
+                    let is_highlight_field = matches!(
+                        lower.as_str(),
+                        "callsign"
+                            | "targetidentification"
+                            | "aircraftaddress"
+                            | "targetaddress"
+                            | "acid"
+                            | "mode3acode"
+                            | "modesc"
+                            | "flightlevel"
+                            | "measuredflightlevel"
+                            | "altitude"
+                            | "messagetype"
+                            | "recordtype"
+                            | "sectorsign"
+                            | "sectornumber"
+                    );
+                    if is_highlight_field {
+                        let display_val = if !node.converted_value.is_empty() {
+                            node.converted_value.trim()
+                        } else {
+                            node.raw_value.trim()
+                        };
+                        if !display_val.is_empty() && !highlights.iter().any(|h| h == display_val) {
+                            highlights.push(display_val.to_string());
+                        }
+                    }
+                }
+                for child in &node.children {
+                    find_highlights(child, cat, highlights);
+                }
+            }
+
+            find_highlights(rec, &mut cat_str, &mut highlights);
+
+            let prefix = if !cat_str.is_empty() {
+                cat_str
+            } else {
+                rec.name.clone()
+            };
+
+            if highlights.is_empty() {
+                record_summaries.push(prefix);
+            } else {
+                record_summaries.push(format!("{} [{}]", prefix, highlights.join(", ")));
+            }
+        }
+
+        if record_summaries.is_empty() {
+            format!("{}: {} records", self.protocol_name, records.len())
+        } else {
+            record_summaries.join(", ")
+        }
+    }
+
     /// Renders the tree as human-readable Wireshark packet details text.
     #[must_use]
     pub fn render_ascii(&self) -> String {
@@ -250,6 +393,9 @@ impl DissectionTree {
         let mut out = String::new();
         out.push_str("{\"protocol\":");
         escape_json_str(&self.protocol_name, &mut out);
+        let summary = self.summary();
+        out.push_str(",\"summary\":");
+        escape_json_str(&summary, &mut out);
         out.push_str(",\"root\":");
         if let Some(ref r) = self.root {
             r.to_json(&mut out);

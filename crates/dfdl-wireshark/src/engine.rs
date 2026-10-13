@@ -161,6 +161,13 @@ impl DfdlDissectorEngine {
             }
         }
 
+        let total_offset = root_children.first().map_or(0, |c| c.offset);
+        let total_length = root_children
+            .iter()
+            .map(|c| c.offset.saturating_add(c.length))
+            .max()
+            .unwrap_or(0)
+            .saturating_sub(total_offset);
         let container_name = format!("{}_Block", self.protocol_name());
         let root_node = DissectionNode {
             name: container_name.clone(),
@@ -171,6 +178,10 @@ impl DfdlDissectorEngine {
             unit: String::new(),
             resolution: String::new(),
             documentation: format!("Container of {} decoded DFDL messages", root_children.len()),
+            offset: total_offset,
+            length: total_length,
+            bit_offset: total_offset.saturating_mul(8),
+            bit_length: total_length.saturating_mul(8),
             children: root_children,
         };
 
