@@ -2296,10 +2296,26 @@ impl SchemaCompiler {
                             );
                             return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                         }
+
+                        let (min_bits, max_bits) = match st {
+                            dfdl_core::infoset::DfdlSimpleType::Byte | dfdl_core::infoset::DfdlSimpleType::UnsignedByte => (1, 8),
+                            dfdl_core::infoset::DfdlSimpleType::Short | dfdl_core::infoset::DfdlSimpleType::UnsignedShort => (1, 16),
+                            dfdl_core::infoset::DfdlSimpleType::Int | dfdl_core::infoset::DfdlSimpleType::UnsignedInt => (1, 32),
+                            dfdl_core::infoset::DfdlSimpleType::Long | dfdl_core::infoset::DfdlSimpleType::UnsignedLong => (1, 64),
+                            _ => (0, 0),
+                        };
+                        if max_bits > 0 && (bit_len < min_bits || bit_len > max_bits) {
+                            let msg = alloc::format!(
+                                "Schema Definition Error: Length in bits {} out of range. Expected between {} and {} for {:?} on element '{}'",
+                                bit_len, min_bits, max_bits, st, elem.name.local_name
+                            );
+                            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                        }
                     }
                 }
             }
         }
+
 
         let text_number_rep = effective_elem_props
             .get_property("textNumberRep")
@@ -2307,6 +2323,12 @@ impl SchemaCompiler {
             .unwrap_or("standard");
         if text_number_rep == "zoned" {
             if let CompiledType::Simple(ref st) = compiled_type {
+                if matches!(st, dfdl_core::infoset::DfdlSimpleType::Float | dfdl_core::infoset::DfdlSimpleType::Double) {
+                    return Err(DFDLError::new(
+                        DFDLErrorKind::SchemaDefinition,
+                        &alloc::format!("Schema Definition Error: textNumberRep=\"zoned\" is not allowed for {:?}", st),
+                    ));
+                }
                 match st {
                     dfdl_core::infoset::DfdlSimpleType::Decimal
                     | dfdl_core::infoset::DfdlSimpleType::Long

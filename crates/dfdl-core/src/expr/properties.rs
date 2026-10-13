@@ -1440,7 +1440,7 @@ impl PropertyStore {
                 crate::schema::ir::TestKind::Expression
             };
             let test_ast = if test_kind == crate::schema::ir::TestKind::Expression {
-                crate::expr::parse_expr(test_expr).ok()
+                Some(crate::expr::parse_expr(test_expr)?)
             } else {
                 None
             };
@@ -1450,9 +1450,15 @@ impl PropertyStore {
                 } else {
                     alloc::format!("^(?:{})", test_expr)
                 };
-                crate::pattern::DfdlRegex::new(&anchored)
+                let re = crate::pattern::DfdlRegex::new(&anchored)
                     .or_else(|_| crate::pattern::DfdlRegex::new(test_expr))
-                    .ok()
+                    .map_err(|e| {
+                        DFDLError::new(
+                            DFDLErrorKind::SchemaDefinition,
+                            &alloc::format!("Schema Definition Error: Invalid regex pattern in dfdl:assert: '{}': {}", test_expr, e),
+                        )
+                    })?;
+                Some(re)
             } else {
                 None
             };
@@ -1474,15 +1480,19 @@ impl PropertyStore {
             return Err(DFDLError::new_static(DFDLErrorKind::SchemaDefinition, msg));
         }
 
-        for assert_item in &asserts {
-            if assert_item.test_kind == crate::schema::ir::TestKind::Pattern
-                && !is_valid_dfdl_regex(&assert_item.test_expr)
+        for assert_item in &mut asserts {
+            if assert_item.test_kind == crate::schema::ir::TestKind::Pattern {
+                if !is_valid_dfdl_regex(&assert_item.test_expr) {
+                    let msg = alloc::format!(
+                        "Schema Definition Error: Invalid regex pattern in dfdl:assert testPattern: '{}'",
+                        assert_item.test_expr
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                }
+            } else if assert_item.test_kind == crate::schema::ir::TestKind::Expression
+                && assert_item.test_ast.is_none()
             {
-                let msg = alloc::format!(
-                    "Schema Definition Error: Invalid regex pattern in dfdl:assert testPattern: '{}'",
-                    assert_item.test_expr
-                );
-                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                assert_item.test_ast = Some(crate::expr::parse_expr(&assert_item.test_expr)?);
             }
         }
 
@@ -2029,7 +2039,7 @@ impl PropertyStore {
             if discriminator_test_kind == crate::schema::ir::TestKind::Expression {
                 let trimmed = expr.trim();
                 if !trimmed.is_empty() {
-                    crate::expr::parse_expr(trimmed).ok()
+                    Some(crate::expr::parse_expr(trimmed)?)
                 } else {
                     None
                 }
@@ -2047,9 +2057,15 @@ impl PropertyStore {
                 } else {
                     alloc::format!("^(?:{})", trimmed)
                 };
-                crate::pattern::DfdlRegex::new(&anchored)
+                let re = crate::pattern::DfdlRegex::new(&anchored)
                     .or_else(|_| crate::pattern::DfdlRegex::new(trimmed))
-                    .ok()
+                    .map_err(|e| {
+                        DFDLError::new(
+                            DFDLErrorKind::SchemaDefinition,
+                            &alloc::format!("Schema Definition Error: Invalid regex pattern in discriminator: '{}': {}", trimmed, e),
+                        )
+                    })?;
+                Some(re)
             } else {
                 None
             }
@@ -2059,7 +2075,7 @@ impl PropertyStore {
         let choice_dispatch_key_ast = if let Some(ref expr) = choice_dispatch_key {
             let trimmed = expr.trim();
             if !trimmed.is_empty() {
-                crate::expr::parse_expr(trimmed).ok()
+                Some(crate::expr::parse_expr(trimmed)?)
             } else {
                 None
             }

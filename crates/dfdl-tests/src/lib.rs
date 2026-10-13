@@ -6034,6 +6034,154 @@ mod tests {
             "Unparsing 2 bytes into a complex element with explicit length 1 byte must fail"
         );
     }
+
+    /// Verifies that all statically determinable Schema Definition Errors (SDE) audited in Part I
+    /// and Validation Mode controls audited in Part II are correctly handled at compile/runtime.
+    ///
+    /// The test covers:
+    /// 1. Static binary integer bit range overflow rejected at schema compile time.
+    /// 2. Incompatible zoned decimal on float/double rejected at schema compile time.
+    /// 3. Malformed assert expressions rejected at schema compile time instead of swallowed.
+    /// 4. `text.rs` nonNegativeInteger facet is skipped when `ValidationMode::Off` and reported when `ValidationMode::Limited`.
+    /// 5. `UnparserEngine` respects `ValidationMode::Limited` and reports facet violation.
+    #[test]
+    fn test_compliance_review_part1_part2_fixes() {
+        use dfdl_core::kernel::parser::ValidationMode;
+        use dfdl_core::kernel::unparser::UnparserEngine;
+        use dfdl_core::kernel::ParserEngine;
+        use dfdl_schema::SchemaCompiler;
+
+        let compiler = SchemaCompiler::new();
+
+        // 1. Static binary integer bit range overflow must fail at schema compile time (§13.7.1)
+        let xml_overflow = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="binary" alignment="1" alignmentUnits="bits"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="val" type="xs:byte" dfdl:lengthKind="explicit" dfdl:length="16" dfdl:lengthUnits="bits"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+        let res_overflow = compiler.compile_str(xml_overflow);
+        assert!(res_overflow.is_err(), "Compile must reject 16-bit xs:byte at schema load time");
+        let err_overflow = res_overflow.unwrap_err();
+        assert!(
+            err_overflow.message.as_str().contains("Length in bits 16 out of range"),
+            "Error must specify bit length overflow: {}",
+            err_overflow.message.as_str()
+        );
+
+        // 2. Incompatible textNumberRep="zoned" on xs:float must fail at schema compile time (§13.7.4)
+        let xml_zoned_float = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" alignment="1" alignmentUnits="bytes"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="val" type="xs:float" dfdl:textNumberRep="zoned" dfdl:lengthKind="explicit" dfdl:length="4"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+        let res_zoned_float = compiler.compile_str(xml_zoned_float);
+        assert!(res_zoned_float.is_err(), "Compile must reject zoned float at schema load time");
+        let err_zoned = res_zoned_float.unwrap_err();
+        assert!(
+            err_zoned.message.as_str().contains("textNumberRep=\"zoned\" is not allowed for Float"),
+            "Error must identify invalid zoned float: {}",
+            err_zoned.message.as_str()
+        );
+
+        // 3. Malformed assert expression syntax must fail at schema compile time (§9.5)
+        let xml_bad_assert = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" alignment="1" alignmentUnits="bytes"/>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="val" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="2">
+                    <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                            <dfdl:assert test="{ 5 = 5 }"/>
+                        </xs:appinfo>
+                    </xs:annotation>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+        let res_bad_assert = compiler.compile_str(xml_bad_assert);
+        assert!(res_bad_assert.is_err(), "Compile must reject malformed assert expression at load time");
+
+        // 4. Facet validation respects ValidationMode in ParserEngine
+        let xml_facet = r#"<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
+    <dfdl:format byteOrder="bigEndian" representation="text" alignment="1" alignmentUnits="bytes" encoding="UTF-8"/>
+    <xs:simpleType name="Min5">
+        <xs:restriction base="xs:integer">
+            <xs:minInclusive value="5"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="val" type="Min5" dfdl:lengthKind="explicit" dfdl:length="2"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>"#;
+        let schema_facet = compiler.compile_str(xml_facet).expect("Compile schema with Min5 facet");
+
+        // ValidationMode::Off must parse without error (§21)
+        let src_off = SliceByteSource::new(b"03");
+        let mut r_off = BitReader::new(src_off, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_off = WorkBudget::new(100);
+        let mut parser_off = ParserEngine::new(&schema_facet, &mut r_off, &mut b_off);
+        parser_off.set_validation_mode(ValidationMode::Off);
+        let doc_off = parser_off.parse_document();
+        assert!(doc_off.is_ok(), "ValidationMode::Off must not fail on facet violation");
+
+        // ValidationMode::Limited must return validation error (§21)
+        let src_lim = SliceByteSource::new(b"03");
+        let mut r_lim = BitReader::new(src_lim, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_lim = WorkBudget::new(100);
+        let mut parser_lim = ParserEngine::new(&schema_facet, &mut r_lim, &mut b_lim);
+        parser_lim.set_validation_mode(ValidationMode::Limited);
+        let doc_lim = parser_lim.parse_document();
+        assert!(doc_lim.is_err(), "ValidationMode::Limited must return validation error on facet violation");
+        assert_eq!(doc_lim.unwrap_err().kind, DFDLErrorKind::Validation);
+
+        // 5. UnparserEngine respects ValidationMode::Limited
+        let mut bld = InfosetBuilder::new();
+        bld.push_event(InfosetEvent::StartDocument).unwrap();
+        bld.push_event(InfosetEvent::StartElement { name: QName::local("Root"), is_nil: false }).unwrap();
+        bld.push_event(InfosetEvent::SimpleValue { name: QName::local("val"), value: DfdlValue::Long(3) }).unwrap();
+        bld.push_event(InfosetEvent::EndElement { name: QName::local("Root") }).unwrap();
+        bld.push_event(InfosetEvent::EndDocument).unwrap();
+        let doc_unparse = bld.build().unwrap();
+
+        // Under ValidationMode::Off, unparsing succeeds
+        let sink_off = VecByteSink::new();
+        let mut w_off = BitWriter::new(sink_off, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_unp_off = WorkBudget::new(100);
+        let mut unp_off = UnparserEngine::new(&schema_facet, &mut w_off, &mut b_unp_off);
+        unp_off.set_validation_mode(ValidationMode::Off);
+        let unp_off_res = unp_off.unparse_document(&doc_unparse);
+        assert!(unp_off_res.is_ok(), "Unparsing must succeed under Off: {:?}", unp_off_res);
+
+        // Under ValidationMode::Limited, unparsing reports validation error
+        let sink_lim = VecByteSink::new();
+        let mut w_lim = BitWriter::new(sink_lim, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut b_unp_lim = WorkBudget::new(100);
+        let mut unp_lim = UnparserEngine::new(&schema_facet, &mut w_lim, &mut b_unp_lim);
+        unp_lim.set_validation_mode(ValidationMode::Limited);
+        let unp_res = unp_lim.unparse_document(&doc_unparse);
+        assert!(unp_res.is_err());
+        assert_eq!(unp_res.unwrap_err().kind, DFDLErrorKind::Validation);
+    }
 }
 
 

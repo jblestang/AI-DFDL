@@ -18,6 +18,9 @@
 //!   with contiguous POU stack executing without recursive stack frames.
 //! - **Bytecode Compiler ([`compiler`])**: Lowers [`dfdl_core::schema::ir::CompiledSchema`]
 //!   directly into linear [`BytecodeProgram`].
+//! - **Validation Mode**: Designed for maximum wire-speed and line-rate decoding;
+//!   operates under equivalent of [`dfdl_core::kernel::ValidationMode::Off`]
+//!   (facet constraint checks are skipped during bytecode execution).
 
 #![no_std]
 #![deny(missing_docs)]

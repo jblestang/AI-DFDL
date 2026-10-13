@@ -1433,7 +1433,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         norm
                     };
 
-                    if props.facets.min_inclusive.as_deref() == Some("0") && (is_neg || norm.starts_with('-')) {
+                    if props.facets.min_inclusive.as_deref() == Some("0")
+                        && (is_neg || norm.starts_with('-'))
+                    {
                         let msg = alloc::format!(
                             "Parse Error: nonNegativeInteger: Out of Range '{}'",
                             raw

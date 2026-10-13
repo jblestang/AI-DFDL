@@ -85,6 +85,8 @@ pub struct UnparserEngine<'a, S: ByteSink> {
     active_delimiters: Vec<String>,
     current_namespaces: &'a [(alloc::string::String, alloc::string::String)],
     ovc_values: alloc::collections::BTreeMap<alloc::string::String, DfdlValue>,
+    validation_mode: crate::kernel::ValidationMode,
+    validation_errors: Vec<DFDLError>,
 }
 
 impl<'a, S: ByteSink> UnparserEngine<'a, S> {
@@ -107,7 +109,21 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
             active_delimiters: Vec::new(),
             current_namespaces: &[],
             ovc_values: alloc::collections::BTreeMap::new(),
+            validation_mode: crate::kernel::ValidationMode::Off,
+            validation_errors: Vec::new(),
         }
+    }
+
+    /// Sets the validation mode for the unparser (§21).
+    #[inline]
+    pub fn set_validation_mode(&mut self, mode: crate::kernel::ValidationMode) {
+        self.validation_mode = mode;
+    }
+
+    /// Returns a slice of collected validation errors.
+    #[inline]
+    pub fn validation_errors(&self) -> &[DFDLError] {
+        &self.validation_errors
     }
 
     /// Sets an external variable value on the unparser's active variable map (§7.7).
@@ -167,6 +183,12 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
 
         self.unparse_element(root_term_id, root_elem)?;
         self.writer.flush()?;
+
+        if self.validation_mode != crate::kernel::ValidationMode::Off && !self.validation_errors.is_empty() {
+            let first_val_err = self.validation_errors.remove(0);
+            return Err(first_val_err);
+        }
+
         Ok(())
     }
 
@@ -326,6 +348,29 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                 }
                             }
                         }
+                    } else if self.validation_mode != crate::kernel::ValidationMode::Off {
+                        if children.len() < el.min_occurs {
+                            let msg = alloc::format!(
+                                "Validation Error: element '{}' occurs {} times, less than minOccurs {}",
+                                el.name.local_name, children.len(), el.min_occurs
+                            );
+                            let _ = crate::util::try_push(
+                                &mut self.validation_errors,
+                                DFDLError::new(DFDLErrorKind::Validation, &msg),
+                            );
+                        }
+                        if let Some(max) = el.max_occurs {
+                            if children.len() > max {
+                                let msg = alloc::format!(
+                                    "Validation Error: element '{}' occurs {} times, exceeding maxOccurs {}",
+                                    el.name.local_name, children.len(), max
+                                );
+                                let _ = crate::util::try_push(
+                                    &mut self.validation_errors,
+                                    DFDLError::new(DFDLErrorKind::Validation, &msg),
+                                );
+                            }
+                        }
                     }
                     let is_array = children.len() > 1
                         || match term.kind {
@@ -415,6 +460,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                         sub_unparser.current_occurs_index = self.current_occurs_index;
                         sub_unparser.variable_map = self.variable_map.clone();
                         sub_unparser.child_cursor = self.child_cursor;
+                        sub_unparser.validation_mode = self.validation_mode;
 
                         for &member_id in &seq.members {
                             sub_unparser.unparse_term(member_id, parent_elem)?;
@@ -422,6 +468,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
 
                         self.child_cursor = sub_unparser.child_cursor;
                         self.variable_map = sub_unparser.variable_map;
+                        self.validation_errors.extend(sub_unparser.validation_errors);
 
                         sub_writer.flush()?;
                         let mut buf = sub_writer.into_sink().into_vec();
@@ -1474,7 +1521,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                     _ => "lengthKind 'prefixed'",
                 };
                 let msg = alloc::format!(
-                    "Runtime Schema Definition Error: Variable width character encoding '{}' with {} and lengthUnits 'characters' is not supported for complex types on element '{}'",
+                    "Schema Definition Error: Variable width character encoding '{}' with {} and lengthUnits 'characters' is not supported for complex types on element '{}'",
                     term.properties.encoding,
                     kind_str,
                     term.name.local_name
@@ -1705,6 +1752,16 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                         if (props.rep_type.is_some() || props.rep_simple_type.is_some())
                             && !props.facets.rep_values.is_empty()
                         {
+                            if self.validation_mode != crate::kernel::ValidationMode::Off
+                                && props.facets.has_facets()
+                            {
+                                if let Err(e) = props.facets.validate_value_detailed(val_ref) {
+                                    let msg_str = e.message.as_str();
+                                    let detail = msg_str.strip_prefix("Validation Error: ").unwrap_or(msg_str);
+                                    let msg = alloc::format!("Validation Error: element '{}' {}", elem.name.local_name, detail);
+                                    let _ = crate::util::try_push(&mut self.validation_errors, DFDLError::new(DFDLErrorKind::Validation, &msg));
+                                }
+                            }
                             let val_str = alloc::format!("{}", val_ref);
                             if let Some((_, rep_str)) = props.facets.rep_values.iter().find(|(k, _)| k == &val_str) {
                                 let rep_st = props.rep_simple_type.unwrap_or(crate::infoset::DfdlSimpleType::UnsignedInt);
@@ -1720,6 +1777,18 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                 return Err(DFDLError::new(DFDLErrorKind::Unparse, &msg));
                             }
                         } else {
+                            if self.validation_mode != crate::kernel::ValidationMode::Off
+                                && props.facets.has_facets()
+                                && props.rep_type.is_none()
+                                && props.rep_simple_type.is_none()
+                            {
+                                if let Err(e) = props.facets.validate_value_detailed(val_ref) {
+                                    let msg_str = e.message.as_str();
+                                    let detail = msg_str.strip_prefix("Validation Error: ").unwrap_or(msg_str);
+                                    let msg = alloc::format!("Validation Error: element '{}' {}", elem.name.local_name, detail);
+                                    let _ = crate::util::try_push(&mut self.validation_errors, DFDLError::new(DFDLErrorKind::Validation, &msg));
+                                }
+                            }
                             self.unparse_simple_value(val_ref, props)?;
                         }
                     }
@@ -1745,7 +1814,9 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
                                     sub_unparser.active_delimiters = self.active_delimiters.clone();
                                     sub_unparser.current_occurs_index = self.current_occurs_index;
                                     sub_unparser.variable_map = self.variable_map.clone();
+                                    sub_unparser.validation_mode = self.validation_mode;
                                     sub_unparser.unparse_term(child_id, elem)?;
+                                    self.validation_errors.append(&mut sub_unparser.validation_errors);
                                     if let Some(unconsumed) = elem.children.get(sub_unparser.child_cursor) {
                                         let unconsumed_name = match unconsumed {
                                             InfosetNode::Element(e) => e.name.clark_notation(),
