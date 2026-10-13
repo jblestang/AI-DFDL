@@ -1484,6 +1484,7 @@ impl<'a, S: ByteSink> UnparserEngine<'a, S> {
         elem: &InfosetElement,
         path_seg: Option<&str>,
     ) -> DFDLResult<()> {
+        self.budget.consume(1)?;
         let term = self.schema.get_term(term_id).ok_or_else(|| {
             DFDLError::new_static(
                 DFDLErrorKind::SchemaDefinition,
@@ -6004,6 +6005,241 @@ mod tests {
             u_pl.unparse_text_value(&DfdlValue::String("hi".into()), &props_pad_l).unwrap();
         }
         assert_eq!(w_pl.into_sink().into_vec(), b"###hi");
+    }
+
+    #[test]
+    fn test_unparse_document_sequence_delimiters_and_suppression() {
+        let mut builder = crate::schema::builder::SchemaBuilder::new();
+        let e1 = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("f1"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let e2 = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("f2"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Int),
+            min_occurs: 0,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let e3 = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("f3"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::String),
+            min_occurs: 0,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let p_txt = ResolvedProperties {
+            representation: Representation::Text,
+            length_kind: crate::schema::ir::LengthKind::Delimited,
+            ..Default::default()
+        };
+        let id1 = builder.add_term_with_props(e1.name.clone(), TermKind::Element(e1), p_txt.clone()).unwrap();
+        let id2 = builder.add_term_with_props(e2.name.clone(), TermKind::Element(e2), p_txt.clone()).unwrap();
+        let id3 = builder.add_term_with_props(e3.name.clone(), TermKind::Element(e3), p_txt.clone()).unwrap();
+
+        let seq = crate::schema::ir::CompiledSequence {
+            members: alloc::vec![id1, id2, id3],
+        };
+        let p_seq = ResolvedProperties {
+            initiator: Some("[".into()),
+            separator: Some(",".into()),
+            separator_position: crate::schema::ir::SeparatorPosition::Infix,
+            terminator: Some("]".into()),
+            separator_suppression_policy: crate::schema::ir::SeparatorSuppressionPolicy::TrailingEmpty,
+            ..Default::default()
+        };
+        let seq_id = builder.add_term_with_props(crate::types::QName::local("seq"), TermKind::Sequence(seq), p_seq).unwrap();
+
+        let root_elem = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("root"),
+            type_ir: crate::schema::ir::CompiledType::Complex(seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder.add_term_with_props(root_elem.name.clone(), TermKind::Element(root_elem), ResolvedProperties::default()).unwrap();
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+
+        // 1. All elements present
+        let mut root_val = crate::infoset::tree::InfosetElement::complex(crate::types::QName::local("root"));
+        root_val.try_add_child(crate::infoset::tree::InfosetNode::Element(
+            crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("f1"), crate::infoset::state::ElementState::Value(DfdlValue::String("hello".into())))
+        )).unwrap();
+        root_val.try_add_child(crate::infoset::tree::InfosetNode::Element(
+            crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("f2"), crate::infoset::state::ElementState::Value(DfdlValue::Int(42)))
+        )).unwrap();
+        root_val.try_add_child(crate::infoset::tree::InfosetNode::Element(
+            crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("f3"), crate::infoset::state::ElementState::Value(DfdlValue::String("world".into())))
+        )).unwrap();
+        let doc1 = crate::infoset::InfosetDocument::with_root(root_val);
+
+        let mut writer1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(10_000);
+        let mut unparser1 = UnparserEngine::new(&schema, &mut writer1, &mut budget);
+        unparser1.unparse_document(&doc1).unwrap();
+        writer1.flush().unwrap();
+        assert_eq!(core::str::from_utf8(writer1.into_sink().as_slice()).unwrap(), "[hello,42,world]");
+
+        // 2. Trailing elements omitted -> suppressed by TrailingEmpty
+        let mut root_val2 = crate::infoset::tree::InfosetElement::complex(crate::types::QName::local("root"));
+        root_val2.try_add_child(crate::infoset::tree::InfosetNode::Element(
+            crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("f1"), crate::infoset::state::ElementState::Value(DfdlValue::String("hello".into())))
+        )).unwrap();
+        let doc2 = crate::infoset::InfosetDocument::with_root(root_val2);
+
+        let mut writer2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut unparser2 = UnparserEngine::new(&schema, &mut writer2, &mut budget);
+        unparser2.unparse_document(&doc2).unwrap();
+        writer2.flush().unwrap();
+        assert_eq!(core::str::from_utf8(writer2.into_sink().as_slice()).unwrap(), "[hello]");
+    }
+
+    #[test]
+    fn test_unparse_document_layers_and_nils() {
+        // 1. TwoByteSwap layer
+        let mut b1 = crate::schema::builder::SchemaBuilder::new();
+        let el = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("body"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let p_el = ResolvedProperties {
+            representation: Representation::Text,
+            length_kind: crate::schema::ir::LengthKind::Explicit,
+            length: Some(4),
+            ..Default::default()
+        };
+        let id_el = b1.add_term_with_props(el.name.clone(), TermKind::Element(el), p_el).unwrap();
+        let seq = crate::schema::ir::CompiledSequence { members: alloc::vec![id_el] };
+        let p_seq = ResolvedProperties {
+            layer: Some("twoByteSwap".into()),
+            ..Default::default()
+        };
+        let id_seq = b1.add_term_with_props(crate::types::QName::local("seq"), TermKind::Sequence(seq), p_seq).unwrap();
+        let root = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("root"),
+            type_ir: crate::schema::ir::CompiledType::Complex(id_seq),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = b1.add_term_with_props(root.name.clone(), TermKind::Element(root), ResolvedProperties::default()).unwrap();
+        b1.set_root(root_id);
+        let schema1 = b1.build().unwrap();
+
+        let mut root_elem = crate::infoset::tree::InfosetElement::complex(crate::types::QName::local("root"));
+        root_elem.try_add_child(crate::infoset::tree::InfosetNode::Element(
+            crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("body"), crate::infoset::state::ElementState::Value(DfdlValue::String("ABCD".into())))
+        )).unwrap();
+        let doc1 = crate::infoset::InfosetDocument::with_root(root_elem);
+
+        let mut writer1 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(10_000);
+        let mut unparser1 = UnparserEngine::new(&schema1, &mut writer1, &mut budget);
+        unparser1.unparse_document(&doc1).unwrap();
+        writer1.flush().unwrap();
+        assert_eq!(core::str::from_utf8(writer1.into_sink().as_slice()).unwrap(), "BADC");
+
+        // 2. Nillable element with literalValue
+        let mut b2 = crate::schema::builder::SchemaBuilder::new();
+        let nil_el = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("item"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: true,
+            default_value: None,
+        };
+        let mut p_nil = ResolvedProperties {
+            representation: Representation::Text,
+            length_kind: crate::schema::ir::LengthKind::Delimited,
+            nil_kind: crate::schema::ir::NilKind::LiteralValue,
+            ..Default::default()
+        };
+        p_nil.nil_value = Some("NIL".into());
+        let id_nil = b2.add_term_with_props(nil_el.name.clone(), TermKind::Element(nil_el), p_nil).unwrap();
+        b2.set_root(id_nil);
+        let schema2 = b2.build().unwrap();
+
+        let mut nil_item = crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("item"), crate::infoset::state::ElementState::Nil);
+        nil_item.nil_attribute = Some(true);
+        let doc2 = crate::infoset::InfosetDocument::with_root(nil_item);
+
+        let mut writer2 = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut unparser2 = UnparserEngine::new(&schema2, &mut writer2, &mut budget);
+        unparser2.unparse_document(&doc2).unwrap();
+        writer2.flush().unwrap();
+        assert_eq!(core::str::from_utf8(writer2.into_sink().as_slice()).unwrap(), "NIL");
+    }
+
+    #[test]
+    fn test_unparse_document_choice_branches() {
+        let mut b = crate::schema::builder::SchemaBuilder::new();
+        let b1 = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("optA"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::String),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let b2 = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("optB"),
+            type_ir: crate::schema::ir::CompiledType::Simple(crate::infoset::DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let p = ResolvedProperties {
+            representation: Representation::Text,
+            length_kind: crate::schema::ir::LengthKind::Delimited,
+            ..Default::default()
+        };
+        let id1 = b.add_term_with_props(b1.name.clone(), TermKind::Element(b1), p.clone()).unwrap();
+        let id2 = b.add_term_with_props(b2.name.clone(), TermKind::Element(b2), p).unwrap();
+
+        let choice = crate::schema::ir::CompiledChoice {
+            branches: alloc::vec![id1, id2],
+        };
+        let ch_id = b.add_term_with_props(crate::types::QName::local("ch"), TermKind::Choice(choice), ResolvedProperties::default()).unwrap();
+        let root = crate::schema::ir::CompiledElement {
+            name: crate::types::QName::local("root"),
+            type_ir: crate::schema::ir::CompiledType::Complex(ch_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = b.add_term_with_props(root.name.clone(), TermKind::Element(root), ResolvedProperties::default()).unwrap();
+        b.set_root(root_id);
+        let schema = b.build().unwrap();
+
+        // Select branch optB
+        let mut root_elem = crate::infoset::tree::InfosetElement::complex(crate::types::QName::local("root"));
+        root_elem.try_add_child(crate::infoset::tree::InfosetNode::Element(
+            crate::infoset::tree::InfosetElement::simple(crate::types::QName::local("optB"), crate::infoset::state::ElementState::Value(DfdlValue::Int(99)))
+        )).unwrap();
+        let doc = crate::infoset::InfosetDocument::with_root(root_elem);
+
+        let mut writer = BitWriter::new(VecByteSink::new(), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut budget = WorkBudget::new(10_000);
+        let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
+        unparser.unparse_document(&doc).unwrap();
+        writer.flush().unwrap();
+        assert_eq!(core::str::from_utf8(writer.into_sink().as_slice()).unwrap(), "99");
     }
 }
 

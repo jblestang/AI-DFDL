@@ -111,6 +111,22 @@ impl DFDLError {
     pub const fn arithmetic_overflow(message: &'static str) -> Self {
         Self::new_static(DFDLErrorKind::ExpressionError, message)
     }
+
+    /// Returns true if the error represents a fatal, non-recoverable condition
+    /// (such as SchemaDefinition, WorkBudgetExhausted, ImplementationLimit,
+    /// or InternalInvariant) that must NOT trigger speculative backtracking
+    /// at Points of Uncertainty.
+    #[inline]
+    #[must_use]
+    pub fn is_fatal(&self) -> bool {
+        matches!(
+            self.kind,
+            DFDLErrorKind::SchemaDefinition
+                | DFDLErrorKind::WorkBudgetExhausted
+                | DFDLErrorKind::ImplementationLimit
+                | DFDLErrorKind::InternalInvariant
+        )
+    }
 }
 
 impl fmt::Display for DFDLError {

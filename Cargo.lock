@@ -40,6 +40,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfdl-example"
+version = "0.1.0"
+dependencies = [
+ "dfdl-core",
+ "dfdl-schema",
+ "dfdl-vm",
+ "dfdl-xml",
+]
+
+[[package]]
 name = "dfdl-fuzz"
 version = "0.1.0"
 dependencies = [
@@ -82,6 +92,17 @@ version = "0.1.0"
 dependencies = [
  "dfdl-core",
  "dfdl-schema",
+]
+
+[[package]]
+name = "dfdl-wireshark"
+version = "0.1.0"
+dependencies = [
+ "dfdl-core",
+ "dfdl-example",
+ "dfdl-schema",
+ "dfdl-vm",
+ "dfdl-xml",
 ]
 
 [[package]]

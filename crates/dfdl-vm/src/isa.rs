@@ -312,6 +312,15 @@ pub enum Instruction {
         /// Source register.
         src: Register,
     },
+    /// Extracts a single bit from `src` register at `bit` position (0..=63) and sets `dest` to 0 or 1.
+    TestBit {
+        /// Destination register receiving the extracted single-bit value (0 or 1).
+        dest: Register,
+        /// Source register containing the integer or bitmask value.
+        src: Register,
+        /// 0-indexed bit position to extract (0 = LSB, up to 63).
+        bit: u8,
+    },
     /// Peeks `count` bits (1..=8) into destination register without advancing the bitstream.
     PeekBitsU8 {
         /// Destination register.

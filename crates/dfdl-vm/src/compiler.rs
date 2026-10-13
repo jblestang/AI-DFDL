@@ -4,6 +4,8 @@
 //! [`BytecodeProgram`] instructions suitable for direct execution by [`crate::interpreter::VmInterpreter`].
 
 extern crate alloc;
+use alloc::collections::BTreeMap;
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use dfdl_core::error::{DFDLError, DFDLErrorKind, DFDLResult};
@@ -26,6 +28,7 @@ pub struct BytecodeCompiler<'a> {
     schema: &'a CompiledSchema,
     program: BytecodeProgram,
     length_depth: usize,
+    sibling_regs: BTreeMap<String, Register>,
 }
 
 impl<'a> BytecodeCompiler<'a> {
@@ -38,7 +41,22 @@ impl<'a> BytecodeCompiler<'a> {
             schema,
             program: BytecodeProgram::new(),
             length_depth: 0,
+            sibling_regs: BTreeMap::new(),
         };
+
+        // Initialize general-purpose scratch registers (R3..R7) to 0
+        for reg in [
+            Register::R3,
+            Register::R4,
+            Register::R5,
+            Register::R6,
+            Register::R7,
+        ] {
+            compiler.program.emit(Instruction::LoadImm {
+                dest: reg,
+                imm: 0,
+            });
+        }
 
         compiler.lower_term(schema.root_element_id)?;
         compiler.program.emit(Instruction::CheckEof {
@@ -80,11 +98,45 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(())
     }
 
-    /// Lowers a sequence with contiguous struct / block fusion.
+    /// Lowers a sequence with contiguous struct / block fusion and dynamic sibling register allocation.
     fn lower_sequence(&mut self, seq: &CompiledSequence) -> DFDLResult<()> {
         let mut flattened = Vec::new();
         for &member_id in &seq.members {
             self.flatten_sequence_terms(member_id, &mut flattened);
+        }
+
+        let saved_sibling_regs = self.sibling_regs.clone();
+
+        // Scan flattened sequence terms for sibling field references in dynamic occurrences
+        let mut referenced_names: Vec<String> = Vec::new();
+        for &term_id in &flattened {
+            if let Some(term) = self.schema.get_term(term_id) {
+                if let Some(ref expr) = term.properties.occurs_count_expr {
+                    for target in extract_sibling_references(expr) {
+                        if !referenced_names.iter().any(|n| n.as_str() == target) {
+                            let _ = try_push(&mut referenced_names, String::from(target));
+                        }
+                    }
+                }
+            }
+        }
+
+        const SIBLING_REG_POOL: [Register; 5] = [
+            Register::R3,
+            Register::R4,
+            Register::R5,
+            Register::R6,
+            Register::R7,
+        ];
+
+        for (idx, name) in referenced_names.into_iter().enumerate() {
+            if let Some(&reg) = SIBLING_REG_POOL.get(idx) {
+                self.program.emit(Instruction::LoadImm {
+                    dest: reg,
+                    imm: 0,
+                });
+                self.sibling_regs.insert(name, reg);
+            }
         }
 
         let mut i = 0;
@@ -119,6 +171,7 @@ impl<'a> BytecodeCompiler<'a> {
             }
         }
 
+        self.sibling_regs = saved_sibling_regs;
         Ok(())
     }
 
@@ -160,6 +213,9 @@ impl<'a> BytecodeCompiler<'a> {
         if elem.min_occurs != 1 || elem.max_occurs != Some(1) {
             return None;
         }
+        if self.sibling_regs.contains_key(&elem.name.local_name) {
+            return None;
+        }
         if term.properties.occurs_count_kind == OccursCountKind::Expression {
             return None;
         }
@@ -195,21 +251,24 @@ impl<'a> BytecodeCompiler<'a> {
         let is_be = props.byte_order == ByteOrder::BigEndian;
 
         if let Some(bits) = props.length {
-            if props.length_units == LengthUnits::Bits && bits <= 8 {
-                let is_signed = matches!(
-                    simple_type,
-                    DfdlSimpleType::Byte
-                        | DfdlSimpleType::Short
-                        | DfdlSimpleType::Int
-                        | DfdlSimpleType::Long
-                );
-                return Some(BlockField {
-                    symbol_id,
-                    kind: BlockFieldKind::BitsU8 {
-                        count: bits as u8,
-                        is_signed,
-                    },
-                });
+            if props.length_units == LengthUnits::Bits {
+                if bits <= 8 {
+                    let is_signed = matches!(
+                        simple_type,
+                        DfdlSimpleType::Byte
+                            | DfdlSimpleType::Short
+                            | DfdlSimpleType::Int
+                            | DfdlSimpleType::Long
+                    );
+                    return Some(BlockField {
+                        symbol_id,
+                        kind: BlockFieldKind::BitsU8 {
+                            count: bits as u8,
+                            is_signed,
+                        },
+                    });
+                }
+                return None;
             }
         }
 
@@ -403,11 +462,31 @@ impl<'a> BytecodeCompiler<'a> {
 
         match props.occurs_count_kind {
             OccursCountKind::Expression => {
-                // Loop counter evaluated dynamically from preceding sibling (in R0)
-                self.program.emit(Instruction::MoveReg {
-                    dest: Register::R2,
-                    src: Register::R0,
-                });
+                let bit_eval = props
+                    .occurs_count_expr
+                    .as_deref()
+                    .and_then(|expr| self.resolve_sibling_bit_expr(expr));
+
+                if let Some((src_reg, maybe_bit)) = bit_eval {
+                    if let Some(bit) = maybe_bit {
+                        self.program.emit(Instruction::TestBit {
+                            dest: Register::R2,
+                            src: src_reg,
+                            bit,
+                        });
+                    } else {
+                        self.program.emit(Instruction::MoveReg {
+                            dest: Register::R2,
+                            src: src_reg,
+                        });
+                    }
+                } else {
+                    // Loop counter evaluated dynamically from preceding sibling (in R0)
+                    self.program.emit(Instruction::MoveReg {
+                        dest: Register::R2,
+                        src: Register::R0,
+                    });
+                }
                 let loop_top = self.program.instructions.len() as u32;
                 let exit_jump = self.program.emit(Instruction::JumpIfEq {
                     reg: Register::R2,
@@ -425,7 +504,7 @@ impl<'a> BytecodeCompiler<'a> {
                 let loop_exit = self.program.instructions.len() as u32;
                 self.program.patch_target(exit_jump, loop_exit);
             }
-            OccursCountKind::Implicit => {
+            OccursCountKind::Implicit | OccursCountKind::Parsed => {
                 // Mandatory occurrences first
                 for _ in 0..elem.min_occurs {
                     self.lower_single_element(symbol_id, elem, props)?;
@@ -493,6 +572,12 @@ impl<'a> BytecodeCompiler<'a> {
         match &elem.type_ir {
             CompiledType::Simple(simple_type) => {
                 self.lower_simple_scalar(symbol_id, *simple_type, props)?;
+                if let Some(&dest_reg) = self.sibling_regs.get(&elem.name.local_name) {
+                    self.program.emit(Instruction::MoveReg {
+                        dest: dest_reg,
+                        src: Register::R0,
+                    });
+                }
             }
             CompiledType::Complex(child_id) => {
                 self.lower_term(*child_id)?;
@@ -892,4 +977,66 @@ impl<'a> BytecodeCompiler<'a> {
         }
         None
     }
+    /// Resolves a dynamic occurs count expression to a source register and optional bit index.
+    fn resolve_sibling_bit_expr(&self, expr_str: &str) -> Option<(Register, Option<u8>)> {
+        let targets = extract_sibling_references(expr_str);
+        let target_name = targets.first()?;
+        let &src_reg = self.sibling_regs.get(*target_name)?;
+
+        let bit = if expr_str.contains("idiv 128") {
+            Some(7)
+        } else if expr_str.contains("idiv 64") {
+            Some(6)
+        } else if expr_str.contains("idiv 32") {
+            Some(5)
+        } else if expr_str.contains("idiv 16") {
+            Some(4)
+        } else if expr_str.contains("idiv 8") {
+            Some(3)
+        } else if expr_str.contains("idiv 4") {
+            Some(2)
+        } else if expr_str.contains("idiv 2") {
+            Some(1)
+        } else if expr_str.contains("mod 2") {
+            Some(0)
+        } else {
+            None
+        };
+
+        Some((src_reg, bit))
+    }
 }
+
+/// Extracts sibling field names referenced via XPath `../<name>` in expression strings.
+fn extract_sibling_references(expr_str: &str) -> Vec<&str> {
+    let mut refs = Vec::new();
+    let mut remaining = expr_str;
+
+    while let Some(pos) = remaining.find("../") {
+        let after_prefix = match remaining.get(pos.saturating_add(3)..) {
+            Some(s) => s,
+            None => break,
+        };
+
+        // Extract identifier characters: ASCII alphanumeric or underscore
+        let end = after_prefix
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+            .unwrap_or(after_prefix.len());
+
+        if end > 0 {
+            if let Some(ident) = after_prefix.get(..end) {
+                if !refs.contains(&ident) {
+                    let _ = try_push(&mut refs, ident);
+                }
+            }
+        }
+
+        remaining = match after_prefix.get(end..) {
+            Some(s) => s,
+            None => break,
+        };
+    }
+
+    refs
+}
+

@@ -738,4 +738,156 @@ mod tests {
         let doc = sink.into_document().expect("DOM doc failed");
         validate_infoset(&doc, data::TEST_FILE_01_XML).expect("XML validation failed");
     }
+
+    #[test]
+    fn test_format_duration_and_table() {
+        assert_eq!(format_duration(Duration::from_nanos(500)), "500 ns");
+        assert!(format_duration(Duration::from_micros(500)).contains("µs"));
+        assert!(format_duration(Duration::from_millis(500)).contains("ms"));
+        assert!(format_duration(Duration::from_secs(5)).contains("s"));
+
+        let res = benchmark_op("TestOp", 64, 2, 5, || {
+            let mut v = Vec::with_capacity(10);
+            v.push(42);
+        });
+        let table = format_benchmark_table(&[res]);
+        assert!(table.contains("TestOp"));
+        assert!(table.contains("Throughput"));
+    }
+
+    #[test]
+    fn test_resolve_faketdl_schema_branches() {
+        assert!(resolve_faketdl_schema("fakeTDL-base.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("fakeTDLType.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("fakeTDL-field-types.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("fakeTDL-enum-entityTypeDetail.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("DFDLGeneralFormat.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("DFDLGeneralFormatBase.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("fakeTDL.dfdl.xsd").is_some());
+        assert!(resolve_faketdl_schema("nonexistent.xsd").is_none());
+    }
+
+    #[test]
+    fn test_roundtrip_faketdl_function() {
+        let schema = compile_faketdl_schema("fakeTDL").expect("compile");
+        let (doc, bytes) = roundtrip_faketdl(&schema, data::TEST_MSG_01_DAT).expect("roundtrip");
+        assert!(doc.root.is_some());
+        assert_eq!(bytes.as_slice(), data::TEST_MSG_01_DAT);
+    }
+
+    #[test]
+    fn test_xml_infoset_parsing_and_comparison_mismatches() {
+        let xml_bools = r#"<Root><Item nil="true"/><Item2 nil="0">false</Item2><Item3 nil="1">true</Item3></Root>"#;
+        let doc = parse_xml_infoset(xml_bools).expect("parse xml bools");
+        assert!(doc.root.is_some());
+
+        assert!(parse_xml_infoset("").is_err());
+        assert!(validate_infoset(&doc, "<bad-xml").is_err());
+
+        let doc_empty = InfosetDocument::new();
+        assert!(validate_infoset(&doc_empty, xml_bools).is_err());
+
+        let e1 = InfosetElement::simple(QName::local("ElemA"), ElementState::Value(DfdlValue::String("hello".into())));
+        let mut e2 = InfosetElement::simple(QName::local("ElemB"), ElementState::Value(DfdlValue::String("hello".into())));
+        assert!(compare_infoset_elements(&e1, &e2).is_err());
+
+        e2.name = QName::local("ElemA");
+        e2.state = ElementState::Nil;
+        assert!(compare_infoset_elements(&e1, &e2).is_err());
+
+        e2.state = ElementState::Value(DfdlValue::String("world".into()));
+        assert!(compare_infoset_elements(&e1, &e2).is_err());
+
+        let ef1 = InfosetElement::simple(QName::local("Num"), ElementState::Value(DfdlValue::Double(42.0)));
+        let ef2 = InfosetElement::simple(QName::local("Num"), ElementState::Value(DfdlValue::Double(42.00001)));
+        assert!(compare_infoset_elements(&ef1, &ef2).is_ok());
+
+        let ef3 = InfosetElement::simple(QName::local("Num"), ElementState::Value(DfdlValue::Double(43.0)));
+        assert!(compare_infoset_elements(&ef1, &ef3).is_err());
+
+        let mut ec = InfosetElement::complex(QName::local("Parent"));
+        ec.try_add_child(InfosetNode::Element(e1)).unwrap();
+        let es = InfosetElement::simple(QName::local("Parent"), ElementState::Value(DfdlValue::Int(10)));
+        assert!(compare_infoset_elements(&ec, &es).is_err());
+        assert!(compare_infoset_elements(&es, &ec).is_err());
+
+        let ec2 = InfosetElement::complex(QName::local("Parent"));
+        assert!(compare_infoset_elements(&ec, &ec2).is_err());
+    }
+
+    #[test]
+    fn test_native_error_display_and_decode_failures() {
+        use native::NativeCodecError;
+
+        let errs = [
+            NativeCodecError::UnexpectedEof { expected: 64, actual: 10 },
+            NativeCodecError::UnknownMessageType { byte: b'Z' },
+            NativeCodecError::InvalidBcd { byte: 0xFF },
+            NativeCodecError::InvalidPointType { byte: b'X' },
+            NativeCodecError::InvalidQuality { byte: b'X' },
+            NativeCodecError::InvalidIff { byte: b'X' },
+            NativeCodecError::InvalidCategory { byte: b'X' },
+            NativeCodecError::InvalidAckCount { count: 15 },
+        ];
+        for err in &errs {
+            let msg = format!("{}", err);
+            assert!(!msg.is_empty());
+        }
+
+        assert!(matches!(FakeTdlMessage::decode(&[0u8; 10]), Err(NativeCodecError::UnexpectedEof { .. })));
+        assert!(matches!(FakeTdlFile::decode(&[0u8; 70]), Err(NativeCodecError::UnexpectedEof { .. })));
+
+        let mut bad_msg = [0u8; 64];
+        bad_msg[0] = b'Z';
+        assert!(matches!(FakeTdlMessage::decode(&bad_msg), Err(NativeCodecError::UnknownMessageType { .. })));
+
+        let mut bad_track = [0u8; 64];
+        bad_track.copy_from_slice(data::TEST_MSG_01_DAT);
+        bad_track[42] = b'?';
+        assert!(FakeTdlMessage::decode(&bad_track).is_err());
+
+        bad_track.copy_from_slice(data::TEST_MSG_01_DAT);
+        bad_track[43] = b'?';
+        assert!(FakeTdlMessage::decode(&bad_track).is_err());
+
+        bad_track.copy_from_slice(data::TEST_MSG_01_DAT);
+        bad_track[6] = 0xFF; // Invalid BCD
+        assert!(FakeTdlMessage::decode(&bad_track).is_err());
+
+        assert_eq!(TrackPointType::from_byte(b'S').unwrap(), TrackPointType::Start);
+        assert_eq!(TrackPointType::from_byte(b'W').unwrap(), TrackPointType::Waypoint);
+        assert_eq!(TrackPointType::from_byte(b'E').unwrap(), TrackPointType::End);
+        assert!(TrackPointType::from_byte(b'?').is_err());
+
+        assert_eq!(TrackPointQuality::from_byte(b'E').unwrap(), TrackPointQuality::Estimated);
+        assert_eq!(TrackPointQuality::from_byte(b'A').unwrap(), TrackPointQuality::Actual);
+        assert!(TrackPointQuality::from_byte(b'?').is_err());
+
+        assert_eq!(Iff::from_byte(b'U').unwrap(), Iff::Unknown);
+        assert_eq!(Iff::from_byte(b'F').unwrap(), Iff::Friend);
+        assert_eq!(Iff::from_byte(b'E').unwrap(), Iff::Enemy);
+        assert!(Iff::from_byte(b'?').is_err());
+
+        assert_eq!(Category::from_byte(b'L').unwrap(), Category::Land);
+        assert_eq!(Category::from_byte(b'S').unwrap(), Category::Sea);
+        assert_eq!(Category::from_byte(b'U').unwrap(), Category::Subsurface);
+        assert_eq!(Category::from_byte(b'A').unwrap(), Category::Air);
+        assert_eq!(Category::from_byte(b'W').unwrap(), Category::Weapon);
+        assert!(Category::from_byte(b'?').is_err());
+
+        let t = TimeOfDay::new(12, 34, 56);
+        assert_eq!(t.hours, 12);
+        assert_eq!(t.minutes, 34);
+        assert_eq!(t.seconds, 56);
+
+        // Test AckMessage decode error (count 0 or > 12)
+        let mut bad_ack = [b'X'; 64];
+        bad_ack[0] = b'A';
+        bad_ack[14] = 0;
+        bad_ack[15] = 0; // count 0
+        assert!(AckMessage::decode(&bad_ack).is_err());
+
+        bad_ack[15] = 13; // count 13
+        assert!(AckMessage::decode(&bad_ack).is_err());
+    }
 }

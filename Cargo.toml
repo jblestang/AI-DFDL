@@ -10,6 +10,8 @@ members = [
     "crates/dfdl-fuzz",
     "crates/dfdl-benchmark",
     "crates/dfdl-vm",
+    "crates/dfdl-example",
+    "crates/dfdl-wireshark",
 ]
 
 [workspace.lints.rust]

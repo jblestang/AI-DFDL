@@ -1,0 +1,28 @@
+[package]
+name = "dfdl-example"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "DFDL examples and Eurocontrol ASTERIX parsing, validation, XML dump, and VM decoding"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", features = ["std"] }
+dfdl-schema = { path = "../dfdl-schema" }
+dfdl-xml = { path = "../dfdl-xml" }
+dfdl-vm = { path = "../dfdl-vm" }
+
+[[example]]
+name = "validate_pcap"
+path = "examples/validate_pcap.rs"
+
+[[example]]
+name = "dump_xml"
+path = "examples/dump_xml.rs"
+
+[[example]]
+name = "vm_decode"
+path = "examples/vm_decode.rs"
+
+[lints]
+workspace = true

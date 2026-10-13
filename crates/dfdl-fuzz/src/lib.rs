@@ -79,16 +79,31 @@ mod tests {
 
     #[test]
     fn test_fuzz_targets_smoke() {
+        // Non-UTF8 branch
+        fuzz_xml_parse(&[0xFF, 0xFE, 0xFD]);
+        fuzz_schema_compile(&[0xFF, 0xFE, 0xFD]);
+
+        // Valid and invalid XML
         fuzz_xml_parse(b"<invalid xml <<>>");
+        fuzz_xml_parse(b"<root><child attr='val'>hello</child></root>");
+
+        // Valid and invalid schema compile
         fuzz_schema_compile(b"<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'/>");
-
-        let schema_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        let valid_schema = r#"<?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.dfdl.org/7793">
-    <xs:element name="Val" type="xs:int" dfdl:representation="text" dfdl:length="2"/>
+    <dfdl:format byteOrder="bigEndian" alignment="1"/>
+    <xs:element name="Val" type="xs:unsignedShort" dfdl:representation="binary" dfdl:lengthKind="explicit" dfdl:length="2"/>
 </xs:schema>"#;
+        fuzz_schema_compile(valid_schema.as_bytes());
 
-        fuzz_bitstream_parse(schema_xml, b"42");
-        fuzz_bitstream_parse(schema_xml, b"garbage data!!!");
-        fuzz_parse_unparse_roundtrip(schema_xml, b"42");
+        // Invalid schema for bitstream parse / roundtrip
+        fuzz_bitstream_parse("<bad-schema/>", b"\x00\x2A");
+        fuzz_parse_unparse_roundtrip("<bad-schema/>", b"\x00\x2A");
+
+        // Valid schema with valid and invalid data
+        fuzz_bitstream_parse(valid_schema, b"\x00\x2A");
+        fuzz_bitstream_parse(valid_schema, b"\x00"); // EOF / short data
+        fuzz_parse_unparse_roundtrip(valid_schema, b"\x00\x2A"); // roundtrip success
+        fuzz_parse_unparse_roundtrip(valid_schema, b"\x00"); // parse failure branch
     }
 }

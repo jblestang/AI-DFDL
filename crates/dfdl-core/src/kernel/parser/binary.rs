@@ -597,25 +597,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 Ok(DfdlValue::HexBinary(bytes))
             }
             DfdlSimpleType::String => {
-                let enc_upper = props.encoding.to_ascii_uppercase();
-                if enc_upper.starts_with("X-DFDL-") {
-                    let char_bits = if enc_upper.contains("BITS") {
-                        1
-                    } else if enc_upper.contains("BASE4") {
-                        2
-                    } else if enc_upper.contains("OCTAL") || enc_upper.contains("3-BIT") {
-                        3
-                    } else if enc_upper.contains("HEX") {
-                        4
-                    } else if enc_upper.contains("6-BIT") {
-                        6
-                    } else {
-                        8
-                    };
+                if let Some(char_bits) = crate::encoding::encoding_char_bits(&props.encoding) {
                     let mut s = String::new();
                     if let Some(l) = dynamic_len {
                         let num_chars = match props.length_units {
-                            crate::schema::ir::LengthUnits::Bits => l / char_bits,
+                            crate::schema::ir::LengthUnits::Bits => {
+                                l.checked_div(char_bits).unwrap_or(0)
+                            }
                             _ => l,
                         };
                         for _ in 0..num_chars {

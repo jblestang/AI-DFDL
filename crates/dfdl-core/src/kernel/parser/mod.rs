@@ -1343,7 +1343,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 break;
                             }
                             Err(e) => {
-                                if e.kind == DFDLErrorKind::SchemaDefinition {
+                                if e.is_fatal() {
                                     return Err(e);
                                 }
                                 if self.pou_stack.get(top_pou_idx).map(|p| p.is_discriminated).unwrap_or(false) {

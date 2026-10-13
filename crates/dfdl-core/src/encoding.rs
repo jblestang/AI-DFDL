@@ -465,7 +465,7 @@ pub fn encoding_char_bits(encoding: &str) -> Option<usize> {
         Some(4)
     } else if enc_upper.contains("5-BIT") {
         Some(5)
-    } else if enc_upper.contains("6-BIT") {
+    } else if enc_upper.contains("ICAO") || enc_upper.contains("6-BIT") || enc_upper.contains("6BIT") {
         Some(6)
     } else if enc_upper.contains("7-BIT") || enc_upper.contains("ASCII-7-BIT-PACKED") {
         Some(7)
@@ -489,6 +489,7 @@ pub fn encoding_unit_bits(encoding: &str) -> usize {
         || upper.contains("BASE4")
         || upper.contains("OCTAL")
         || upper.contains("HEX")
+        || upper.contains("ICAO")
         || upper.contains("1-BIT")
         || upper.contains("2-BIT")
         || upper.contains("3-BIT")
@@ -525,6 +526,7 @@ pub fn encoding_mandatory_alignment_bits(encoding: &str) -> usize {
         || upper.contains("BASE4")
         || upper.contains("OCTAL")
         || upper.contains("HEX")
+        || upper.contains("ICAO")
     {
         1
     } else {
@@ -567,6 +569,14 @@ pub fn decode_sub_byte_char(code: u64, encoding: &str) -> char {
             0 => '\u{00A0}',
             1..=26 => (b'A'.saturating_add((code as u8).saturating_sub(1)) ) as char,
             _ => '\u{FFFD}',
+        }
+    } else if enc_upper.contains("ICAO") {
+        let c = (code as u8) & 0x3F;
+        match c {
+            1..=26 => (b'A'.saturating_add(c).saturating_sub(1)) as char,
+            48..=57 => c as char,
+            0 | 32 => ' ',
+            _ => ' ',
         }
     } else if enc_upper.contains("5-BIT") {
         PACKED_5BIT_CHARS
@@ -624,6 +634,13 @@ pub fn strict_sub_byte_code(ch: char, encoding: &str) -> Option<u64> {
         }
     } else if enc_upper.contains("DFI-1661-DUI-001") {
         if ch == '\u{00A0}' { Some(0) } else { alpha_index('A', 1) }
+    } else if enc_upper.contains("ICAO") {
+        match ch.to_ascii_uppercase() {
+            'A'..='Z' => Some((ch as u64).saturating_sub('A' as u64).saturating_add(1)),
+            '0'..='9' => Some(ch as u64),
+            ' ' => Some(32),
+            _ => None,
+        }
     } else if enc_upper.contains("5-BIT") {
         match ch.to_ascii_uppercase() {
             // Letters O and I have no code of their own; they alias the digits 0 and 1.
@@ -661,6 +678,8 @@ pub fn sub_byte_replacement_code(encoding: &str) -> u64 {
     let enc_upper = encoding.trim().to_ascii_uppercase();
     if enc_upper.contains("5-BIT") {
         29
+    } else if enc_upper.contains("ICAO") {
+        32
     } else if enc_upper.contains("6-BIT") {
         0x1F
     } else if enc_upper.contains("7-BIT") || enc_upper.contains("ASCII-7-BIT-PACKED") {
@@ -949,4 +968,43 @@ mod tests {
             None
         );
     }
+
+    #[test]
+    fn test_icao_6bit_roundtrip() {
+        let enc = "X-DFDL-ICAO-6BIT";
+        assert_eq!(encoding_char_bits(enc), Some(6));
+        assert_eq!(encoding_unit_bits(enc), 1);
+        assert_eq!(encoding_mandatory_alignment_bits(enc), 1);
+
+        // Code mappings: 1..=26 -> 'A'..='Z', 48..=57 -> '0'..='9', 32 / 0 -> ' '
+        assert_eq!(decode_sub_byte_char(1, enc), 'A');
+        assert_eq!(decode_sub_byte_char(26, enc), 'Z');
+        assert_eq!(decode_sub_byte_char(48, enc), '0');
+        assert_eq!(decode_sub_byte_char(57, enc), '9');
+        assert_eq!(decode_sub_byte_char(32, enc), ' ');
+        assert_eq!(decode_sub_byte_char(0, enc), ' ');
+
+        // Strict sub-byte code
+        assert_eq!(strict_sub_byte_code('A', enc), Some(1));
+        assert_eq!(strict_sub_byte_code('Z', enc), Some(26));
+        assert_eq!(strict_sub_byte_code('0', enc), Some(48));
+        assert_eq!(strict_sub_byte_code('9', enc), Some(57));
+        assert_eq!(strict_sub_byte_code(' ', enc), Some(32));
+        assert_eq!(strict_sub_byte_code('?', enc), None);
+
+        // Replacement code
+        assert_eq!(sub_byte_replacement_code(enc), 32);
+
+        // Test callsign encoding and decoding
+        let callsign = "DLH65A  ";
+        let mut codes = Vec::new();
+        for ch in callsign.chars() {
+            let (code, bits) = encode_sub_byte_char(ch, enc).unwrap();
+            assert_eq!(bits, 6);
+            codes.push(code);
+        }
+        let decoded: String = codes.iter().map(|&c| decode_sub_byte_char(c, enc)).collect();
+        assert_eq!(decoded, callsign);
+    }
 }
+

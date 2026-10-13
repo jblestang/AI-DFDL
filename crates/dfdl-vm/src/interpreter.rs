@@ -14,6 +14,7 @@ use alloc::vec::Vec;
 use dfdl_core::error::{DFDLError, DFDLErrorKind, DFDLResult};
 use dfdl_core::io::bitstream::BitReader;
 use dfdl_core::io::traits::{ByteSource, Checkpoint};
+use dfdl_core::limits::WorkBudget;
 use dfdl_core::util::try_push;
 
 use crate::arena::{VmEvent, VmEventSink};
@@ -108,14 +109,33 @@ impl VmInterpreter {
         reader: &mut BitReader<S>,
         sink: &mut K,
     ) -> DFDLResult<()> {
+        let mut budget = WorkBudget::new(self.max_steps);
+        self.execute_with_budget(program, reader, sink, &mut budget)
+    }
+
+    /// Executes a [`BytecodeProgram`] against the provided [`BitReader`] and emits events into [`VmEventSink`]
+    /// while consuming execution units from the provided [`WorkBudget`].
+    ///
+    /// # Errors
+    /// Returns [`DFDLError`] on fatal bitstream depletion, instruction failure without
+    /// an active choice checkpoint, or if `budget` is exhausted.
+    pub fn execute_with_budget<S: ByteSource, K: VmEventSink>(
+        &mut self,
+        program: &BytecodeProgram,
+        reader: &mut BitReader<S>,
+        sink: &mut K,
+        budget: &mut WorkBudget,
+    ) -> DFDLResult<()> {
         let mut ip: usize = 0;
-        let mut steps: usize = 0;
 
         macro_rules! try_read {
             ($read_expr:expr) => {
                 match $read_expr {
                     Ok(val) => val,
                     Err(err) => {
+                        if err.is_fatal() {
+                            return Err(err);
+                        }
                         if let Some(frame) = self.pou_stack.pop() {
                             reader.rollback(frame.bit_checkpoint)?;
                             sink.rollback(frame.sink_mark);
@@ -130,13 +150,7 @@ impl VmInterpreter {
         }
 
         while ip < program.instructions.len() {
-            steps = steps.saturating_add(1);
-            if steps > self.max_steps {
-                return Err(DFDLError::new(
-                    DFDLErrorKind::ImplementationLimit,
-                    "Virtual machine step limit exceeded (possible loop termination failure)",
-                ));
-            }
+            budget.consume(1)?;
 
             let Some(inst) = program.instructions.get(ip) else {
                 break;
@@ -483,6 +497,17 @@ impl VmInterpreter {
                     self.set_reg(*dest, val);
                     ip = ip.saturating_add(1);
                 }
+                Instruction::TestBit { dest, src, bit } => {
+                    // Extract single bit at 0-indexed position (bit 0 = LSB) safely within 64-bit bounds
+                    let val = self.get_reg(*src);
+                    let bit_val = if *bit < 64 {
+                        (val >> (*bit as u64)) & 1
+                    } else {
+                        0
+                    };
+                    self.set_reg(*dest, bit_val);
+                    ip = ip.saturating_add(1);
+                }
                 Instruction::PeekBitsU8 { dest, count } => {
                     let val = try_read!(reader.lookahead_bits(0, *count as usize)) as u64;
                     self.set_reg(*dest, val);
@@ -601,10 +626,33 @@ impl VmInterpreter {
                         DFDLError::new(DFDLErrorKind::Parse, "Invalid block fields slice range")
                     })?;
 
-                    for field in fields {
+                    let mut rolled_back = false;
+                    'block_loop: for field in fields {
+                        macro_rules! try_read_field {
+                            ($read_expr:expr) => {
+                                match $read_expr {
+                                    Ok(val) => val,
+                                    Err(err) => {
+                                        if err.is_fatal() {
+                                            return Err(err);
+                                        }
+                                        if let Some(frame) = self.pou_stack.pop() {
+                                            reader.rollback(frame.bit_checkpoint)?;
+                                            sink.rollback(frame.sink_mark);
+                                            ip = frame.rollback_ip as usize;
+                                            rolled_back = true;
+                                            break 'block_loop;
+                                        } else {
+                                            return Err(err);
+                                        }
+                                    }
+                                }
+                            };
+                        }
+
                         match field.kind {
                             BlockFieldKind::BeU16 { is_signed } => {
-                                let raw = try_read!(reader.read_bits(16));
+                                let raw = try_read_field!(reader.read_bits(16));
                                 let val = if is_signed {
                                     raw as i16 as i64
                                 } else {
@@ -618,7 +666,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::LeU16 { is_signed } => {
-                                let raw = try_read!(reader.read_bits(16));
+                                let raw = try_read_field!(reader.read_bits(16));
                                 let swapped = (raw as u16).swap_bytes();
                                 let val = if is_signed {
                                     swapped as i16 as i64
@@ -633,7 +681,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::BeU32 { is_signed } => {
-                                let raw = try_read!(reader.read_bits(32));
+                                let raw = try_read_field!(reader.read_bits(32));
                                 let val = if is_signed {
                                     raw as i32 as i64
                                 } else {
@@ -647,7 +695,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::LeU32 { is_signed } => {
-                                let raw = try_read!(reader.read_bits(32));
+                                let raw = try_read_field!(reader.read_bits(32));
                                 let swapped = (raw as u32).swap_bytes();
                                 let val = if is_signed {
                                     swapped as i32 as i64
@@ -662,7 +710,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::BeU64 { is_signed } => {
-                                let raw = try_read!(reader.read_bits(64));
+                                let raw = try_read_field!(reader.read_bits(64));
                                 let val = raw as i64;
                                 self.set_reg(Register::R0, raw);
                                 sink.on_event(VmEvent::ScalarInt {
@@ -672,7 +720,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::LeU64 { is_signed } => {
-                                let raw = try_read!(reader.read_bits(64));
+                                let raw = try_read_field!(reader.read_bits(64));
                                 let swapped = raw.swap_bytes();
                                 let val = swapped as i64;
                                 self.set_reg(Register::R0, swapped);
@@ -683,7 +731,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::BitsU8 { count, is_signed } => {
-                                let raw = try_read!(reader.read_bits(count as usize));
+                                let raw = try_read_field!(reader.read_bits(count as usize));
                                 let val = if is_signed {
                                     sign_extend(raw, count as usize)
                                 } else {
@@ -697,7 +745,7 @@ impl VmInterpreter {
                                 })?;
                             }
                             BlockFieldKind::Bool { count, true_val } => {
-                                let raw = try_read!(reader.read_bits(count as usize)) as u8;
+                                let raw = try_read_field!(reader.read_bits(count as usize)) as u8;
                                 let val = raw == true_val;
                                 self.set_reg(Register::R0, if val { 1 } else { 0 });
                                 sink.on_event(VmEvent::ScalarBool {
@@ -712,7 +760,7 @@ impl VmInterpreter {
                                 let target = stack_buf.get_mut(..target_len).ok_or_else(|| {
                                     DFDLError::new(DFDLErrorKind::Parse, "Invalid stack string range")
                                 })?;
-                                try_read!(reader.read_bytes(target));
+                                try_read_field!(reader.read_bytes(target));
                                 let non_nul_len = if trim_nul {
                                     target
                                         .iter()
@@ -732,7 +780,7 @@ impl VmInterpreter {
                             }
                             BlockFieldKind::BcdTime => {
                                 let mut raw = [0u8; 3];
-                                try_read!(reader.read_bytes(&mut raw));
+                                try_read_field!(reader.read_bytes(&mut raw));
                                 let b1 = *raw.first().unwrap_or(&0);
                                 let b2 = *raw.get(1).unwrap_or(&0);
                                 let b3 = *raw.get(2).unwrap_or(&0);
@@ -762,6 +810,9 @@ impl VmInterpreter {
                                 })?;
                             }
                         }
+                    }
+                    if rolled_back {
+                        continue;
                     }
                     ip = ip.saturating_add(1);
                 }

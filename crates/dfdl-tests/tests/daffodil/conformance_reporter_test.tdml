@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tdml:testSuite suiteName="ConformanceReporterSuite"
+  xmlns:tdml="http://daffodil.apache.org/tdml"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+
+  <tdml:defineSchema name="validSchema">
+    <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:format byteOrder="bigEndian" bitOrder="mostSignificantBitFirst" alignment="1" representation="text" encoding="UTF-8" lengthUnits="characters"/>
+      <xs:element name="elem" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"/>
+      <xs:element name="delimElem" type="xs:string" dfdl:initiator="[" dfdl:terminator="]" dfdl:lengthKind="delimited"/>
+      <xs:element name="numElem" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="2"/>
+      <xs:element name="dateElem" type="xs:date" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:calendarPattern="yyyy-MM-dd"/>
+      <xs:element name="calcElem" type="xs:string" dfdl:inputValueCalc="{fn:unsupportedFunction()}"/>
+      <xs:element name="choiceElem">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="c1" type="xs:int" dfdl:initiator="A" dfdl:lengthKind="explicit" dfdl:length="2"/>
+            <xs:element name="c2" type="xs:int" dfdl:initiator="B" dfdl:lengthKind="explicit" dfdl:length="2"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="arrElem" type="xs:int" minOccurs="3" maxOccurs="3" dfdl:occursCountKind="parsed" dfdl:lengthKind="explicit" dfdl:length="2"/>
+    </xs:schema>
+  </tdml:defineSchema>
+
+  <!-- 1. Passing Test Case -->
+  <tdml:parserTestCase name="tc_pass" root="elem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">PASS</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>PASS</elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 2. Schema compilation failure -->
+  <tdml:parserTestCase name="tc_bad_schema" root="missing" model="nonExistentSchema.dfdl.xsd">
+    <tdml:document><tdml:documentPart type="text">DATA</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <missing>DATA</missing>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 3. Parse unexpected error: Delimiter mismatch -->
+  <tdml:parserTestCase name="tc_delim_mismatch" root="delimElem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">{FAIL}</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <delimElem>FAIL</delimElem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 4. Parse unexpected error: EOF / Underflow -->
+  <tdml:parserTestCase name="tc_eof" root="elem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">AB</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>AB</elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 5. Expected error succeeded -->
+  <tdml:parserTestCase name="tc_expected_error_succeeded" root="elem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">OKAY</tdml:documentPart></tdml:document>
+    <tdml:errors>
+      <tdml:error>ShouldHaveFailed</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!-- 6. Infoset mismatch -->
+  <tdml:parserTestCase name="tc_infoset_mismatch" root="elem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">TRUE</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>FALSE</elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 7. Error message mismatch -->
+  <tdml:parserTestCase name="tc_error_msg_mismatch" root="numElem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">XX</tdml:documentPart></tdml:document>
+    <tdml:errors>
+      <tdml:error>ExpectedSpecificNonExistentErrorMessage</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+
+  <!-- 8. Unparse failure -->
+  <tdml:unparserTestCase name="tc_unparse_mismatch" root="elem" model="validSchema">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>UNP1</elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><tdml:documentPart type="text">DIFFERENT</tdml:documentPart></tdml:document>
+  </tdml:unparserTestCase>
+
+  <!-- 9. Expected unparse error succeeded -->
+  <tdml:unparserTestCase name="tc_expected_unparse_err_succeeded" root="elem" model="validSchema">
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>PASS</elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+    <tdml:document><tdml:documentPart type="text">PASS</tdml:documentPart></tdml:document>
+    <tdml:errors>
+      <tdml:error>ShouldFail</tdml:error>
+    </tdml:errors>
+  </tdml:unparserTestCase>
+
+  <!-- 10. Unsupported function / Expression -->
+  <tdml:parserTestCase name="tc_unsupported_fn" root="calcElem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">1234</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <calcElem>RES</calcElem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 11. Unsupported type or date error -->
+  <tdml:parserTestCase name="tc_unsupported_type" root="dateElem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">INVALIDDAT</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <dateElem>2020-01-01</dateElem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 12. Choice branch failure -->
+  <tdml:parserTestCase name="tc_choice_failed" root="choiceElem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">ZZ99</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <choiceElem><c1>99</c1></choiceElem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <!-- 13. Leftover data -->
+  <tdml:parserTestCase name="tc_leftover_data" root="elem" model="validSchema">
+    <tdml:document><tdml:documentPart type="text">PASSEXTRA</tdml:documentPart></tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset>
+        <elem>PASS</elem>
+      </tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

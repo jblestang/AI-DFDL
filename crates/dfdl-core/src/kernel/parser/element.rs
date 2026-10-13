@@ -792,7 +792,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         builder.rollback(builder_cp);
                         self.variable_map.rollback(vmap_cp);
                         self.validation_errors.truncate(val_err_cp);
-                        if count >= elem.min_occurs && e.kind != DFDLErrorKind::SchemaDefinition {
+                        if count >= elem.min_occurs && !e.is_fatal() {
                             break;
                         }
                         return Err(e);
@@ -1055,7 +1055,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     } else {
                         false
                     };
-                    if e.kind == DFDLErrorKind::SchemaDefinition {
+                    if e.is_fatal() {
                         return Err(e);
                     }
                     if is_discriminated {
@@ -1622,6 +1622,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         is_occurrence_pou: bool,
         parent_initiated_content: bool,
     ) -> DFDLResult<()> {
+        self.budget.consume(1)?;
         let is_hidden = term.properties.is_hidden;
 
         self.evaluate_pattern_asserts(term, Some(&elem.name.local_name), builder)?;
@@ -2458,7 +2459,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         };
                         match crate::expr::eval_expr(ast, &mut ctx) {
                             Ok(val) => val.effective_boolean_value(),
-                            Err(e) if e.kind == DFDLErrorKind::SchemaDefinition && !e.message.as_str().contains("does not exist") => {
+                            Err(e) if e.is_fatal() && !e.message.as_str().contains("does not exist") => {
                                 return Err(e);
                             }
                             Err(_) => false,
@@ -2868,16 +2869,27 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                     }
                     let active_doc = builder.active_doc();
+                    let (variable_map, schema, budget, reader) = (
+                        &self.variable_map,
+                        self.schema,
+                        &mut *self.budget,
+                        &mut *self.reader,
+                    );
+                    let reader_cell = core::cell::RefCell::new(reader);
+                    let la_fn = |offset: usize, num_bits: usize| -> DFDLResult<u128> {
+                        reader_cell.borrow_mut().lookahead_bits(offset, num_bits)
+                    };
                     let mut ctx = crate::expr::ExprContext::with_variable_map(
                         Some(&active_doc),
                         &current_path,
                         &[],
-                        Some(&self.variable_map),
-                        self.budget,
+                        Some(variable_map),
+                        budget,
                     )
                     .with_occurs_index(self.current_occurs_index)
-                    .with_schema(self.schema)
+                    .with_schema(schema)
                     .with_namespaces(&props.in_scope_namespaces)
+                    .with_lookahead(Some(&la_fn))
                     .with_enclosing_lengths(&self.enclosing_complex_elements);
                     let val = crate::expr::eval_expr(ast, &mut ctx)?;
                     let len = match val {

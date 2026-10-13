@@ -1,0 +1,24 @@
+[package]
+name = "dfdl-wireshark"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Wireshark plugin and PCAP dissector powered by DFDL schema loading with unit conversion and documentation"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", features = ["std"] }
+dfdl-schema = { path = "../dfdl-schema" }
+dfdl-xml = { path = "../dfdl-xml" }
+dfdl-vm = { path = "../dfdl-vm" }
+dfdl-example = { path = "../dfdl-example" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "dfdl-wireshark"
+path = "src/main.rs"
+
+[lints]
+workspace = true

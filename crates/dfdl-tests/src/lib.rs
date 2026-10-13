@@ -1739,9 +1739,7 @@ mod tests {
         );
     }
 
-    #[test]
-    #[ignore = "Full Apache Daffodil official TDML benchmark suite (4,337 test cases) - run explicitly with -- --ignored"]
-    fn test_apache_daffodil_official_tdml_suite() {
+    fn run_apache_daffodil_official_tdml_suite_impl(override_file_filter: Option<&str>) {
         use crate::tdml::{TdmlRunner, TdmlTestSuite};
         use std::fs;
         use std::path::Path;
@@ -1781,7 +1779,16 @@ mod tests {
         };
 
         let mut tdml_files = Vec::new();
-        collect_tdml_files(base_dir, &mut tdml_files);
+        if let Some(ff) = override_file_filter {
+            let specific = base_dir.join(ff);
+            if specific.exists() {
+                tdml_files.push(specific);
+            } else {
+                collect_tdml_files(base_dir, &mut tdml_files);
+            }
+        } else {
+            collect_tdml_files(base_dir, &mut tdml_files);
+        }
 
         let mut total_passed = 0usize;
         let mut total_failed = 0usize;
@@ -1835,7 +1842,7 @@ mod tests {
         let mut other_sample_tests: Vec<String> = Vec::new();
 
         let test_filter = std::env::var("TDML_FILTER").ok();
-        let file_filter = std::env::var("TDML_FILE_FILTER").ok();
+        let file_filter = override_file_filter.map(String::from).or_else(|| std::env::var("TDML_FILE_FILTER").ok());
         for path in &tdml_files {
             if let Some(ref ff) = file_filter {
                 if !path.to_string_lossy().contains(ff) {
@@ -2370,6 +2377,22 @@ mod tests {
             total_passed > 0,
             "Passed 0 test cases from Apache Daffodil section TDML files"
         );
+    }
+
+    #[test]
+    #[ignore = "Full Apache Daffodil official TDML benchmark suite (4,337 test cases) - run explicitly with -- --ignored"]
+    fn test_apache_daffodil_official_tdml_suite() {
+        run_apache_daffodil_official_tdml_suite_impl(None);
+    }
+
+    #[test]
+    fn test_apache_daffodil_official_tdml_suite_smoke() {
+        run_apache_daffodil_official_tdml_suite_impl(Some("section06/namespaces/multiFile.tdml"));
+    }
+
+    #[test]
+    fn test_apache_daffodil_official_tdml_suite_reporter_coverage() {
+        run_apache_daffodil_official_tdml_suite_impl(Some("conformance_reporter_test.tdml"));
     }
 
     #[test]

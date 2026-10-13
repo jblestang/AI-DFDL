@@ -1,0 +1,2056 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EUROCONTROL ASTERIX (All Purpose STructured Eurocontrol suRveillance Information EXchange)
+  DFDL Definition for Categories:
+    - Category 034: Transmission of Monoradar Service Messages (Ed 1.27)
+    - Category 048: Transmission of Monoradar Target Reports (Ed 1.21)
+    - Category 001: Transmission of Monoradar Data (Ed 1.2)
+    - Category 002: Transmission of Monoradar Service Messages (Ed 1.0)
+-->
+<xs:schema
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+    xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+    xmlns:fn="http://www.w3.org/2005/xpath-functions"
+    xmlns:ast="urn:eurocontrol:asterix">
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format
+          representation="binary"
+          byteOrder="bigEndian"
+          bitOrder="mostSignificantBitFirst"
+          binaryNumberRep="binary"
+          lengthUnits="bytes"
+          alignment="1"
+          alignmentUnits="bytes"
+          lengthKind="implicit"
+          leadingSkip="0"
+          trailingSkip="0"
+          initiator=""
+          terminator=""
+          separator=""
+          encoding="ISO-8859-1"
+          textBidi="no"
+          floating="no"
+          fillByte="%#r00;"
+          occursCountKind="implicit"
+      />
+    </xs:appinfo>
+  </xs:annotation>
+
+  <!-- ========================================================================= -->
+  <!-- Top-Level Root Elements                                                   -->
+  <!-- ========================================================================= -->
+
+  <!-- Top-level Network Packet / UDP Datagram containing one or more ASTERIX Data Blocks -->
+  <xs:element name="AsterixPacket" type="AsterixPacketType"/>
+  <xs:element name="AsterixDatagram" type="AsterixPacketType"/>
+
+  <xs:complexType name="AsterixPacketType">
+    <xs:sequence>
+      <xs:element ref="AsterixRecord" minOccurs="1" maxOccurs="unbounded" dfdl:occursCountKind="parsed"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Top-level polymorphic ASTERIX Record (Data Block) with O(1) Category dispatch -->
+  <xs:element name="AsterixRecord" dfdl:lengthKind="explicit" dfdl:length="{ dfdlx:lookAhead(8, 16) }" dfdl:lengthUnits="bytes">
+    <xs:complexType>
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(dfdlx:lookAhead(0, 8)) }">
+        <xs:element ref="Cat034Record" dfdl:choiceBranchKey="34"/>
+        <xs:element ref="Cat048Record" dfdl:choiceBranchKey="48"/>
+        <xs:element ref="Cat001Record" dfdl:choiceBranchKey="1"/>
+        <xs:element ref="Cat002Record" dfdl:choiceBranchKey="2"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Individual Category Root Elements -->
+  <xs:element name="Cat034Record" type="Cat034RecordType" dfdl:lengthKind="explicit" dfdl:length="{ dfdlx:lookAhead(8, 16) }" dfdl:lengthUnits="bytes"/>
+  <xs:element name="Cat048Record" type="Cat048RecordType" dfdl:lengthKind="explicit" dfdl:length="{ dfdlx:lookAhead(8, 16) }" dfdl:lengthUnits="bytes"/>
+  <xs:element name="Cat001Record" type="Cat001RecordType" dfdl:lengthKind="explicit" dfdl:length="{ dfdlx:lookAhead(8, 16) }" dfdl:lengthUnits="bytes"/>
+  <xs:element name="Cat002Record" type="Cat002RecordType" dfdl:lengthKind="explicit" dfdl:length="{ dfdlx:lookAhead(8, 16) }" dfdl:lengthUnits="bytes"/>
+
+  <!-- ========================================================================= -->
+  <!-- ASTERIX Numerical Simple Types with Quanta and Field Descriptions        -->
+  <!-- ========================================================================= -->
+
+  <!-- ASTERIX Data Category (1 octet: 0 to 255) -->
+  <xs:simpleType name="DataCategoryType">
+    <xs:annotation>
+      <xs:documentation>
+        ASTERIX Data Category.
+        Identifies the message category according to Eurocontrol ASTERIX standards:
+        - Cat 034: Transmission of Monoradar Service Messages (Ed 1.28)
+        - Cat 048: Transmission of Monoradar Target Reports (Ed 1.21)
+        - Cat 001: Transmission of Monoradar Data (Ed 1.2)
+        - Cat 002: Transmission of Monoradar Service Messages (Ed 1.0)
+        Quantum: 1 (category number). Unit: dimensionless. Range: 0 to 255.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>Data Category</ast:item>
+        <ast:description>ASTERIX Data Category number</ast:description>
+        <ast:unit>dimensionless</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ASTERIX Data Block Length (2 octets: 3 to 65535 bytes) -->
+  <xs:simpleType name="BlockLengthType">
+    <xs:annotation>
+      <xs:documentation>
+        ASTERIX Data Block Length.
+        Total length of the data block in octets, including the Category field (1 octet)
+        and the Length field itself (2 octets). Minimum valid length is 3 octets.
+        Quantum: 1 octet (byte). Unit: bytes. Range: 3 to 65535 bytes.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>Length Indicator</ast:item>
+        <ast:description>Total length of ASTERIX Data Block in bytes</ast:description>
+        <ast:unit>bytes</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1 byte</ast:lsb>
+        <ast:range min="3" max="65535"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="3"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Data Source Identifier: SAC / SIC (1 octet: 0 to 255) -->
+  <xs:simpleType name="DataSourceIdType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 010: Data Source Identifier (SAC / SIC).
+        - SAC (System Area Code): Identifies the nation/region or airspace division.
+        - SIC (System Identification Code): Identifies the radar sensor system within the SAC.
+        Quantum: 1. Unit: dimensionless code. Range: 0 to 255.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/010, I048/010, I001/010, I002/010</ast:item>
+        <ast:description>Data Source Identifier (SAC / SIC)</ast:description>
+        <ast:unit>code</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- System Area Code (SAC): 1 octet (0 to 255) -->
+  <xs:simpleType name="SacType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 010: System Area Code (SAC).
+        Identifies the nation, region, or airspace division.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/010-SAC, I048/010-SAC, I001/010-SAC</ast:item>
+        <ast:description>System Area Code (SAC)</ast:description>
+        <ast:unit>code</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- System Identification Code (SIC): 1 octet (0 to 255) -->
+  <xs:simpleType name="SicType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 010: System Identification Code (SIC).
+        Identifies the radar sensor station within the SAC.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/010-SIC, I048/010-SIC, I001/010-SIC</ast:item>
+        <ast:description>System Identification Code (SIC)</ast:description>
+        <ast:unit>code</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Field Specification (FSPEC) Primary Octet -->
+  <xs:simpleType name="Fspec1Type">
+    <xs:annotation>
+      <xs:documentation>FSPEC Octet 1: Primary field specification.</xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:description>Field Specification (FSPEC 1)</ast:description>
+        <ast:unit>bitfield</ast:unit>
+        <ast:resolution>1</ast:resolution>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte"/>
+  </xs:simpleType>
+
+  <!-- Field Specification (FSPEC) First Extension -->
+  <xs:simpleType name="Fspec2Type">
+    <xs:annotation>
+      <xs:documentation>FSPEC Octet 2: First extension field specification.</xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:description>Field Specification (FSPEC 2)</ast:description>
+        <ast:unit>bitfield</ast:unit>
+        <ast:resolution>1</ast:resolution>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte"/>
+  </xs:simpleType>
+
+  <!-- Field Specification (FSPEC) Second Extension -->
+  <xs:simpleType name="Fspec3Type">
+    <xs:annotation>
+      <xs:documentation>FSPEC Octet 3: Second extension field specification.</xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:description>Field Specification (FSPEC 3)</ast:description>
+        <ast:unit>bitfield</ast:unit>
+        <ast:resolution>1</ast:resolution>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte"/>
+  </xs:simpleType>
+
+  <!-- Target Identification / Callsign: 8 characters encoded in 6-bit ICAO -->
+  <xs:simpleType name="AircraftIdType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 240: Target Identification (Callsign).
+        8 characters representing the aircraft callsign.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/240</ast:item>
+        <ast:description>Target Identification (Callsign)</ast:description>
+        <ast:unit>string</ast:unit>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+
+  <!-- BDS Report Repetition Factor -->
+  <xs:simpleType name="BdsRepType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 250: BDS Report Repetition Factor.
+        Number of BDS reports following.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/250-REP</ast:item>
+        <ast:description>BDS Report Repetition Factor</ast:description>
+        <ast:unit>count</ast:unit>
+        <ast:resolution>1</ast:resolution>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte"/>
+  </xs:simpleType>
+
+  <!-- Message Type: Category 034 / 002 (1 to 255) -->
+  <xs:simpleType name="MessageTypeType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 000: Message Type.
+        Defines the service message type for Monoradar Service Messages:
+        - 1: North Marker Message
+        - 2: Sector Crossing Message
+        - 3: Geographical Filtering Message (Cat 034) / Station Status Message (Cat 002)
+        - 4: Jamming Strobe Message
+        - 5: Solar Storm Message
+        - 6: SSR Jamming Strobe Message
+        - 7: Mode S Jamming Strobe Message
+        - 8..255: Other service / reserved messages
+        Quantum: 1. Unit: message type ID. Range: 1 to 255.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/000, I002/000</ast:item>
+        <ast:description>Service Message Type</ast:description>
+        <ast:unit>type_id</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="1" max="255"/>
+        <ast:enum value="1" label="North Marker Message"/>
+        <ast:enum value="2" label="Sector Crossing Message"/>
+        <ast:enum value="3" label="Geographical Filtering Message"/>
+        <ast:enum value="4" label="Jamming Strobe Message"/>
+        <ast:enum value="5" label="Solar Storm Message"/>
+        <ast:enum value="6" label="SSR Jamming Strobe Message"/>
+        <ast:enum value="7" label="Mode S Jamming Strobe Message"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="1"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Time of Day (24-bit unsigned integer, LSB = 1/128 s: 0 to 16777215) -->
+  <xs:simpleType name="TimeOfDayType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 030 / 140: Time of Day.
+        Absolute time stamping expressed as UTC elapsed time since midnight.
+        Quantum (LSB): 1/128 s (~7.8125 milliseconds).
+        Unit: seconds.
+        Range: [0 s, 24 h) = [0, 86400 s) represented as integer [0, 11059200].
+        Maximum 24-bit integer: 16777215 (~36.4 hours).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/030, I048/140, I002/030</ast:item>
+        <ast:description>Time of Day (UTC since midnight)</ast:description>
+        <ast:unit>seconds</ast:unit>
+        <ast:resolution>1/128</ast:resolution>
+        <ast:lsb>0.0078125 s (1/128 s)</ast:lsb>
+        <ast:range min="0" max="86400"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedInt">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="16777215"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Truncated Time of Day (16-bit unsigned integer, LSB = 1/128 s: 0 to 65535) -->
+  <xs:simpleType name="TruncatedTimeOfDayType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 141: Truncated Time of Day.
+        Time of day truncated to the 16 least significant bits of the standard Time of Day.
+        Quantum (LSB): 1/128 s (~7.8125 milliseconds).
+        Unit: seconds.
+        Range: [0 s, 512 s) represented as [0, 65535] (wraps around every 512 seconds).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I001/141</ast:item>
+        <ast:description>Truncated Time of Day</ast:description>
+        <ast:unit>seconds</ast:unit>
+        <ast:resolution>1/128</ast:resolution>
+        <ast:lsb>0.0078125 s (1/128 s)</ast:lsb>
+        <ast:range min="0" max="511.9921875"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Sector Number (Azimuth = sector * 360 / 256 deg: 0 to 255) -->
+  <xs:simpleType name="SectorNumberType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 020: Sector Number.
+        Azimuth sector crossing indicator, dividing 360 degrees into 256 equal angular sectors.
+        Quantum (LSB): 360 / 256 degrees = 1.40625 degrees (~1° 24' 22.5").
+        Unit: degrees.
+        Range: 0 to 255 (= 0.0° to 358.59375° clockwise from True North).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/020, I002/020</ast:item>
+        <ast:description>Azimuth Sector Number</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/256</ast:resolution>
+        <ast:lsb>1.40625 deg</ast:lsb>
+        <ast:range min="0" max="358.59375"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Antenna Rotation Period (LSB = 1/128 s: 0 to 65535) -->
+  <xs:simpleType name="AntennaRotationPeriodType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 041: Antenna Rotation Period.
+        Measured duration of the previous full 360-degree antenna revolution.
+        Quantum (LSB): 1/128 s (~7.8125 milliseconds).
+        Unit: seconds.
+        Range: 0 to 511.9921875 seconds (0 to 65535 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/041, I002/041</ast:item>
+        <ast:description>Antenna Rotation Period</ast:description>
+        <ast:unit>seconds</ast:unit>
+        <ast:resolution>1/128</ast:resolution>
+        <ast:lsb>0.0078125 s (1/128 s)</ast:lsb>
+        <ast:range min="0" max="511.9921875"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- 3D Height (LSB = 6.25 m or 1 meter: -32768 to 32767 m) -->
+  <xs:simpleType name="DataSourceHeightType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 120 (Height Subfield): 3D Position of Data Source - Antenna Height.
+        Height of the radar antenna phase center relative to mean sea level in two's complement.
+        Quantum (LSB): 6.25 meters (Eurocontrol standard) or 1 meter.
+        Unit: meters.
+        Range: -32768 to 32767.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/120-HEIGHT</ast:item>
+        <ast:description>Antenna Height above Mean Sea Level</ast:description>
+        <ast:unit>meters</ast:unit>
+        <ast:resolution>6.25</ast:resolution>
+        <ast:lsb>6.25 m</ast:lsb>
+        <ast:range min="-204800" max="204793.75"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:short">
+      <xs:minInclusive value="-32768"/>
+      <xs:maxInclusive value="32767"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- 24-bit WGS-84 Coordinate (-8388608 to 8388607) -->
+  <xs:simpleType name="Wgs84CoordinateType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 120 (Latitude / Longitude Subfields): 3D Position of Data Source in WGS-84.
+        Geographic coordinates in two's complement 24-bit binary representation.
+        Quantum (LSB): 180 / 2^23 degrees (= 180 / 8388608 deg ~ 0.00002145767 degrees ~ 2.146 cm at equator).
+        Unit: degrees.
+        Range: [-90.0°, +90.0°] for Latitude; [-180.0°, +180.0°] for Longitude.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/120-LATLON</ast:item>
+        <ast:description>WGS-84 Geographic Latitude / Longitude</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>180/8388608</ast:resolution>
+        <ast:lsb>0.00002145767 deg</ast:lsb>
+        <ast:range min="-180.0" max="180.0"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:int">
+      <xs:minInclusive value="-8388608"/>
+      <xs:maxInclusive value="8388607"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Collimation Error (LSB = 360 / 2^16 deg: 0 to 65535) -->
+  <xs:simpleType name="CollimationErrorType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 090: Collimation Error.
+        Angular alignment error between the PSR axis and the SSR axis.
+        Quantum (LSB): 360 / 2^16 degrees (= 360 / 65536 deg ~ 0.005493164 degrees).
+        Unit: degrees.
+        Range: 0 to 359.9945 degrees.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/090</ast:item>
+        <ast:description>Collimation Error</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/65536</ast:resolution>
+        <ast:lsb>0.005493164 deg</ast:lsb>
+        <ast:range min="0" max="359.9945"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Message Count Values (LSB = 1 message: 0 to 65535) -->
+  <xs:simpleType name="MessageCountType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 070: Message Count Values.
+        Number of messages of the specified type transmitted during the reporting period.
+        Quantum (LSB): 1 message.
+        Unit: messages.
+        Range: 0 to 65535 messages.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I034/070</ast:item>
+        <ast:description>Message Count Values</ast:description>
+        <ast:unit>messages</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="65535"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Target Report Descriptor (Primary Subfield: 1 octet = 8 bits) -->
+  <xs:complexType name="TargetDescriptorType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 020: Target Report Descriptor (Primary Subfield).
+        Bitfield identifying target detection characteristics:
+        - Bits 8-6 (TYP): Target Report Type (0=No detection, 1=Single PSR, 2=Single SSR, 3=SSR+PSR,
+                          4=Single Mode S All-Call, 5=Single Mode S Roll-Call, 6=Mode S All-Call+PSR, 7=Mode S Roll-Call+PSR)
+        - Bit 5 (SIM): Simulated Target Report (0=Actual target, 1=Simulated target)
+        - Bit 4 (RDP): Report Source (0=Surveillance chain, 1=RDP)
+        - Bit 3 (SPI): Special Position Identification (0=Default, 1=SPI active)
+        - Bit 2 (RAB): Aircraft Address source (0=Target report, 1=Reply)
+        - Bit 1 (FX): Extension indicator (0=End of data item, 1=Extension follows)
+        Quantum: Bitfield (1 octet = 8 bits).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/020, I001/020</ast:item>
+        <ast:description>Target Report Descriptor</ast:description>
+        <ast:unit>bitfield</ast:unit>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:sequence dfdl:alignment="1" dfdl:alignmentUnits="bits">
+      <xs:element name="typ" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="3" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>TYP: Target Report Type (0=No detection, 1=Single PSR, 2=Single SSR, 3=SSR+PSR, 4=Single Mode S, 5=Mode S+PSR, 6=Mode S+SSR, 7=Mode S+SSR+PSR)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.TYP</ast:item>
+            <ast:description>Target Report Type</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="7"/>
+            <ast:enum value="0" label="No detection"/>
+            <ast:enum value="1" label="Single PSR"/>
+            <ast:enum value="2" label="Single SSR"/>
+            <ast:enum value="3" label="SSR + PSR"/>
+            <ast:enum value="4" label="Single Mode S"/>
+            <ast:enum value="5" label="Mode S + PSR"/>
+            <ast:enum value="6" label="Mode S + SSR"/>
+            <ast:enum value="7" label="Mode S + SSR + PSR"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="sim" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>SIM: Simulated Target Report (0=Actual, 1=Simulated)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.SIM</ast:item>
+            <ast:description>Simulated Target</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Actual"/>
+            <ast:enum value="1" label="Simulated"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="rdp" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>RDP: Provided by Surveillance Chain (0) vs RDP (1)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.RDP</ast:item>
+            <ast:description>Report from RDP</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Surveillance chain"/>
+            <ast:enum value="1" label="RDP"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="spi" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>SPI: Special Position Identification (0=Default, 1=SPI)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.SPI</ast:item>
+            <ast:description>Special Position Identification</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Default"/>
+            <ast:enum value="1" label="SPI present"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="rab" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>RAB: Report from Target Report (0) vs Reply (1)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.RAB</ast:item>
+            <ast:description>Report from Aircraft Address Reply</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Report"/>
+            <ast:enum value="1" label="Reply"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="fx" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>FX: Extension Indicator (0=End, 1=Extension follows)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.FX</ast:item>
+            <ast:description>Extension Bit</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="End of Field"/>
+            <ast:enum value="1" label="Extension follows"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Target Report Descriptor First Extension (1 octet = 8 bits) -->
+  <xs:complexType name="TargetDescriptorExtType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 020 First Extension: Extended Target Report Characteristics.
+        - Bit 8 (TST): Test Target (0=Real, 1=Test)
+        - Bit 7 (ERR): Extended Range Report (0=No error, 1=Error)
+        - Bit 6 (XPP): X-Pulse Present (0=No, 1=Yes)
+        - Bit 5 (ME): Military Emergency (0=No, 1=Yes)
+        - Bit 4 (MI): Military Identification (0=No, 1=Yes)
+        - Bits 3-2 (FOE_FRI): Friend / Foe (0=No Mode 4, 1=Friendly, 2=Unknown, 3=No reply)
+        - Bit 1 (FX): Extension Indicator (0=End, 1=Extension follows)
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/020-EXT</ast:item>
+        <ast:description>Target Report Descriptor Extension</ast:description>
+        <ast:unit>bitfield</ast:unit>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:sequence dfdl:alignment="1" dfdl:alignmentUnits="bits">
+      <xs:element name="tst" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>TST: Test Target Indicator (0=Real, 1=Test)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.TST</ast:item>
+            <ast:description>Test Target Indicator</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="err" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>ERR: Error Condition (0=No error, 1=Error)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.ERR</ast:item>
+            <ast:description>Error Condition</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="xpp" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>XPP: X-Pulse Present (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.XPP</ast:item>
+            <ast:description>X-Pulse Present</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="me" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>ME: Military Emergency (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.ME</ast:item>
+            <ast:description>Military Emergency</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="mi" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>MI: Military Identification (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.MI</ast:item>
+            <ast:description>Military Identification</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="foeFri" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="2" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>FOE_FRI: Friend / Foe Identification (0=No Mode 4, 1=Friendly, 2=Unknown, 3=No reply)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.FOE_FRI</ast:item>
+            <ast:description>Friend / Foe Identification</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="3"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="fx" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>FX: Extension Indicator (0=End, 1=Extension follows)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/020.FX</ast:item>
+            <ast:description>Extension Bit</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Track Number (12 to 16 bits: 0 to 65535) -->
+  <xs:simpleType name="TrackNumberType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 161: Track Number.
+        Unique tracking identifier assigned to a track by the radar data processor.
+        Standard Eurocontrol definition uses bits 12-1 (0 to 4095) with bits 16-13 reserved (0).
+        Quantum: 1. Unit: dimensionless integer. Range: 0 to 65535.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/161, I001/161</ast:item>
+        <ast:description>Radar Track Number</ast:description>
+        <ast:unit>track_id</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="65535"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Measured Distance Rho in Polar Coordinates (LSB = 1/256 NM: 0 to 65535) -->
+  <xs:simpleType name="PolarDistanceType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 040 / 100: Measured Distance (Rho) in Polar Coordinates.
+        Slant distance between the radar antenna and the target.
+        Quantum (LSB): 1/256 NM (= 0.00390625 NM ~ 7.2297 meters).
+        Unit: Nautical Miles (NM).
+        Range: 0 to 255.99609375 NM (0 to 65535 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/040-RHO, I034/100-RHO, I001/040-RHO</ast:item>
+        <ast:description>Measured Distance Rho in Polar Coordinates</ast:description>
+        <ast:unit>NM</ast:unit>
+        <ast:resolution>1/256</ast:resolution>
+        <ast:lsb>0.00390625 NM (~7.2297 m)</ast:lsb>
+        <ast:range min="0" max="255.99609375"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Measured Azimuth Theta in Polar Coordinates (LSB = 360 / 2^16 deg: 0 to 65535) -->
+  <xs:simpleType name="PolarAzimuthType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 040 / 100: Measured Azimuth (Theta) in Polar Coordinates.
+        Azimuth angle measured clockwise from True North to the target.
+        Quantum (LSB): 360 / 2^16 degrees (= 360 / 65536 deg ~ 0.005493164 degrees ~ 19.77 arcseconds).
+        Unit: degrees.
+        Range: 0 to 359.9945068 degrees (0 to 65535 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/040-THETA, I034/100-THETA, I001/040-THETA</ast:item>
+        <ast:description>Measured Azimuth Theta in Polar Coordinates</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/65536</ast:resolution>
+        <ast:lsb>0.005493164 deg</ast:lsb>
+        <ast:range min="0" max="359.9945068"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Cartesian Coordinate X or Y (LSB = 1/64 or 1/16 NM: -32768 to 32767) -->
+  <xs:simpleType name="CartesianCoordinateType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 042: Calculated Position in Cartesian Coordinates (X or Y).
+        Position coordinate relative to the radar sensor in signed two's complement.
+        Quantum (LSB): 1/64 NM (= 0.015625 NM ~ 28.918 meters) in Cat 048;
+                       1/16 NM (= 0.0625 NM ~ 115.67 meters) in Cat 001.
+        Unit: Nautical Miles (NM).
+        Range: -512.0 NM to +511.984375 NM (-32768 to 32767 LSB at 1/64 NM).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/042, I001/042</ast:item>
+        <ast:description>Calculated Position in Cartesian Coordinates (X / Y)</ast:description>
+        <ast:unit>NM</ast:unit>
+        <ast:resolution>1/64</ast:resolution>
+        <ast:lsb>0.015625 NM (~28.918 m)</ast:lsb>
+        <ast:range min="-512.0" max="511.984375"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:short">
+      <xs:minInclusive value="-32768"/>
+      <xs:maxInclusive value="32767"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Ground Speed (LSB = (2^-14) NM/s: 0 to 65535) -->
+  <xs:simpleType name="GroundSpeedType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 200 (Ground Speed Subfield): Calculated Track Velocity in Polar Coordinates.
+        Horizontal speed of the target calculated by the tracker.
+        Quantum (LSB): 2^-14 NM/s (= 1/16384 NM/s ~ 0.2197265625 knots ~ 0.113037 m/s).
+        Unit: NM/s (multiply raw value by 3600 / 16384 to obtain speed in knots).
+        Range: 0 to 3.99993896 NM/s (~0 to 14399.78 knots).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/200-SPEED, I001/200-SPEED</ast:item>
+        <ast:description>Calculated Track Ground Speed</ast:description>
+        <ast:unit>NM/s</ast:unit>
+        <ast:resolution>1/16384</ast:resolution>
+        <ast:lsb>0.00006103515625 NM/s (~0.2197 kt)</ast:lsb>
+        <ast:range min="0" max="3.99993896"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Track Heading (LSB = 360 / 2^16 deg: 0 to 65535) -->
+  <xs:simpleType name="HeadingType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 200 (Heading Subfield): Calculated Track Heading / Course in Polar Coordinates.
+        Calculated track heading angle measured clockwise from True North.
+        Quantum (LSB): 360 / 2^16 degrees (= 360 / 65536 deg ~ 0.005493164 degrees).
+        Unit: degrees.
+        Range: 0 to 359.9945068 degrees (0 to 65535 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/200-HEADING, I001/200-HEADING</ast:item>
+        <ast:description>Calculated Track Heading</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/65536</ast:resolution>
+        <ast:lsb>0.005493164 deg</ast:lsb>
+        <ast:range min="0" max="359.9945068"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Mode-3/A Code in Octal Representation (0 to 65535) -->
+  <xs:simpleType name="Mode3ACodeType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 070: Mode-3/A Code in Octal Representation.
+        Mode-3/A transponder squawk reply code with status bits:
+        - Bit 16 (V): 0=Code validated, 1=Code not validated
+        - Bit 15 (G): 0=Default, 1=Garbled code
+        - Bit 14 (L): 0=Mode-3/A code derived from reply, 1=Smoothed by tracker
+        - Bit 13: Reserved (set to 0)
+        - Bits 12-1: 4-digit octal reply code (A4..A1, B4..B1, C4..C1, D4..D1), range 0000 to 7777.
+        Quantum: 1 octal code. Unit: octal squawk code. Range: 0000 to 7777 (raw 0 to 65535).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/070, I001/070</ast:item>
+        <ast:description>Mode-3/A Code in Octal Representation</ast:description>
+        <ast:unit>octal</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="4095"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Flight Level (LSB = 1/4 FL: 0 to 65535) -->
+  <xs:simpleType name="FlightLevelType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 090: Flight Level in Binary Representation.
+        Pressure altitude measured by aircraft barometric altimeter transponder:
+        - Bit 16 (V): 0=Code validated, 1=Code not validated
+        - Bit 15 (G): 0=Default, 1=Garbled code
+        - Bits 14-1: Flight Level encoded in signed two's complement.
+        Quantum (LSB): 1/4 FL (= 25 feet ~ 7.62 meters).
+        Unit: FL (Flight Level; 1 FL = 100 feet).
+        Range: -12 FL (-300 ft) to +1270 FL (+127000 ft). Raw range: 0 to 65535.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/090, I001/090</ast:item>
+        <ast:description>Flight Level in Binary Representation</ast:description>
+        <ast:unit>FL</ast:unit>
+        <ast:resolution>1/4</ast:resolution>
+        <ast:lsb>0.25 FL (25 ft ~ 7.62 m)</ast:lsb>
+        <ast:range min="-12.0" max="1270.0"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Height Measured by 3D Radar (16-bit unsigned, LSB = 25 ft = 1/4 FL) -->
+  <xs:simpleType name="Height3dType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 110: Height Measured by a 3D Radar.
+        Altitude/height of target above mean sea level measured directly by a 3D primary radar.
+        Quantum (LSB): 25 feet (= 1/4 FL ~ 7.62 meters).
+        Unit: feet.
+        Range: 0 to 819100 feet (0 to 2047.75 FL, 0 to 32764 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/110</ast:item>
+        <ast:description>Height Measured by 3D Radar</ast:description>
+        <ast:unit>feet</ast:unit>
+        <ast:resolution>25</ast:resolution>
+        <ast:lsb>25 ft (1/4 FL)</ast:lsb>
+        <ast:range min="0" max="819100"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- 24-bit ICAO Aircraft Address (0 to 16777215) -->
+  <xs:simpleType name="AircraftAddressType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 220: Aircraft Address.
+        Unique 24-bit ICAO technical aircraft address assigned to aircraft transponder.
+        Quantum: 1. Unit: 24-bit hexadecimal code. Range: 0x000000 to 0xFFFFFF (0 to 16777215).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/220</ast:item>
+        <ast:description>24-bit ICAO Aircraft Address</ast:description>
+        <ast:unit>hex</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="16777215"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedInt">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="16777215"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Mode S Comm B Data (56 bits: 7 octets) -->
+  <xs:simpleType name="BdsDataType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 250 (BDS Data Subfield): Mode S Comm B Message Data.
+        56-bit MB data payload extracted from Mode S Comm-B replies (e.g. BDS 4,0, 5,0, 6,0).
+        Quantum: 56 bits (7 octets). Unit: binary hex payload.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/250-DATA</ast:item>
+        <ast:description>Mode S Comm B MB Data (56 bits)</ast:description>
+        <ast:unit>bytes</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1 bit</ast:lsb>
+        <ast:range min="0" max="7"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:hexBinary"/>
+  </xs:simpleType>
+
+  <!-- Mode S Comm B Report (7 octets MB data + 1 octet BDS register) -->
+  <xs:complexType name="BdsReportType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 250: Mode S Comm B Report.
+        Consists of 7 octets (56 bits) of Comm-B MB data followed by 1 octet BDS register code.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/250</ast:item>
+        <ast:description>BDS Register Report</ast:description>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="bdsData" type="BdsDataType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes" dfdl:length="7"/>
+      <xs:element name="bdsReg" type="BdsRegisterType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Mode S BDS Register (0 to 255) -->
+  <xs:simpleType name="BdsRegisterType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 250 (BDS Register Subfield): Comm B Data Buffer Identifier.
+        Bits 8-5 identify BDS 1, bits 4-1 identify BDS 2:
+        - 0x40: BDS 4,0 (Selected Vertical Intent)
+        - 0x50: BDS 5,0 (Track and Turn Report)
+        - 0x60: BDS 6,0 (Heading and Speed Report)
+        Quantum: 1. Unit: hexadecimal register identifier. Range: 0x00 to 0xFF (0 to 255).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/250-BDS</ast:item>
+        <ast:description>BDS Register Identifier (BDS 1 and BDS 2)</ast:description>
+        <ast:unit>hex</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Track Status (Primary Subfield: 1 octet = 8 bits) -->
+  <xs:complexType name="TrackStatusType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 170: Track Status (Primary Subfield).
+        Bitfield indicating status and validity of radar track:
+        - Bit 8 (CNF): 0=Confirmed track, 1=Tentative track
+        - Bits 7-6 (RAD): 00=Combined, 01=PSR only, 10=SSR/Mode S only, 11=Invalid
+        - Bit 5 (DOU): 0=Normal confidence, 1=Low confidence in plot-to-track correlation
+        - Bit 4 (MAH): 0=No horizontal manoeuvre detected, 1=Horizontal manoeuvre detected
+        - Bits 3-2 (CDM): 00=Maintaining, 01=Climbing, 10=Descending, 11=Unknown
+        - Bit 1 (FX): Extension bit (0=End, 1=Extension follows)
+        Quantum: Bitfield (1 octet).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/170</ast:item>
+        <ast:description>Track Status</ast:description>
+        <ast:unit>bitfield</ast:unit>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:sequence dfdl:alignment="1" dfdl:alignmentUnits="bits">
+      <xs:element name="cnf" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>CNF: Confirmed vs Tentative Track (0=Confirmed, 1=Tentative)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.CNF</ast:item>
+            <ast:description>Confirmed / Tentative Track</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Confirmed"/>
+            <ast:enum value="1" label="Tentative"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="rad" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="2" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>RAD: Type of Sensor(s) Maintaining Track (0=Combined, 1=PSR, 2=SSR/Mode S, 3=Invalid)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.RAD</ast:item>
+            <ast:description>Maintaining Sensor Type</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="3"/>
+            <ast:enum value="0" label="Combined"/>
+            <ast:enum value="1" label="PSR"/>
+            <ast:enum value="2" label="SSR / Mode S"/>
+            <ast:enum value="3" label="Invalid"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="dou" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>DOU: Low Confidence in Plot-to-Track Correlation (0=Normal, 1=Low)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.DOU</ast:item>
+            <ast:description>Doubtful Correlation</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Normal"/>
+            <ast:enum value="1" label="Low"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="mah" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>MAH: Horizontal Manoeuvre Detection (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.MAH</ast:item>
+            <ast:description>Manoeuvre Detection</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="No"/>
+            <ast:enum value="1" label="Yes"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="cdm" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="2" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>CDM: Climb / Descent Mode (0=Maintaining, 1=Climbing, 2=Descending, 3=Unknown)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.CDM</ast:item>
+            <ast:description>Climb / Descent Mode</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="3"/>
+            <ast:enum value="0" label="Maintaining"/>
+            <ast:enum value="1" label="Climbing"/>
+            <ast:enum value="2" label="Descending"/>
+            <ast:enum value="3" label="Unknown"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="fx" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>FX: Extension Indicator (0=End, 1=Extension follows)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.FX</ast:item>
+            <ast:description>Extension Bit</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="End of Field"/>
+            <ast:enum value="1" label="Extension follows"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Track Status First Extension (1 octet = 8 bits) -->
+  <xs:complexType name="TrackStatusExtType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 170 First Extension: Extended Track Status.
+        - Bit 8 (TRE): End of Track Lifetime (0=Track alive, 1=Track terminated)
+        - Bit 7 (GHO): Ghost Track (0=True target, 1=Ghost track)
+        - Bit 6 (SUP): Track Maintenance Suppression (0=No, 1=Yes)
+        - Bit 5 (TCC): Type of Coordinate Conversion (0=Radar plane, 1=Sensor to local)
+        - Bits 4-2 (spare): Spare bits, set to 0
+        - Bit 1 (FX): Extension Indicator (0=End, 1=Extension follows)
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/170-EXT</ast:item>
+        <ast:description>Track Status First Extension</ast:description>
+        <ast:unit>bitfield</ast:unit>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:sequence dfdl:alignment="1" dfdl:alignmentUnits="bits">
+      <xs:element name="tre" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>TRE: End of Track Lifetime (0=Track alive, 1=Track terminated)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.TRE</ast:item>
+            <ast:description>Track Termination Indicator</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Track alive"/>
+            <ast:enum value="1" label="Track terminated"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="gho" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>GHO: Ghost Track Indicator (0=True target, 1=Ghost track)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.GHO</ast:item>
+            <ast:description>Ghost Track Indicator</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="True target"/>
+            <ast:enum value="1" label="Ghost track"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="sup" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>SUP: Track-to-Track Correlation Suppression (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.SUP</ast:item>
+            <ast:description>Correlation Suppression</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="No"/>
+            <ast:enum value="1" label="Yes"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="tcc" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>TCC: Coordinate Conversion Mode (0=Radar plane, 1=Sensor to local)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.TCC</ast:item>
+            <ast:description>Coordinate Conversion Mode</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="Radar plane"/>
+            <ast:enum value="1" label="Sensor to local"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="spare" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="3" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>Spare bits (set to 0)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.SPARE</ast:item>
+            <ast:description>Spare bits</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="7"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="fx" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>FX: Extension Indicator (0=End, 1=Extension follows)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/170.FX</ast:item>
+            <ast:description>Extension Bit</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="End of Field"/>
+            <ast:enum value="1" label="Extension follows"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Communications / ACAS Capability (2 octets = 16 bits) -->
+  <xs:complexType name="CommCapabilityType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 230: Communications / ACAS Capability and Flight Status.
+        2-octet field encoding transponder capability and flight status:
+        - Bits 16-14 (COM): Communications capability (0=No comm, 1=Comm A/B, 2=Up ELM, 3=Up/Down ELM, 4=Level 5)
+        - Bits 13-11 (STAT): Flight status (0=Airborne no alert/SPI, 1=Ground no alert/SPI, 2=Airborne alert, 3=Ground alert, 4=Alert+SPI, 5=SPI only)
+        - Bit 10 (SI): SI/II capability (0=SI code capable, 1=II code capable)
+        - Bit 9 (spare): Reserved (0)
+        - Bit 8 (MSSC): Mode S Specific Service Capability (0=No, 1=Yes)
+        - Bit 7 (ARC): Altitude Reporting Capability (0=100 ft, 1=25 ft)
+        - Bit 6 (AIC): Aircraft Identification Capability (0=No, 1=Yes)
+        - Bit 5 (B1A): BDS 0,5 bit 16 status
+        - Bits 4-1 (B1B): BDS 0,5 bits 37-40
+        Quantum: Bitfield (2 octets = 16 bits).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/230</ast:item>
+        <ast:description>Communications / ACAS Capability and Flight Status</ast:description>
+        <ast:unit>bitfield</ast:unit>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:sequence dfdl:alignment="1" dfdl:alignmentUnits="bits">
+      <xs:element name="com" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="3" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>COM: Communications Capability (0=No comm, 1=Comm A/B, 2=Up ELM, 3=Up/Down ELM, 4=Level 5)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.COM</ast:item>
+            <ast:description>Communications Capability</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="7"/>
+            <ast:enum value="0" label="No comm"/>
+            <ast:enum value="1" label="Comm A/B (16 BDS)"/>
+            <ast:enum value="2" label="Comm A/B + Uplink ELM"/>
+            <ast:enum value="3" label="Comm A/B + Up/Down ELM"/>
+            <ast:enum value="4" label="Level 5 transponder"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="stat" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="3" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>STAT: Flight Status (0=Airborne, 1=Ground, 2=Alert/Airborne, 3=Alert/Ground, 4=Alert+SPI, 5=SPI)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.STAT</ast:item>
+            <ast:description>Flight Status</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="7"/>
+            <ast:enum value="0" label="No alert / Airborne"/>
+            <ast:enum value="1" label="No alert / Ground"/>
+            <ast:enum value="2" label="Alert / Airborne"/>
+            <ast:enum value="3" label="Alert / Ground"/>
+            <ast:enum value="4" label="Alert + SPI"/>
+            <ast:enum value="5" label="SPI"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="si" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>SI: SI Code Capability (0=SI code capable, 1=II code capable)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.SI</ast:item>
+            <ast:description>SI / II Capability</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="SI-Code capable"/>
+            <ast:enum value="1" label="II-Code capable"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="spare" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>Spare bit (set to 0)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.SPARE</ast:item>
+            <ast:description>Spare bit</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="mssc" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>MSSC: Mode S Specific Service Capability (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.MSSC</ast:item>
+            <ast:description>Mode S Specific Service Capability</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="No"/>
+            <ast:enum value="1" label="Yes"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="arc" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>ARC: Altitude Reporting Capability (0=100 ft, 1=25 ft)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.ARC</ast:item>
+            <ast:description>Altitude Reporting Capability</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="100 ft resolution"/>
+            <ast:enum value="1" label="25 ft resolution"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="aic" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>AIC: Aircraft Identification Capability (0=No, 1=Yes)</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.AIC</ast:item>
+            <ast:description>Aircraft Identification Capability</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="No"/>
+            <ast:enum value="1" label="Yes"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="b1a" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="1" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>B1A: BDS 0,5 bit 16 status</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.B1A</ast:item>
+            <ast:description>BDS 0,5 bit 16 status</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="1"/>
+            <ast:enum value="0" label="BDS 0,5 bit 16 = 0"/>
+            <ast:enum value="1" label="BDS 0,5 bit 16 = 1"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="b1b" type="xs:unsignedByte" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="4" dfdl:alignment="1" dfdl:alignmentUnits="bits">
+        <xs:annotation>
+          <xs:documentation>B1B: BDS 0,5 bits 37-40</xs:documentation>
+          <xs:appinfo source="urn:eurocontrol:asterix">
+            <ast:item>I048/230.B1B</ast:item>
+            <ast:description>BDS 0,5 bits 37-40</ast:description>
+            <ast:unit>code</ast:unit>
+            <ast:resolution>1</ast:resolution>
+            <ast:range min="0" max="15"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Radar Plot Characteristics (0 to 4294967295) -->
+  <xs:simpleType name="PlotCharacteristicsType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130: Radar Plot Characteristics.
+        Compound data item containing SSR/PSR plot runlength, amplitude, and range/azimuth differences.
+        Quantum: Compound. Unit: compound structure.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130</ast:item>
+        <ast:description>Radar Plot Characteristics</ast:description>
+        <ast:unit>compound</ast:unit>
+        <ast:resolution>compound</ast:resolution>
+        <ast:lsb>compound</ast:lsb>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedInt">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="4294967295"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- SSR Plot Runlength (1 octet, LSB = 360 / 2^13 deg = 0.043945 deg) -->
+  <xs:simpleType name="SrlType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 1: SSR Plot Runlength (SRL).
+        Angular width of the SSR plot.
+        Quantum (LSB): 360 / 2^13 degrees (= 360 / 8192 deg ~ 0.0439453125 degrees).
+        Unit: degrees.
+        Range: 0 to 11.2060547 degrees (0 to 255 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-SRL</ast:item>
+        <ast:description>SSR Plot Runlength</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/8192</ast:resolution>
+        <ast:lsb>0.0439453125 deg</ast:lsb>
+        <ast:range min="0" max="11.2060547"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Number of Received SSR Replies (1 octet, LSB = 1 reply) -->
+  <xs:simpleType name="SrrType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 2: Number of Received SSR Replies (SRR).
+        Total number of valid SSR replies received for this target plot.
+        Quantum (LSB): 1 reply.
+        Unit: replies.
+        Range: 0 to 255 replies.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-SRR</ast:item>
+        <ast:description>Number of Received SSR Replies</ast:description>
+        <ast:unit>replies</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- SSR Reply Amplitude (1 octet, LSB = 1 dBm) -->
+  <xs:simpleType name="SamType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 3: SSR Reply Amplitude (SAM).
+        Average received signal strength of SSR replies referenced to receiver detection threshold.
+        Quantum (LSB): 1 dBm.
+        Unit: dBm.
+        Range: 0 to 255 dBm.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-SAM</ast:item>
+        <ast:description>SSR Reply Amplitude</ast:description>
+        <ast:unit>dBm</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1 dBm</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Primary Plot Runlength (1 octet, LSB = 360 / 2^13 deg = 0.043945 deg) -->
+  <xs:simpleType name="PrlType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 4: Primary Plot Runlength (PRL).
+        Angular width of the primary radar (PSR) plot.
+        Quantum (LSB): 360 / 2^13 degrees (= 360 / 8192 deg ~ 0.0439453125 degrees).
+        Unit: degrees.
+        Range: 0 to 11.2060547 degrees (0 to 255 LSB).
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-PRL</ast:item>
+        <ast:description>Primary Plot Runlength</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/8192</ast:resolution>
+        <ast:lsb>0.0439453125 deg</ast:lsb>
+        <ast:range min="0" max="11.2060547"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Primary Plot Amplitude (1 octet, LSB = 1 dBm) -->
+  <xs:simpleType name="PamType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 5: Primary Plot Amplitude (PAM).
+        Received signal strength of the primary radar (PSR) target plot.
+        Quantum (LSB): 1 dBm.
+        Unit: dBm.
+        Range: 0 to 255 dBm.
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-PAM</ast:item>
+        <ast:description>Primary Plot Amplitude</ast:description>
+        <ast:unit>dBm</ast:unit>
+        <ast:resolution>1</ast:resolution>
+        <ast:lsb>1 dBm</ast:lsb>
+        <ast:range min="0" max="255"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Difference in Range PSR - SSR (1 octet, LSB = 1/256 NM) -->
+  <xs:simpleType name="RpdType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 6: Difference in Range between PSR and SSR plots (RPD = PSR - SSR).
+        Quantum (LSB): 1/256 NM (~7.2297 meters). Encoded as two's complement.
+        Unit: Nautical Miles (NM).
+        Range: [-128/256 NM, +127/256 NM] = [-0.5 NM, +0.49609375 NM].
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-RPD</ast:item>
+        <ast:description>Range Difference (PSR - SSR)</ast:description>
+        <ast:unit>NM</ast:unit>
+        <ast:resolution>1/256</ast:resolution>
+        <ast:lsb>0.00390625 NM (~7.2297 m)</ast:lsb>
+        <ast:range min="-0.5" max="0.49609375"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Difference in Azimuth PSR - SSR (1 octet, LSB = 360 / 2^14 deg) -->
+  <xs:simpleType name="ApdType">
+    <xs:annotation>
+      <xs:documentation>
+        Item 130 Subfield 7: Difference in Azimuth between PSR and SSR plots (APD = PSR - SSR).
+        Quantum (LSB): 360 / 2^14 degrees (= 360 / 16384 deg ~ 0.02197265625 degrees). Encoded as two's complement.
+        Unit: degrees.
+        Range: [-128 * (360/16384)°, +127 * (360/16384)°] = [-2.8125°, +2.79052734375°].
+      </xs:documentation>
+      <xs:appinfo source="urn:eurocontrol:asterix">
+        <ast:item>I048/130-APD</ast:item>
+        <ast:description>Azimuth Difference (PSR - SSR)</ast:description>
+        <ast:unit>degrees</ast:unit>
+        <ast:resolution>360/16384</ast:resolution>
+        <ast:lsb>0.02197265625 deg</ast:lsb>
+        <ast:range min="-2.8125" max="2.79052734375"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ========================================================================= -->
+  <!-- Category 034: Monoradar Service Messages                                  -->
+  <!-- ========================================================================= -->
+  <xs:complexType name="Cat034RecordType">
+    <xs:sequence>
+      <xs:element name="category" type="DataCategoryType"/>
+      <xs:element name="length" type="BlockLengthType"/>
+      <!-- Choice among standard Category 034 message profiles (Eurocontrol ASTERIX Cat 034 Ed. 1.28) -->
+      <xs:choice dfdl:choiceDispatchKey="{ if (((dfdlx:lookAhead(0, 8) idiv 64) mod 2) eq 1) then (if ((dfdlx:lookAhead(0, 8) mod 2) eq 1) then xs:string(dfdlx:lookAhead(32, 8)) else xs:string(dfdlx:lookAhead(24, 8))) else 'unknown' }">
+        <!-- Message Type 1: North Marker Message -->
+        <xs:element name="northMarker" type="Cat034NorthMarkerType" dfdl:choiceBranchKey="1"/>
+        <!-- Message Type 2: Sector Crossing Message -->
+        <xs:element name="sectorCrossing" type="Cat034SectorCrossingType" dfdl:choiceBranchKey="2"/>
+        <!-- Message Type 3: Geographical Filtering Message -->
+        <xs:element name="geographicalFiltering" type="Cat034GeographicalFilteringType" dfdl:choiceBranchKey="3"/>
+        <!-- Message Type 4: Jamming Strobe Message -->
+        <xs:element name="jammingStrobe" type="Cat034JammingStrobeType" dfdl:choiceBranchKey="4"/>
+        <!-- Message Type 5: Solar Storm Message -->
+        <xs:element name="solarStorm" type="Cat034SolarStormType" dfdl:choiceBranchKey="5"/>
+        <!-- Message Type 6: SSR Jamming Strobe Message -->
+        <xs:element name="ssrJammingStrobe" type="Cat034SsrJammingStrobeType" dfdl:choiceBranchKey="6"/>
+        <!-- Message Type 7: Mode S Jamming Strobe Message -->
+        <xs:element name="modeSJammingStrobe" type="Cat034ModeSJammingStrobeType" dfdl:choiceBranchKey="7"/>
+        <!-- Message Types 8..255: Other / Reserved Service Messages -->
+        <xs:element name="otherService" type="Cat034OtherServiceType" dfdlx:choiceBranchKeyRanges="8 255"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- Category 034 Standard User Application Profile (UAP) Field Sequence        -->
+  <!-- ========================================================================= -->
+  <xs:group name="Cat034UapGroup">
+    <xs:sequence>
+      <!-- FSPEC (Field Specification) octets: FX (bit 0) indicates extension -->
+      <xs:element name="fspec1" type="Fspec1Type"/>
+      <xs:element name="fspec2" type="Fspec2Type" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ ../fspec1 mod 2 }"/>
+      <xs:element name="fspec3" type="Fspec3Type" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ if (fn:exists(../fspec2)) then (../fspec2 mod 2) else 0 }"/>
+
+      <!-- FRN 1 / Item 010: Data Source Identifier (bit 7 of fspec1 = 128) -->
+      <xs:element name="sac" type="SacType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 128) mod 2 }"/>
+      <xs:element name="sic" type="SicType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 128) mod 2 }"/>
+
+      <!-- FRN 2 / Item 000: Message Type (bit 6 of fspec1 = 64) -->
+      <xs:element name="messageType" type="MessageTypeType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 64) mod 2 }"/>
+
+      <!-- FRN 3 / Item 030: Time of Day (bit 5 of fspec1 = 32, 24 bits, LSB = 1/128 s) -->
+      <xs:element name="timeOfDay" type="TimeOfDayType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"
+                  minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 32) mod 2 }"/>
+
+      <!-- FRN 4 / Item 020: Sector Number (bit 4 of fspec1 = 16) -->
+      <xs:element name="sectorNumber" type="SectorNumberType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 16) mod 2 }"/>
+
+      <!-- FRN 5 / Item 041: Antenna Rotation Period (bit 3 of fspec1 = 8, LSB = 1/128 s) -->
+      <xs:element name="antennaRotationPeriod" type="AntennaRotationPeriodType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 8) mod 2 }"/>
+
+      <!-- FRN 6 / Item 050: System Configuration and Status (bit 2 of fspec1 = 4) -->
+      <xs:element name="statusFspec" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 4) mod 2 }"/>
+      <xs:element name="statusCom" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../statusFspec)) then ((../statusFspec idiv 128) mod 2) else 0 }"/>
+      <xs:element name="statusPsr" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../statusFspec)) then ((../statusFspec idiv 16) mod 2) else 0 }"/>
+      <xs:element name="statusSsr" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../statusFspec)) then ((../statusFspec idiv 8) mod 2) else 0 }"/>
+      <xs:element name="statusMds" type="xs:unsignedShort" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../statusFspec)) then ((../statusFspec idiv 4) mod 2) else 0 }"/>
+
+      <!-- FRN 7 / Item 060: System Processing Mode (bit 1 of fspec1 = 2) -->
+      <xs:element name="modeFspec" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 2) mod 2 }"/>
+      <xs:element name="modeCom" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../modeFspec)) then ((../modeFspec idiv 128) mod 2) else 0 }"/>
+      <xs:element name="modePsr" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../modeFspec)) then ((../modeFspec idiv 16) mod 2) else 0 }"/>
+      <xs:element name="modeSsr" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../modeFspec)) then ((../modeFspec idiv 8) mod 2) else 0 }"/>
+      <xs:element name="modeMds" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../modeFspec)) then ((../modeFspec idiv 4) mod 2) else 0 }"/>
+
+      <!-- FRN 8 / Item 070: Message Count Values (bit 7 of fspec2 = 128) -->
+      <xs:element name="messageCount" type="MessageCountType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 128) mod 2) else 0 }"/>
+
+      <!-- FRN 9 / Item 100: Generic Polar Window (bit 6 of fspec2 = 64) -->
+      <xs:element name="rhoStart" type="PolarDistanceType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 64) mod 2) else 0 }"/>
+      <xs:element name="rhoEnd" type="PolarDistanceType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 64) mod 2) else 0 }"/>
+      <xs:element name="thetaStart" type="PolarAzimuthType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 64) mod 2) else 0 }"/>
+      <xs:element name="thetaEnd" type="PolarAzimuthType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 64) mod 2) else 0 }"/>
+
+      <!-- FRN 10 / Item 110: Data Filter (bit 5 of fspec2 = 32) -->
+      <xs:element name="dataFilter" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 32) mod 2) else 0 }"/>
+
+      <!-- FRN 11 / Item 120: 3D Position of Data Source (bit 4 of fspec2 = 16) -->
+      <xs:element name="height" type="DataSourceHeightType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 16) mod 2) else 0 }"/>
+      <xs:element name="latitude" type="Wgs84CoordinateType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"
+                  minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 16) mod 2) else 0 }"/>
+      <xs:element name="longitude" type="Wgs84CoordinateType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"
+                  minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 16) mod 2) else 0 }"/>
+
+      <!-- FRN 12 / Item 090: Collimation Error (bit 3 of fspec2 = 8) -->
+      <xs:element name="collimationError" type="CollimationErrorType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 8) mod 2) else 0 }"/>
+    </xs:sequence>
+  </xs:group>
+
+  <!-- Cat 034: Sector Crossing Message (Message Type 2) -->
+  <xs:complexType name="Cat034SectorCrossingType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: Geographical Filtering Message (Message Type 3) -->
+  <xs:complexType name="Cat034GeographicalFilteringType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: Jamming Strobe Message (Message Type 4) -->
+  <xs:complexType name="Cat034JammingStrobeType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: Solar Storm Message (Message Type 5) -->
+  <xs:complexType name="Cat034SolarStormType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: SSR Jamming Strobe Message (Message Type 6) -->
+  <xs:complexType name="Cat034SsrJammingStrobeType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: Mode S Jamming Strobe Message (Message Type 7) -->
+  <xs:complexType name="Cat034ModeSJammingStrobeType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: Other / Reserved Service Message (Message Types 8..255) -->
+  <xs:complexType name="Cat034OtherServiceType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 034: North Marker Message (Message Type 1) -->
+  <xs:complexType name="Cat034NorthMarkerType">
+    <xs:sequence>
+      <xs:group ref="Cat034UapGroup"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- Category 048: Monoradar Target Reports                                    -->
+  <!-- ========================================================================= -->
+  <!-- ========================================================================= -->
+  <!-- Category 048: Monoradar Target Reports                                    -->
+  <!-- ========================================================================= -->
+  <xs:complexType name="Cat048RecordType">
+    <xs:sequence>
+      <xs:element name="category" type="DataCategoryType"/>
+      <xs:element name="length" type="BlockLengthType"/>
+      <!-- Repeating plot/track target reports within this Category 048 Data Block -->
+      <xs:element name="record" type="Cat048RecordItemType" minOccurs="1" maxOccurs="unbounded" dfdl:occursCountKind="parsed"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Cat048RecordItemType">
+    <xs:sequence>
+      <!-- FSPEC (Field Specification) octets: FX (bit 0) indicates extension -->
+      <xs:element name="fspec1" type="Fspec1Type"/>
+      <xs:element name="fspec2" type="Fspec2Type" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ ../fspec1 mod 2 }"/>
+      <xs:element name="fspec3" type="Fspec3Type" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ if (fn:exists(../fspec2)) then (../fspec2 mod 2) else 0 }"/>
+      <xs:element name="fspec4" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ if (fn:exists(../fspec3)) then (../fspec3 mod 2) else 0 }"/>
+
+      <!-- Item 010: Data Source Identifier (bit 7 of fspec1 = 128) -->
+      <xs:element name="sac" type="SacType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 128) mod 2 }"/>
+      <xs:element name="sic" type="SicType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 128) mod 2 }"/>
+
+      <!-- Item 140: Time of Day (bit 6 of fspec1 = 64) -->
+      <xs:element name="timeOfDay" type="TimeOfDayType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"
+                  minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 64) mod 2 }"/>
+
+      <!-- Item 020: Target Report Descriptor (bit 5 of fspec1 = 32, Extensible) -->
+      <xs:element name="targetDescriptor" type="TargetDescriptorType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 32) mod 2 }"/>
+      <xs:element name="targetDescriptorExt" type="TargetDescriptorExtType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../targetDescriptor)) then ../targetDescriptor/fx else 0 }"/>
+
+      <!-- Item 040: Measured Position in Polar Coordinates (bit 4 of fspec1 = 16) -->
+      <xs:element name="rho" type="PolarDistanceType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 16) mod 2 }"/>
+      <xs:element name="theta" type="PolarAzimuthType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 16) mod 2 }"/>
+
+      <!-- Item 070: Mode-3/A Code in Octal (bit 3 of fspec1 = 8) -->
+      <xs:element name="mode3a" type="Mode3ACodeType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 8) mod 2 }"/>
+
+      <!-- Item 090: Flight Level (bit 2 of fspec1 = 4) -->
+      <xs:element name="flightLevel" type="FlightLevelType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 4) mod 2 }"/>
+
+      <!-- Item 130: Radar Plot Characteristics (bit 1 of fspec1 = 2, Compound Data Item) -->
+      <xs:element name="plotCharFspec" type="xs:unsignedByte" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression" dfdl:occursCount="{ (../fspec1 idiv 2) mod 2 }"/>
+      <xs:element name="srl" type="SrlType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 128) mod 2) else 0 }"/>
+      <xs:element name="srr" type="SrrType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 64) mod 2) else 0 }"/>
+      <xs:element name="sam" type="SamType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 32) mod 2) else 0 }"/>
+      <xs:element name="prl" type="PrlType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 16) mod 2) else 0 }"/>
+      <xs:element name="pam" type="PamType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 8) mod 2) else 0 }"/>
+      <xs:element name="rpd" type="RpdType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 4) mod 2) else 0 }"/>
+      <xs:element name="apd" type="ApdType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../plotCharFspec)) then ((../plotCharFspec idiv 2) mod 2) else 0 }"/>
+
+      <!-- Item 220: Aircraft Address (bit 7 of fspec2 = 128) -->
+      <xs:element name="aircraftAddress" type="AircraftAddressType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"
+                  minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 128) mod 2) else 0 }"/>
+
+      <!-- Item 240: Aircraft Identification (bit 6 of fspec2 = 64) -->
+      <xs:element name="aircraftId" type="AircraftIdType" dfdl:lengthKind="explicit" dfdl:length="8" dfdl:lengthUnits="characters"
+                  dfdl:encoding="X-DFDL-ICAO-6BIT"
+                  minOccurs="0" maxOccurs="1" dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 64) mod 2) else 0 }"/>
+
+      <!-- Item 250: Mode S Comm B Data (bit 5 of fspec2 = 32, Repetitive Data Item) -->
+      <xs:element name="bdsRep" type="BdsRepType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 32) mod 2) else 0 }"/>
+      <xs:element name="bdsReport" type="BdsReportType" minOccurs="0" maxOccurs="16"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../bdsRep)) then ../bdsRep else 0 }"/>
+
+      <!-- Item 161: Track Number (bit 4 of fspec2 = 16) -->
+      <xs:element name="trackNumber" type="TrackNumberType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 16) mod 2) else 0 }"/>
+
+      <!-- Item 042: Calculated Position in Cartesian Coordinates (bit 3 of fspec2 = 8) -->
+      <xs:element name="cartesianX" type="CartesianCoordinateType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 8) mod 2) else 0 }"/>
+      <xs:element name="cartesianY" type="CartesianCoordinateType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 8) mod 2) else 0 }"/>
+
+      <!-- Item 200: Calculated Track Velocity in Polar Coordinates (bit 2 of fspec2 = 4) -->
+      <xs:element name="groundSpeed" type="GroundSpeedType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 4) mod 2) else 0 }"/>
+      <xs:element name="heading" type="HeadingType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 4) mod 2) else 0 }"/>
+
+      <!-- Item 170: Track Status (bit 1 of fspec2 = 2, Extensible) -->
+      <xs:element name="trackStatus" type="TrackStatusType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 2) mod 2) else 0 }"/>
+      <xs:element name="trackStatusExt" type="TrackStatusExtType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../trackStatus)) then ../trackStatus/fx else 0 }"/>
+
+      <!-- Item 110: Height Measured by 3D Radar (bit 4 of fspec3 = 8) -->
+      <xs:element name="height3d" type="Height3dType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec3)) then ((../fspec3 idiv 8) mod 2) else 0 }"/>
+
+      <!-- Item 230: Communications / ACAS Capability (bit 2 of fspec3 = 2) -->
+      <xs:element name="commCapability" type="CommCapabilityType" minOccurs="0" maxOccurs="1"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ if (fn:exists(../fspec3)) then ((../fspec3 idiv 2) mod 2) else 0 }"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- Category 001: Monoradar Data (Plots and Tracks)                           -->
+  <!-- In Eurocontrol ASTERIX Part 2a, a Category 001 Data Block consists of      -->
+  <!-- Category (1 octet), Length (2 octets), and one or more plot/track records. -->
+  <!-- ========================================================================= -->
+  <xs:complexType name="Cat001RecordType">
+    <xs:sequence>
+      <xs:element name="category" type="DataCategoryType"/>
+      <xs:element name="length" type="BlockLengthType"/>
+      <!-- Repeating plot/track records within this Category 001 Data Block -->
+      <xs:element name="record" type="Cat001RecordItemType" minOccurs="1" maxOccurs="unbounded" dfdl:occursCountKind="parsed"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Cat001RecordItemType">
+    <xs:sequence>
+      <!-- FSPEC (2 octets) -->
+      <xs:element name="fspec1" type="Fspec1Type"/>
+      <xs:element name="fspec2" type="Fspec2Type"/>
+      <!-- Item 010: Data Source Identifier -->
+      <xs:element name="sac" type="SacType"/>
+      <xs:element name="sic" type="SicType"/>
+      <!-- Item 020: Target Report Descriptor -->
+      <xs:element name="targetDescriptor" type="TargetDescriptorType"/>
+      <!-- Item 161: Track Number -->
+      <xs:element name="trackNumber" type="TrackNumberType"/>
+      <!-- Item 040: Measured Position in Polar Coordinates -->
+      <xs:element name="rho" type="PolarDistanceType"/>
+      <xs:element name="theta" type="PolarAzimuthType"/>
+      <!-- Item 042: Calculated Position in Cartesian Coordinates -->
+      <xs:element name="cartesianX" type="CartesianCoordinateType"/>
+      <xs:element name="cartesianY" type="CartesianCoordinateType"/>
+      <!-- Item 200: Calculated Track Velocity in Polar Coordinates -->
+      <xs:element name="groundSpeed" type="GroundSpeedType"/>
+      <xs:element name="heading" type="HeadingType"/>
+      <!-- Item 070: Mode-3/A Code in Octal Representation -->
+      <xs:element name="mode3a" type="Mode3ACodeType"/>
+      <!-- Item 090: Flight Level in Binary Representation -->
+      <xs:element name="flightLevel" type="FlightLevelType"/>
+      <!-- Item 141: Truncated Time of Day (LSB = 1/128 s) -->
+      <xs:element name="truncatedTimeOfDay" type="TruncatedTimeOfDayType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- Category 002: Monoradar Service Messages                                  -->
+  <!-- ========================================================================= -->
+  <xs:complexType name="Cat002RecordType">
+    <xs:sequence>
+      <xs:element name="category" type="DataCategoryType"/>
+      <xs:element name="length" type="BlockLengthType"/>
+      <!-- FSPEC (2 octets) -->
+      <xs:element name="fspec1" type="Fspec1Type"/>
+      <xs:element name="fspec2" type="Fspec2Type"/>
+      <!-- Item 010: Data Source Identifier -->
+      <xs:element name="sac" type="SacType"/>
+      <xs:element name="sic" type="SicType"/>
+      <!-- Item 000: Message Type -->
+      <xs:element name="messageType" type="MessageTypeType"/>
+      <!-- Fields mandatory or optional according to messageType -->
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(messageType) }">
+        <!-- Message Type 1: North Marker Message -->
+        <xs:element name="northMarker" type="Cat002NorthMarkerType" dfdl:choiceBranchKey="1"/>
+        <!-- Message Type 2: Sector Crossing Message -->
+        <xs:element name="sectorCrossing" type="Cat002SectorCrossingType" dfdl:choiceBranchKey="2"/>
+        <!-- Message Type 3: Station Status Message -->
+        <xs:element name="stationStatus" type="Cat002StatusType" dfdl:choiceBranchKey="3"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 002 North Marker: Sector Number is NOT present, Antenna Rotation Period IS present -->
+  <xs:complexType name="Cat002NorthMarkerType">
+    <xs:sequence>
+      <!-- Item 030: Time of Day (24-bit, LSB = 1/128 s) -->
+      <xs:element name="timeOfDay" type="TimeOfDayType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"/>
+      <!-- Item 041: Antenna Rotation Period (LSB = 1/128 s) - Mandatory for North Marker -->
+      <xs:element name="antennaRotationPeriod" type="AntennaRotationPeriodType"/>
+      <!-- Item 050 & 060: Station Configuration Status & Processing Mode (Optional) -->
+      <xs:element name="stationConfig" type="xs:unsignedByte" minOccurs="0" maxOccurs="1" dfdl:occursCountKind="parsed"/>
+      <xs:element name="stationProcessingMode" type="xs:unsignedByte" minOccurs="0" maxOccurs="1" dfdl:occursCountKind="parsed"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 002 Sector Crossing: Sector Number IS present and mandatory, Antenna Rotation Period is NOT present -->
+  <xs:complexType name="Cat002SectorCrossingType">
+    <xs:sequence>
+      <!-- Item 020: Sector Number - Mandatory for Sector Crossing -->
+      <xs:element name="sectorNumber" type="SectorNumberType"/>
+      <!-- Item 030: Time of Day (24-bit, LSB = 1/128 s) -->
+      <xs:element name="timeOfDay" type="TimeOfDayType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Cat 002 Station Status Message -->
+  <xs:complexType name="Cat002StatusType">
+    <xs:sequence>
+      <!-- Item 030: Time of Day -->
+      <xs:element name="timeOfDay" type="TimeOfDayType" dfdl:lengthKind="explicit" dfdl:lengthUnits="bits" dfdl:length="24"/>
+      <!-- Item 050: Station Configuration Status (Mandatory) -->
+      <xs:element name="stationConfig" type="xs:unsignedByte"/>
+      <!-- Item 060: Station Processing Mode (Mandatory) -->
+      <xs:element name="stationProcessingMode" type="xs:unsignedByte"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

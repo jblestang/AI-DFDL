@@ -2447,6 +2447,856 @@ fn test_schema_compiler_extended_coverage() {
     assert!(compiled.is_ok());
 }
 
+#[test]
+fn test_simple_type_facet_validations_deep() {
+    let mut props = PropertyStore::new();
 
+    // Pattern restriction only allowed on types derived from string (with InvalidRestrictionPolicy::Error)
+    props.set_property("pattern", "[0-9]+").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &props, "e1", InvalidRestrictionPolicy::Error).is_err());
 
+    // minLength on non-string/hexBinary
+    let mut p2 = PropertyStore::new();
+    p2.set_property("minLength", "2").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p2, "e2", InvalidRestrictionPolicy::Validate).is_err());
 
+    // maxLength on non-string/hexBinary
+    let mut p3 = PropertyStore::new();
+    p3.set_property("maxLength", "5").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p3, "e3", InvalidRestrictionPolicy::Validate).is_err());
+
+    // fractionDigits on non-decimal
+    let mut p4 = PropertyStore::new();
+    p4.set_property("fractionDigits", "2").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p4, "e4", InvalidRestrictionPolicy::Validate).is_err());
+
+    // totalDigits on non-decimal/integer
+    let mut p5 = PropertyStore::new();
+    p5.set_property("totalDigits", "5").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::String, &p5, "e5", InvalidRestrictionPolicy::Validate).is_err());
+
+    // totalDigits == 0
+    let mut p6 = PropertyStore::new();
+    p6.set_property("totalDigits", "0").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p6, "e6", InvalidRestrictionPolicy::Validate).is_err());
+
+    // totalDigits non-numeric
+    let mut p7 = PropertyStore::new();
+    p7.set_property("totalDigits", "abc").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p7, "e7", InvalidRestrictionPolicy::Validate).is_err());
+
+    // fractionDigits > totalDigits
+    let mut p8 = PropertyStore::new();
+    p8.set_property("totalDigits", "3").unwrap();
+    p8.set_property("fractionDigits", "5").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Decimal, &p8, "e8", InvalidRestrictionPolicy::Validate).is_err());
+
+    // minLength > maxLength
+    let mut p9 = PropertyStore::new();
+    p9.set_property("minLength", "10").unwrap();
+    p9.set_property("maxLength", "5").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::String, &p9, "e9", InvalidRestrictionPolicy::Validate).is_err());
+
+    // minInclusive and minExclusive cannot both be specified
+    let mut p10 = PropertyStore::new();
+    p10.set_property("minInclusive", "10").unwrap();
+    p10.set_property("minExclusive", "5").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p10, "e10", InvalidRestrictionPolicy::Validate).is_err());
+
+    // maxInclusive and maxExclusive cannot both be specified
+    let mut p11 = PropertyStore::new();
+    p11.set_property("maxInclusive", "50").unwrap();
+    p11.set_property("maxExclusive", "60").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p11, "e11", InvalidRestrictionPolicy::Validate).is_err());
+
+    // Range facet cannot be NaN
+    let mut p12 = PropertyStore::new();
+    p12.set_property("minInclusive", "NaN").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p12, "e12", InvalidRestrictionPolicy::Validate).is_err());
+
+    let mut p13 = PropertyStore::new();
+    p13.set_property("maxExclusive", "nan").unwrap();
+    assert!(validate_simple_type_facets(DfdlSimpleType::Int, &p13, "e13", InvalidRestrictionPolicy::Validate).is_err());
+
+    // Range checks for Byte, Short, Int, Long, UnsignedByte, UnsignedShort, UnsignedInt, UnsignedLong
+    for (st, bad_val) in [
+        (DfdlSimpleType::Byte, "999"),
+        (DfdlSimpleType::Short, "99999"),
+        (DfdlSimpleType::Int, "99999999999"),
+        (DfdlSimpleType::UnsignedByte, "-5"),
+        (DfdlSimpleType::UnsignedShort, "-10"),
+        (DfdlSimpleType::UnsignedInt, "-20"),
+    ] {
+        let mut p = PropertyStore::new();
+        p.set_property("minInclusive", bad_val).unwrap();
+        assert!(validate_simple_type_facets(st, &p, "overflow", InvalidRestrictionPolicy::Validate).is_err());
+    }
+}
+
+#[test]
+fn test_rep_type_and_rep_value_ranges_comprehensive() {
+    // Odd number of tokens in repValueRanges
+    let xsd_odd = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r">
+        <xs:simpleType dfdlx:repType="xs:int">
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValueRanges="1 5 10"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_odd).is_err());
+
+    // Low > high in repValueRanges
+    let xsd_low_high = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r">
+        <xs:simpleType dfdlx:repType="xs:int">
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValueRanges="10 5"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_low_high).is_err());
+
+    // Non-integer in repValueRanges
+    let xsd_non_int = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r">
+        <xs:simpleType dfdlx:repType="xs:int">
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValueRanges="abc 10"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_non_int).is_err());
+
+    // Overlapping repValueRanges with repValues
+    let xsd_overlap1 = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r">
+        <xs:simpleType dfdlx:repType="xs:int">
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValueRanges="1 10"/>
+            <xs:enumeration value="B" dfdlx:repValues="5"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_overlap1).is_err());
+
+    // Overlapping repValues with repValues
+    let xsd_overlap2 = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r">
+        <xs:simpleType dfdlx:repType="xs:int">
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValues="42"/>
+            <xs:enumeration value="B" dfdlx:repValues="42"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_overlap2).is_err());
+
+    // Overlapping repValueRanges with repValueRanges
+    let xsd_overlap3 = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r">
+        <xs:simpleType dfdlx:repType="xs:int">
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValueRanges="10 20"/>
+            <xs:enumeration value="B" dfdlx:repValueRanges="15 25"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_overlap3).is_err());
+
+    // repType without restriction base
+    let xsd_no_base = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r" type="xs:string" dfdlx:repType="xs:int"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_no_base).is_err());
+
+    // outputValueCalc and repType on same element
+    let xsd_ovc_rep = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+      <xs:element name="r" dfdl:outputValueCalc="{ 'test' }" dfdlx:repType="xs:int">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="A" dfdlx:repValues="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_ovc_rep).is_err());
+}
+
+#[test]
+fn test_duplicate_named_components_and_schema_doc_errors() {
+    // Duplicate top-level element
+    let xsd_dup_elem = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="dup" type="xs:int"/>
+      <xs:element name="dup" type="xs:string"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_dup_elem).is_err());
+
+    // Duplicate named group
+    let xsd_dup_group = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:group name="G">
+        <xs:sequence><xs:element name="a" type="xs:int"/></xs:sequence>
+      </xs:group>
+      <xs:group name="G">
+        <xs:sequence><xs:element name="b" type="xs:int"/></xs:sequence>
+      </xs:group>
+      <xs:element name="root"><xs:complexType><xs:sequence><xs:group ref="G"/></xs:sequence></xs:complexType></xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_dup_group).is_err());
+
+    // Duplicate named complexType
+    let xsd_dup_ct = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:complexType name="CT"><xs:sequence><xs:element name="a" type="xs:int"/></xs:sequence></xs:complexType>
+      <xs:complexType name="CT"><xs:sequence><xs:element name="b" type="xs:int"/></xs:sequence></xs:complexType>
+      <xs:element name="root" type="CT"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_dup_ct).is_err());
+
+    // Duplicate named simpleType
+    let xsd_dup_st = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="ST"><xs:restriction base="xs:int"/></xs:simpleType>
+      <xs:simpleType name="ST"><xs:restriction base="xs:string"/></xs:simpleType>
+      <xs:element name="root" type="ST"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_dup_st).is_err());
+
+    // Unknown base type for xs:restriction in simpleType
+    let xsd_bad_base = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="ST"><xs:restriction base="xs:nonExistentType"/></xs:simpleType>
+      <xs:element name="root" type="ST"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_bad_base).is_err());
+
+    // Base type with whitespace in xs:restriction
+    let xsd_ws_base = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="ST"><xs:restriction base=" xs:int "/></xs:simpleType>
+      <xs:element name="root" type="ST"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_ws_base).is_err());
+
+    // ComplexType with sequence containing hiddenGroupRef
+    let xsd_ct_hgr = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:group name="HG"><xs:sequence><xs:element name="h" type="xs:int"/></xs:sequence></xs:group>
+      <xs:complexType name="BadCT">
+        <xs:sequence dfdl:hiddenGroupRef="HG"/>
+      </xs:complexType>
+      <xs:element name="root" type="BadCT"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_ct_hgr).is_err());
+
+    // Group definition with sequence containing hiddenGroupRef
+    let xsd_grp_hgr = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:group name="G1"><xs:sequence><xs:element name="x" type="xs:int"/></xs:sequence></xs:group>
+      <xs:group name="G2"><xs:sequence dfdl:hiddenGroupRef="G1"/></xs:group>
+      <xs:element name="root"><xs:complexType><xs:sequence><xs:group ref="G2"/></xs:sequence></xs:complexType></xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_grp_hgr).is_err());
+
+    // Empty hiddenGroupRef
+    let xsd_empty_hgr = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence dfdl:hiddenGroupRef="   ">
+            <xs:element name="x" type="xs:int"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(xsd_empty_hgr).is_err());
+}
+
+#[test]
+fn test_import_and_include_edge_cases() {
+    let schema_parent = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/ns1">
+      <xs:import namespace="http://example.com/wrong_ns" schemaLocation="child.xsd"/>
+      <xs:element name="root" type="xs:int"/>
+    </xs:schema>"#;
+
+    let child_schema = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/ns2">
+      <xs:element name="child" type="xs:string"/>
+    </xs:schema>"#;
+
+    let mut resolver = |loc: &str| -> Option<String> {
+        if loc == "child.xsd" {
+            Some(String::from(child_schema))
+        } else {
+            None
+        }
+    };
+
+    // Import element specifies namespace http://example.com/wrong_ns but imported schema has http://example.com/ns2 -> SDE
+    assert!(SchemaCompiler::new().compile_str_with_resolver(schema_parent, &mut resolver).is_err());
+}
+
+#[test]
+fn test_lower_prefix_length_and_nillable_and_patterns() {
+    // Assert with testKind="pattern" and empty testPattern -> SDE
+    let schema_empty_pattern_assert = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5">
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:assert testKind="pattern" testPattern=""/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_empty_pattern_assert).is_err());
+
+    // Assert with failureType="recoverableError"
+    let schema_recoverable_assert = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5">
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:assert testKind="expression" test="{ 1 eq 1 }" failureType="recoverableError"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_recoverable_assert).is_ok());
+
+    // Nillable element with nilValue
+    let schema_nil = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:string" nillable="true" dfdl:nilKind="literalValue" dfdl:nilValue="%ES;" dfdl:lengthKind="explicit" dfdl:length="0"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_nil).is_ok());
+
+    // LengthKind pattern on binary representation -> SDE
+    let schema_pattern_binary = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:string" dfdl:representation="binary" dfdl:lengthKind="pattern" dfdl:lengthPattern="[0-9]+"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_pattern_binary).is_err());
+
+    // PrefixLengthType lowering
+    let schema_prefix = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:simpleType name="LenType">
+        <xs:restriction base="xs:unsignedByte"/>
+      </xs:simpleType>
+      <xs:element name="root" type="xs:string" dfdl:lengthKind="prefixed" dfdl:prefixLengthType="LenType" dfdl:prefixIncludesPrefixLength="no"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_prefix).is_ok());
+}
+
+#[test]
+fn test_enumeration_subsets_and_polymorphic_groups() {
+    // Local enumeration subset error
+    let schema_enum_subset = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="BaseEnum">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="A"/>
+          <xs:enumeration value="B"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType name="DerivedEnum">
+        <xs:restriction base="BaseEnum">
+          <xs:enumeration value="A"/>
+          <xs:enumeration value="C"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="root" type="DerivedEnum"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_enum_subset).is_err());
+
+    // Discriminator with testKind="pattern"
+    let schema_discrim_pattern = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="elem" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3">
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:discriminator testKind="pattern" testPattern="[A-Z]{3}"/>
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_discrim_pattern).is_ok());
+}
+
+#[test]
+fn test_schema_doc_define_format_and_properties() {
+    // Test defineFormat with child format, property elements (attribute & inner text), and ref
+    let schema_df = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:defineFormat name="baseFmt">
+        <dfdl:format byteOrder="bigEndian" representation="text" lengthUnits="bytes"/>
+      </dfdl:defineFormat>
+      <dfdl:defineFormat name="childFmt">
+        <dfdl:format ref="baseFmt">
+          <dfdl:property name="encoding" value="UTF-8"/>
+          <dfdl:property name="textStringJustification">left</dfdl:property>
+        </dfdl:format>
+      </dfdl:defineFormat>
+      <dfdl:format ref="childFmt" lengthKind="delimited"/>
+      <xs:element name="root" type="xs:string"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_df).is_ok());
+
+    // Disallowed attribute on defineFormat -> SDE
+    let schema_disallowed = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:defineFormat name="badFmt" encoding="UTF-8">
+        <dfdl:format byteOrder="bigEndian"/>
+      </dfdl:defineFormat>
+      <xs:element name="root" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_disallowed).is_err());
+
+    // Duplicate defineFormat -> SDE
+    let schema_dup_fmt = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:defineFormat name="dup">
+        <dfdl:format byteOrder="bigEndian"/>
+      </dfdl:defineFormat>
+      <dfdl:defineFormat name="dup">
+        <dfdl:format byteOrder="littleEndian"/>
+      </dfdl:defineFormat>
+      <xs:element name="root" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_dup_fmt).is_err());
+}
+
+#[test]
+fn test_schema_doc_variables_and_directions() {
+    // Test defineVariable with parseOnly, unparseOnly, both, and body text
+    let schema_vars = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:defineVariable name="v1" type="xs:int" defaultValue="10" direction="parseOnly"/>
+      <dfdl:defineVariable name="v2" type="xs:string" direction="unparseOnly">hello</dfdl:defineVariable>
+      <dfdl:defineVariable name="v3" type="xs:boolean" defaultValue="true" direction="both"/>
+      <xs:element name="root" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="2">
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:setVariable ref="v1" value="20"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_vars).is_ok());
+
+    // Invalid variable direction -> SDE
+    let schema_bad_dir = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:defineVariable name="vBad" type="xs:int" direction="invalidDir"/>
+      <xs:element name="root" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_bad_dir).is_err());
+}
+
+#[test]
+fn test_schema_doc_imports_and_chameleon_includes() {
+    // Import namespace mismatch -> SDE
+    let imported_xsd = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/actual">
+      <xs:element name="sub" type="xs:string"/>
+    </xs:schema>"#;
+    let main_xsd = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/main">
+      <xs:import namespace="http://example.com/expected" schemaLocation="sub.xsd"/>
+      <xs:element name="root" type="xs:string"/>
+    </xs:schema>"#;
+    let compiler = SchemaCompiler::new();
+    let mut resolver = |loc: &str| -> Option<String> {
+        if loc == "sub.xsd" {
+            Some(String::from(imported_xsd))
+        } else {
+            None
+        }
+    };
+    assert!(compiler.compile_str_with_resolver(main_xsd, &mut resolver).is_err());
+
+    // Chameleon include of targetless schema into namespaced schema
+    let chameleon_xsd = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:defineFormat name="chamFmt">
+        <dfdl:format byteOrder="bigEndian" representation="text"/>
+      </dfdl:defineFormat>
+      <xs:group name="chamGroup">
+        <xs:sequence>
+          <xs:element name="gElem" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="2"/>
+        </xs:sequence>
+      </xs:group>
+      <xs:complexType name="chamComplex">
+        <xs:sequence>
+          <xs:element name="cElem" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="3"/>
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="chamSimple">
+        <xs:restriction base="xs:string">
+          <xs:maxLength value="10"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:schema>"#;
+    let main_chameleon = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+      xmlns:tns="http://example.com/chameleon"
+      targetNamespace="http://example.com/chameleon">
+      <xs:include schemaLocation="cham.xsd"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:group ref="tns:chamGroup"/>
+            <xs:element name="comp" type="tns:chamComplex"/>
+            <xs:element name="simp" type="tns:chamSimple" dfdl:lengthKind="explicit" dfdl:length="4"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    let mut cham_resolver = |loc: &str| -> Option<String> {
+        if loc == "cham.xsd" {
+            Some(String::from(chameleon_xsd))
+        } else {
+            None
+        }
+    };
+    let res = compiler.compile_str_with_resolver(main_chameleon, &mut cham_resolver);
+    assert!(res.is_ok(), "Failed chameleon compile: {:?}", res.err());
+}
+
+#[test]
+fn test_schema_doc_definition_errors() {
+    // Duplicate group name -> SDE
+    let schema_dup_group = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:group name="grp">
+        <xs:sequence><xs:element name="a" type="xs:string"/></xs:sequence>
+      </xs:group>
+      <xs:group name="grp">
+        <xs:sequence><xs:element name="b" type="xs:string"/></xs:sequence>
+      </xs:group>
+      <xs:element name="root" type="xs:string"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_dup_group).is_err());
+
+    // Duplicate complexType name -> SDE
+    let schema_dup_ct = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:complexType name="CT">
+        <xs:sequence><xs:element name="a" type="xs:string"/></xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="CT">
+        <xs:sequence><xs:element name="b" type="xs:string"/></xs:sequence>
+      </xs:complexType>
+      <xs:element name="root" type="CT"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_dup_ct).is_err());
+
+    // Duplicate simpleType name -> SDE
+    let schema_dup_st = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="ST"><xs:restriction base="xs:string"/></xs:simpleType>
+      <xs:simpleType name="ST"><xs:restriction base="xs:string"/></xs:simpleType>
+      <xs:element name="root" type="ST"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_dup_st).is_err());
+
+    // ComplexType with sequence hiddenGroupRef -> SDE
+    let schema_ct_hgr = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:group name="hg"><xs:sequence><xs:element name="h" type="xs:string" dfdl:inputValueCalc="{ 'x' }"/></xs:sequence></xs:group>
+      <xs:complexType name="CT">
+        <xs:sequence dfdl:hiddenGroupRef="hg"/>
+      </xs:complexType>
+      <xs:element name="root" type="CT"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_ct_hgr).is_err());
+
+    // SimpleType with repType but no enumeration -> SDE
+    let schema_rep_no_enum = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdlx="http://example.com/dfdlx">
+      <xs:simpleType name="RepST" dfdlx:repType="xs:int">
+        <xs:restriction base="xs:string"/>
+      </xs:simpleType>
+      <xs:element name="root" type="RepST"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_rep_no_enum).is_err());
+
+    // SimpleType with whitespace in restriction base -> SDE
+    let schema_ws_base = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="WsST">
+        <xs:restriction base=" xs:string "/>
+      </xs:simpleType>
+      <xs:element name="root" type="WsST"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_ws_base).is_err());
+}
+
+#[test]
+fn test_schema_location_resolution_helper() {
+    use crate::compiler::schema_doc::resolve_schema_location;
+
+    // Absolute and URI schemes returned verbatim
+    assert_eq!(resolve_schema_location(None, "/abs/path.xsd"), "/abs/path.xsd");
+    assert_eq!(resolve_schema_location(Some("base/"), "http://example.com/a.xsd"), "http://example.com/a.xsd");
+    assert_eq!(resolve_schema_location(Some("base/"), "urn:dfdl:test"), "urn:dfdl:test");
+    assert_eq!(resolve_schema_location(None, "rel.xsd"), "rel.xsd");
+
+    // Relative with slash
+    assert_eq!(resolve_schema_location(Some("dir/main.xsd"), "sub.xsd"), "dir/sub.xsd");
+    assert_eq!(resolve_schema_location(Some("dir/sub/main.xsd"), "../other.xsd"), "dir/other.xsd");
+    assert_eq!(resolve_schema_location(Some("/root/dir/main.xsd"), "../peer/other.xsd"), "/root/peer/other.xsd");
+    assert_eq!(resolve_schema_location(Some("no_slash"), "sub.xsd"), "sub.xsd");
+}
+
+#[test]
+fn test_groups_validation_and_errors() {
+    // Choice branch with minOccurs="0" -> SDE
+    let schema_choice_opt = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="a" type="xs:string" minOccurs="0"/>
+            <xs:element name="b" type="xs:string"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_choice_opt).is_err());
+
+    // Choice branch default value on array -> SDE
+    let schema_choice_arr_def = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="a" type="xs:string" default="def" maxOccurs="2"/>
+            <xs:element name="b" type="xs:string"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_choice_arr_def).is_err());
+
+    // Choice branch duplicate element name -> SDE
+    let schema_choice_dup = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="dup" type="xs:string"/>
+            <xs:element name="dup" type="xs:string"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_choice_dup).is_err());
+
+    // Group definition with hiddenGroupRef -> SDE
+    let schema_grp_hgr = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:group name="hg"><xs:sequence><xs:element name="h" type="xs:string" dfdl:inputValueCalc="{ '1' }"/></xs:sequence></xs:group>
+      <xs:group name="badGrp">
+        <xs:sequence dfdl:hiddenGroupRef="hg"/>
+      </xs:group>
+      <xs:element name="root" type="xs:string"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_grp_hgr).is_err());
+
+    // Sequence with hiddenGroupRef and children -> SDE
+    let schema_seq_hgr_children = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:group name="hg"><xs:sequence><xs:element name="h" type="xs:string" dfdl:inputValueCalc="{ '1' }"/></xs:sequence></xs:group>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence dfdl:hiddenGroupRef="hg">
+            <xs:element name="extra" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_seq_hgr_children).is_err());
+
+    // Model group with same element name but different types -> SDE
+    let schema_diff_types = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="xs:string"/>
+            <xs:element name="item" type="xs:int"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_diff_types).is_err());
+}
+
+#[test]
+fn test_lower_choice_dispatch_keys_and_ranges() {
+    // Choice with choiceDispatchKey and branches with choiceBranchKey / choiceBranchKeyRanges
+    let schema_dispatch = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="tag" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="1"/>
+            <xs:choice dfdl:choiceDispatchKey="{ xs:string(../tag) }">
+              <xs:element name="branchA" type="xs:string" dfdl:choiceBranchKey="1" dfdl:lengthKind="explicit" dfdl:length="4"/>
+              <xs:element name="branchB" type="xs:string" dfdl:choiceBranchKeyRanges="2 5" dfdl:lengthKind="explicit" dfdl:length="4"/>
+              <xs:element name="branchC" type="xs:string" dfdl:choiceBranchKey="6" dfdl:lengthKind="explicit" dfdl:length="4"/>
+            </xs:choice>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    let res = SchemaCompiler::new().compile_str(schema_dispatch);
+    assert!(res.is_ok(), "Failed choice dispatch compile: {:?}", res.err());
+}
+
+#[test]
+fn test_lower_sequence_delimiters_and_suppression() {
+    // Sequence with separator, separatorPosition, separatorSuppressionPolicy
+    let schema_seq_sep = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:format representation="text" lengthKind="delimited" encoding="UTF-8"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence dfdl:separator="," dfdl:separatorPosition="infix" dfdl:separatorSuppressionPolicy="trailingEmpty">
+            <xs:element name="f1" type="xs:string"/>
+            <xs:element name="f2" type="xs:string"/>
+            <xs:element name="f3" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_seq_sep).is_ok());
+
+    // Prefix and postfix separator positions
+    let schema_prefix_sep = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:format representation="text" lengthKind="delimited" encoding="UTF-8"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence dfdl:separator=";" dfdl:separatorPosition="prefix">
+            <xs:element name="a" type="xs:string"/>
+            <xs:element name="b" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_prefix_sep).is_ok());
+}
+
+#[test]
+fn test_lower_text_numbers_and_booleans_formatting() {
+    // Text number with pattern, standard decimal/grouping separators, exponent rep
+    let schema_text_num = r##"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="num" type="xs:decimal" dfdl:representation="text" dfdl:lengthKind="explicit" dfdl:length="8"
+        dfdl:textNumberPattern="#,##0.00" dfdl:textStandardDecimalSeparator="."
+        dfdl:textStandardGroupingSeparator="," dfdl:textStandardExponentRep="E"
+        dfdl:textNumberRounding="pattern" dfdl:textNumberCheckPolicy="lax"/>
+    </xs:schema>"##;
+    assert!(SchemaCompiler::new().compile_str(schema_text_num).is_ok());
+
+    // Text boolean with true/false reps, pad character, justification
+    let schema_text_bool = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="b" type="xs:boolean" dfdl:representation="text" dfdl:lengthKind="explicit" dfdl:length="4"
+        dfdl:textBooleanTrueRep="TRUE" dfdl:textBooleanFalseRep="FALS"
+        dfdl:textBooleanJustification="center" dfdl:textPadKind="padChar" dfdl:textStringPadCharacter="_"/>
+    </xs:schema>"#;
+    let res = SchemaCompiler::new().compile_str(schema_text_bool);
+    assert!(res.is_ok(), "text_bool err: {:?}", res.err());
+}
+
+#[test]
+fn test_lower_alignment_skips_and_occurs() {
+    // Alignment, leadingSkip, trailingSkip
+    let schema_align = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:format byteOrder="bigEndian"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="f1" type="xs:int" dfdl:representation="binary" dfdl:binaryNumberRep="binary"
+              dfdl:lengthKind="explicit" dfdl:length="4" dfdl:alignment="4" dfdl:alignmentUnits="bytes"
+              dfdl:leadingSkip="1" dfdl:trailingSkip="2"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    let res = SchemaCompiler::new().compile_str(schema_align);
+    assert!(res.is_ok(), "align err: {:?}", res.err());
+
+    // OccursCountKind parsed and stopValue
+    let schema_occurs = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:format representation="text"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="arrParsed" type="xs:string" minOccurs="0" maxOccurs="unbounded"
+              dfdl:lengthKind="delimited" dfdl:terminator=";" dfdl:occursCountKind="parsed"/>
+            <xs:element name="arrStop" type="xs:string" minOccurs="0" maxOccurs="unbounded"
+              dfdl:lengthKind="delimited" dfdl:terminator="," dfdl:occursCountKind="stopValue" dfdl:occursStopValue="STOP"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_occurs).is_ok());
+}
+
+#[test]
+fn test_lower_binary_types_and_representations() {
+    // Packed, bcd, and ibm4690Packed binaryNumberRep
+    let schema_packed = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <dfdl:format byteOrder="bigEndian"/>
+      <xs:element name="root">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="p1" type="xs:int" dfdl:representation="binary" dfdl:binaryNumberRep="packed"
+              dfdl:lengthKind="explicit" dfdl:length="4"/>
+            <xs:element name="b1" type="xs:unsignedInt" dfdl:representation="binary" dfdl:binaryNumberRep="bcd"
+              dfdl:lengthKind="explicit" dfdl:length="4"/>
+            <xs:element name="i1" type="xs:int" dfdl:representation="binary" dfdl:binaryNumberRep="ibm4690Packed"
+              dfdl:lengthKind="explicit" dfdl:length="4"/>
+            <xs:element name="f1" type="xs:float" dfdl:representation="binary" dfdl:binaryFloatRep="ieee"
+              dfdl:lengthKind="explicit" dfdl:length="4"/>
+            <xs:element name="d1" type="xs:double" dfdl:representation="binary" dfdl:binaryFloatRep="ieee"
+              dfdl:lengthKind="explicit" dfdl:length="8"/>
+            <xs:element name="bool1" type="xs:boolean" dfdl:representation="binary"
+              dfdl:binaryBooleanTrueRep="1" dfdl:binaryBooleanFalseRep="0"
+              dfdl:lengthKind="explicit" dfdl:length="1"/>
+            <xs:element name="hb1" type="xs:hexBinary" dfdl:representation="binary"
+              dfdl:lengthKind="explicit" dfdl:length="4"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>"#;
+    let res = SchemaCompiler::new().compile_str(schema_packed);
+    assert!(res.is_ok(), "packed err: {:?}", res.err());
+}
+
+#[test]
+fn test_lower_validation_error_paths() {
+    // minOccurs > maxOccurs -> SDE
+    let schema_min_gt_max = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="root" type="xs:string" minOccurs="5" maxOccurs="2"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_min_gt_max).is_err());
+
+    // occursCountKind="fixed" with minOccurs != maxOccurs -> SDE
+    let schema_fixed_mismatch = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:string" minOccurs="1" maxOccurs="3" dfdl:occursCountKind="fixed"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_fixed_mismatch).is_err());
+
+    // occursCountKind="expression" without dfdl:occursCount -> SDE
+    let schema_expr_missing = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:string" minOccurs="0" maxOccurs="5" dfdl:occursCountKind="expression"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_expr_missing).is_err());
+
+    // Binary data with lengthKind="delimited" -> SDE
+    let schema_bin_delim = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+      <xs:element name="root" type="xs:int" dfdl:representation="binary" dfdl:lengthKind="delimited" dfdl:terminator=";"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_bin_delim).is_err());
+
+    // MinInclusive > MaxInclusive -> SDE
+    let schema_min_gt_max_inc = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="BadRange">
+        <xs:restriction base="xs:int">
+          <xs:minInclusive value="100"/>
+          <xs:maxInclusive value="50"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="root" type="BadRange"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_min_gt_max_inc).is_err());
+
+    // MinExclusive and MinInclusive both specified -> SDE
+    let schema_both_min = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:simpleType name="BothMin">
+        <xs:restriction base="xs:int">
+          <xs:minInclusive value="10"/>
+          <xs:minExclusive value="5"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:element name="root" type="BothMin"/>
+    </xs:schema>"#;
+    assert!(SchemaCompiler::new().compile_str(schema_both_min).is_err());
+}

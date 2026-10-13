@@ -109,7 +109,7 @@ pub struct TdmlTestSuite {
 }
 
 /// Result report of executing a TDML Test Suite.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TdmlReport {
     /// Suite name.
     pub suite_name: String,
@@ -2312,5 +2312,422 @@ mod tests {
         };
         let (bytes, bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[part], None).unwrap();
         assert_eq!((bytes, bits), (alloc::vec![189, 71, 251], 24));
+    }
+
+    #[test]
+    fn test_replace_dfdl_entities_in_text() {
+        let input = "%CR;%LF;%LF;%CR;%SP;%HT;%NUL;%%%#x41;%#66;%#X43;normal";
+        let out = TdmlRunner::replace_dfdl_entities_in_text(input);
+        assert_eq!(out, "\r\n\n\r \t\0%ABCnormal");
+
+        // Edge case: unclosed entity or lone percent
+        let unclosed = "%#x;%#;%";
+        let unclosed_out = TdmlRunner::replace_dfdl_entities_in_text(unclosed);
+        assert!(unclosed_out.contains('%'));
+    }
+
+    #[test]
+    fn test_assemble_document_parts_comprehensive() {
+        // Hex and byte parts
+        let hex_part = TdmlDocumentPart {
+            part_type: String::from("hex"),
+            content: String::from("DE AD BE EF"),
+            bit_order: None,
+            byte_order: None,
+            encoding: None,
+            replace_dfdl_entities: false,
+        };
+        let byte_part = TdmlDocumentPart {
+            part_type: String::from("byte"),
+            content: String::from("01 02"),
+            bit_order: None,
+            byte_order: None,
+            encoding: None,
+            replace_dfdl_entities: false,
+        };
+        let bytes = TdmlRunner::assemble_document_bytes(&[hex_part, byte_part]);
+        assert_eq!(bytes, alloc::vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02]);
+
+        // Text part with entity replacement
+        let text_part = TdmlDocumentPart {
+            part_type: String::from("text"),
+            content: String::from("Hello%SP;World"),
+            bit_order: None,
+            byte_order: None,
+            encoding: Some(String::from("UTF-8")),
+            replace_dfdl_entities: true,
+        };
+        let bytes_txt = TdmlRunner::assemble_document_bytes(&[text_part]);
+        assert_eq!(bytes_txt, b"Hello World");
+
+        // Bits part standard MSBF
+        let bits_part = TdmlDocumentPart {
+            part_type: String::from("bits"),
+            content: String::from("10101010 01010101"),
+            bit_order: Some(String::from("MSBFirst")),
+            byte_order: None,
+            encoding: None,
+            replace_dfdl_entities: false,
+        };
+        let (bits_bytes, total_bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[bits_part], None).unwrap();
+        assert_eq!((bits_bytes, total_bits), (alloc::vec![0xAA, 0x55], 16));
+
+        // Missing file part -> Error
+        let file_part = TdmlDocumentPart {
+            part_type: String::from("file"),
+            content: String::from("non_existent_file_xyz_123.bin"),
+            bit_order: None,
+            byte_order: None,
+            encoding: None,
+            replace_dfdl_entities: false,
+        };
+        let err = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[file_part], None).unwrap_err();
+        assert!(err.to_string().contains("not found"));
+
+        // Fallback default part type
+        let other_part = TdmlDocumentPart {
+            part_type: String::from("raw"),
+            content: String::from("ABC"),
+            bit_order: None,
+            byte_order: None,
+            encoding: None,
+            replace_dfdl_entities: false,
+        };
+        let (raw_b, raw_bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[other_part], None).unwrap();
+        assert_eq!((raw_b, raw_bits), (alloc::vec![b'A', b'B', b'C'], 24));
+    }
+
+    #[test]
+    fn test_parse_infoset_xml_and_comparison_edges() {
+        // Nilled document
+        let nil_xml = r#"<dfdlInfoset><root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true"/></dfdlInfoset>"#;
+        let doc = TdmlRunner::parse_infoset_xml(nil_xml).unwrap();
+        assert!(doc.root.as_ref().unwrap().state == ElementState::Nil);
+        assert!(TdmlRunner::verify_infoset(&doc, nil_xml));
+
+        // Invalid xsi:nil boolean -> error
+        let bad_nil = r#"<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="maybe"/>"#;
+        assert!(TdmlRunner::parse_infoset_xml(bad_nil).is_err());
+
+        // Simple nilled element with text content -> error
+        let text_nil = r#"<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true">content</root>"#;
+        assert!(TdmlRunner::parse_infoset_xml(text_nil).is_err());
+
+        // Complex nilled element with child element -> error
+        let comp_nil = r#"<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true"><child/></root>"#;
+        assert!(TdmlRunner::parse_infoset_xml(comp_nil).is_err());
+
+        // Parsed types: boolean, integer, long, string prefixes
+        let types_xml = r#"<root>
+          <b>true</b>
+          <n>42</n>
+          <big>999999999999</big>
+          <s_lead>0123</s_lead>
+          <s_plus>+0123</s_plus>
+          <s>hello</s>
+        </root>"#;
+        let doc_types = TdmlRunner::parse_infoset_xml(types_xml).unwrap();
+        assert!(TdmlRunner::verify_infoset(&doc_types, types_xml));
+
+        // Compare float with near epsilon
+        let f_doc1 = TdmlRunner::parse_infoset_xml("<root><f>1.00000001</f></root>").unwrap();
+        let f_doc2 = TdmlRunner::parse_infoset_xml("<root><f>1.0</f></root>").unwrap();
+        assert!(TdmlRunner::compare_infoset_elements(f_doc1.root.as_ref().unwrap(), f_doc2.root.as_ref().unwrap()));
+
+        // Compare float mismatch
+        let f_doc3 = TdmlRunner::parse_infoset_xml("<root><f>2.5</f></root>").unwrap();
+        assert!(!TdmlRunner::compare_infoset_elements(f_doc1.root.as_ref().unwrap(), f_doc3.root.as_ref().unwrap()));
+
+        // Compare name mismatch
+        let name_doc = TdmlRunner::parse_infoset_xml("<different/>").unwrap();
+        assert!(!TdmlRunner::compare_infoset_elements(f_doc1.root.as_ref().unwrap(), name_doc.root.as_ref().unwrap()));
+
+        // Empty expected XML always verifies true
+        assert!(TdmlRunner::verify_infoset(&doc_types, "   "));
+    }
+
+    #[test]
+    fn test_tdml_suite_parsing_and_report() {
+        let tdml_xml = r#"<tdml:testSuite xmlns:tdml="http://daffodil.apache.org/tdml"
+          xmlns:xs="http://www.w3.org/2001/XMLSchema"
+          xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+          suiteName="SimpleSuite">
+          <tdml:defineSchema name="s1">
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+              <xs:element name="root" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+            </xs:schema>
+          </tdml:defineSchema>
+          <tdml:parserTestCase name="test_p1" root="root" model="s1">
+            <tdml:document>
+              <tdml:documentPart type="text">Hello</tdml:documentPart>
+            </tdml:document>
+            <tdml:infoset>
+              <tdml:dfdlInfoset>
+                <root>Hello</root>
+              </tdml:dfdlInfoset>
+            </tdml:infoset>
+          </tdml:parserTestCase>
+          <tdml:unparserTestCase name="test_u1" root="root" model="s1">
+            <tdml:infoset>
+              <tdml:dfdlInfoset>
+                <root>World</root>
+              </tdml:dfdlInfoset>
+            </tdml:infoset>
+            <tdml:document>
+              <tdml:documentPart type="text">World</tdml:documentPart>
+            </tdml:document>
+          </tdml:unparserTestCase>
+        </tdml:testSuite>"#;
+
+        let suite = TdmlTestSuite::parse_xml(tdml_xml).unwrap();
+        assert_eq!(suite.suite_name, "SimpleSuite");
+        assert_eq!(suite.test_cases.len(), 2);
+        assert_eq!(suite.embedded_schemas.len(), 1);
+
+        let report = TdmlRunner::run_suite(&suite, "");
+        assert_eq!(report.passed, 2);
+        assert_eq!(report.failed, 0);
+
+        // Report helper add_failure
+        let mut rep = TdmlReport::default();
+        rep.add_failure(String::from("failure reason"));
+        assert_eq!(rep.failed, 1);
+        assert_eq!(rep.failure_messages.len(), 1);
+    }
+
+    #[test]
+    fn test_tdml_xml_encoding_detection() {
+        // Test UTF-8 with BOM
+        let dir = std::env::temp_dir();
+        let p_utf8_bom = dir.join("test_utf8_bom.xml");
+        let mut data_utf8_bom = alloc::vec![0xEF, 0xBB, 0xBF];
+        data_utf8_bom.extend_from_slice(b"<root>hello</root>");
+        std::fs::write(&p_utf8_bom, data_utf8_bom).unwrap();
+        let res_utf8_bom = read_xml_file_to_string(&p_utf8_bom).unwrap();
+        assert_eq!(res_utf8_bom, "<root>hello</root>");
+        let _ = std::fs::remove_file(&p_utf8_bom);
+
+        // Test UTF-16 BE with BOM
+        let p_utf16_be_bom = dir.join("test_utf16_be_bom.xml");
+        let mut data_utf16_be_bom = alloc::vec![0xFE, 0xFF];
+        for b in "<root>be_bom</root>".encode_utf16() {
+            data_utf16_be_bom.extend_from_slice(&b.to_be_bytes());
+        }
+        std::fs::write(&p_utf16_be_bom, data_utf16_be_bom).unwrap();
+        let res_utf16_be_bom = read_xml_file_to_string(&p_utf16_be_bom).unwrap();
+        assert_eq!(res_utf16_be_bom, "<root>be_bom</root>");
+        let _ = std::fs::remove_file(&p_utf16_be_bom);
+
+        // Test UTF-16 LE with BOM
+        let p_utf16_le_bom = dir.join("test_utf16_le_bom.xml");
+        let mut data_utf16_le_bom = alloc::vec![0xFF, 0xFE];
+        for b in "<root>le_bom</root>".encode_utf16() {
+            data_utf16_le_bom.extend_from_slice(&b.to_le_bytes());
+        }
+        std::fs::write(&p_utf16_le_bom, data_utf16_le_bom).unwrap();
+        let res_utf16_le_bom = read_xml_file_to_string(&p_utf16_le_bom).unwrap();
+        assert_eq!(res_utf16_le_bom, "<root>le_bom</root>");
+        let _ = std::fs::remove_file(&p_utf16_le_bom);
+
+        // Test UTF-16 BE without BOM
+        let p_utf16_be = dir.join("test_utf16_be.xml");
+        let mut data_utf16_be = alloc::vec![];
+        for b in "<?xml version=\"1.0\"?><root>be</root>".encode_utf16() {
+            data_utf16_be.extend_from_slice(&b.to_be_bytes());
+        }
+        std::fs::write(&p_utf16_be, data_utf16_be).unwrap();
+        let res_utf16_be = read_xml_file_to_string(&p_utf16_be).unwrap();
+        assert_eq!(res_utf16_be, "<?xml version=\"1.0\"?><root>be</root>");
+        let _ = std::fs::remove_file(&p_utf16_be);
+
+        // Test UTF-16 LE without BOM
+        let p_utf16_le = dir.join("test_utf16_le.xml");
+        let mut data_utf16_le = alloc::vec![];
+        for b in "<?xml version=\"1.0\"?><root>le</root>".encode_utf16() {
+            data_utf16_le.extend_from_slice(&b.to_le_bytes());
+        }
+        std::fs::write(&p_utf16_le, data_utf16_le).unwrap();
+        let res_utf16_le = read_xml_file_to_string(&p_utf16_le).unwrap();
+        assert_eq!(res_utf16_le, "<?xml version=\"1.0\"?><root>le</root>");
+        let _ = std::fs::remove_file(&p_utf16_le);
+
+        // Test fallback (lossy UTF-8)
+        let p_lossy = dir.join("test_lossy.xml");
+        std::fs::write(&p_lossy, alloc::vec![0x80, 0x81]).unwrap();
+        let res_lossy = read_xml_file_to_string(&p_lossy).unwrap();
+        assert!(!res_lossy.is_empty());
+        let _ = std::fs::remove_file(&p_lossy);
+    }
+
+    #[test]
+    fn test_tdml_config_and_document_parts() {
+        // TDML XML containing config with bindings and tunables, plus multi-part documents
+        let tdml_xml = r#"<tdml:testSuite xmlns:tdml="http://daffodil.apache.org/tdml"
+          xmlns:xs="http://www.w3.org/2001/XMLSchema"
+          xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+          xmlns:ex="http://example.com"
+          suiteName="ConfigSuite">
+          <tdml:defineConfig name="cfgB">
+            <tdml:externalVariableBindings>
+              <tdml:bind name="ex:v_cdata"><![CDATA[initial_cdata]]></tdml:bind>
+            </tdml:externalVariableBindings>
+          </tdml:defineConfig>
+          <tdml:defineConfig name="cfgA">
+            <tdml:externalVariableBindings>
+              <tdml:bind name="ex:v1">val1</tdml:bind>
+              <tdml:bind name="ex:v2"><![CDATA[cdata_val]]></tdml:bind>
+            </tdml:externalVariableBindings>
+            <tdml:tunables>
+              <maxFieldContentLengthInBytes>2048</maxFieldContentLengthInBytes>
+            </tdml:tunables>
+          </tdml:defineConfig>
+          <tdml:defineSchema name="s_cfg">
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+              <xs:element name="elem" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"/>
+            </xs:schema>
+          </tdml:defineSchema>
+          <tdml:parserTestCase name="tc_parts" root="elem" model="s_cfg" config="cfgA">
+            <tdml:document>
+              <tdml:documentPart type="text" replaceDFDLEntities="true" encoding="utf-8">AB</tdml:documentPart>
+              <tdml:documentPart type="byte" bitOrder="mostSignificantBitFirst" byteOrder="bigEndian">43 44</tdml:documentPart>
+            </tdml:document>
+            <tdml:infoset>
+              <tdml:dfdlInfoset>
+                <elem myAttr="123" xmlns="http://example.com">ABCD</elem>
+              </tdml:dfdlInfoset>
+            </tdml:infoset>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_err" root="elem" model="s_cfg">
+            <tdml:document>
+              <tdml:documentPart type="text">ZZ</tdml:documentPart>
+            </tdml:document>
+            <tdml:errors>
+              <tdml:error><![CDATA[Parse Error]]></tdml:error>
+            </tdml:errors>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_ibm_model" root="elem" model="IBMdefined/GeneralPurposeFormat.xsd">
+            <tdml:document>
+              <tdml:documentPart type="text">ZZ</tdml:documentPart>
+            </tdml:document>
+            <tdml:errors>
+              <tdml:error>Error</tdml:error>
+            </tdml:errors>
+          </tdml:parserTestCase>
+        </tdml:testSuite>"#;
+
+        let suite = TdmlTestSuite::parse_xml(tdml_xml).unwrap();
+        assert_eq!(suite.suite_name, "ConfigSuite");
+        assert_eq!(suite.configs.len(), 2);
+        assert_eq!(suite.external_variable_bindings.len(), 2);
+
+        let report = TdmlRunner::run_suite(&suite, "");
+        assert_eq!(report.passed, 3);
+    }
+
+    #[test]
+    fn test_tdml_runner_file_part_and_debug_clusters() {
+        // Set debug env vars to exercise diagnostic cluster summary reporting
+        std::env::set_var("TDML_DEBUG", "1");
+        std::env::set_var("TDML_DEBUG_COMPARE", "1");
+
+        let tdml_xml = r#"<tdml:testSuite xmlns:tdml="http://daffodil.apache.org/tdml"
+          xmlns:xs="http://www.w3.org/2001/XMLSchema"
+          xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+          suiteName="FileAndDebugSuite">
+          <tdml:defineSchema name="s_f">
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/">
+              <xs:element name="fElem" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="4"/>
+            </xs:schema>
+          </tdml:defineSchema>
+          <tdml:parserTestCase name="tc_file_err_expected" root="fElem" model="s_f">
+            <tdml:document>
+              <tdml:documentPart type="file">non_existent_file_xyz.dat</tdml:documentPart>
+            </tdml:document>
+            <tdml:errors>
+              <tdml:error>was not found</tdml:error>
+            </tdml:errors>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_file_err_unexpected" root="fElem" model="s_f">
+            <tdml:document>
+              <tdml:documentPart type="file">non_existent_file_abc.dat</tdml:documentPart>
+            </tdml:document>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_compare_name_mismatch" root="fElem" model="s_f">
+            <tdml:document>
+              <tdml:documentPart type="text">AAAA</tdml:documentPart>
+            </tdml:document>
+            <tdml:infoset>
+              <tdml:dfdlInfoset>
+                <otherElem>ZZZZ</otherElem>
+              </tdml:dfdlInfoset>
+            </tdml:infoset>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_distinct_bos" root="fElem" model="s_f">
+            <tdml:document>
+              <tdml:documentPart type="bits" bitOrder="mostSignificantBitFirst">1010</tdml:documentPart>
+              <tdml:documentPart type="bits" bitOrder="leastSignificantBitFirst">0101</tdml:documentPart>
+            </tdml:document>
+            <tdml:errors>
+              <tdml:error>Must specify bitOrder</tdml:error>
+            </tdml:errors>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_no_infoset" root="fElem" model="s_f">
+            <tdml:document>
+              <tdml:documentPart type="text">PASS</tdml:documentPart>
+            </tdml:document>
+          </tdml:parserTestCase>
+          <tdml:unparserTestCase name="tc_unp_file_err_exp" root="fElem" model="s_f">
+            <tdml:infoset><tdml:dfdlInfoset><fElem>PASS</fElem></tdml:dfdlInfoset></tdml:infoset>
+            <tdml:document>
+              <tdml:documentPart type="file">unp_missing_1.dat</tdml:documentPart>
+            </tdml:document>
+            <tdml:errors>
+              <tdml:error>was not found</tdml:error>
+            </tdml:errors>
+          </tdml:unparserTestCase>
+          <tdml:unparserTestCase name="tc_unp_file_err_unexp" root="fElem" model="s_f">
+            <tdml:infoset><tdml:dfdlInfoset><fElem>PASS</fElem></tdml:dfdlInfoset></tdml:infoset>
+            <tdml:document>
+              <tdml:documentPart type="file">unp_missing_2.dat</tdml:documentPart>
+            </tdml:document>
+          </tdml:unparserTestCase>
+          <tdml:unparserTestCase name="tc_unp_len_diff_exp" root="fElem" model="s_f">
+            <tdml:infoset><tdml:dfdlInfoset><fElem>PASS</fElem></tdml:dfdlInfoset></tdml:infoset>
+            <tdml:document><tdml:documentPart type="text">PA</tdml:documentPart></tdml:document>
+            <tdml:errors><tdml:error>doesn't match expected length</tdml:error></tdml:errors>
+          </tdml:unparserTestCase>
+          <tdml:unparserTestCase name="tc_unp_no_infoset" root="fElem" model="s_f">
+            <tdml:document><tdml:documentPart type="text">PASS</tdml:documentPart></tdml:document>
+          </tdml:unparserTestCase>
+          <tdml:unparserTestCase name="tc_unp_bad_infoset_exp" root="fElem" model="s_f">
+            <tdml:infoset><![CDATA[<unclosed]]></tdml:infoset>
+            <tdml:document><tdml:documentPart type="text">PASS</tdml:documentPart></tdml:document>
+            <tdml:errors><tdml:error>unclosed</tdml:error></tdml:errors>
+          </tdml:unparserTestCase>
+          <tdml:unparserTestCase name="tc_unp_bad_infoset_unexp" root="fElem" model="s_f">
+            <tdml:infoset><![CDATA[<unclosed]]></tdml:infoset>
+            <tdml:document><tdml:documentPart type="text">PASS</tdml:documentPart></tdml:document>
+          </tdml:unparserTestCase>
+          <tdml:unparserTestCase name="tc_exp_unp_err_succ" root="fElem" model="s_f">
+            <tdml:infoset><tdml:dfdlInfoset><fElem>PASS</fElem></tdml:dfdlInfoset></tdml:infoset>
+            <tdml:document><tdml:documentPart type="text">PASS</tdml:documentPart></tdml:document>
+            <tdml:errors><tdml:error>ShouldFail</tdml:error></tdml:errors>
+          </tdml:unparserTestCase>
+          <tdml:parserTestCase name="tc_schema_comp_fail" root="badElem" model="nonExistentSchema.xsd">
+            <tdml:document><tdml:documentPart type="text">1</tdml:documentPart></tdml:document>
+          </tdml:parserTestCase>
+          <tdml:parserTestCase name="tc_err_msg_mismatch" root="fElem" model="s_f">
+            <tdml:document><tdml:documentPart type="file">non_existent_file_xyz.dat</tdml:documentPart></tdml:document>
+            <tdml:errors><tdml:error>someNonExistentExpectedString</tdml:error></tdml:errors>
+          </tdml:parserTestCase>
+        </tdml:testSuite>"#;
+
+        let suite = TdmlTestSuite::parse_xml(tdml_xml).unwrap();
+        let report = TdmlRunner::run_suite_with_base_dir(&suite, "", Some(std::path::Path::new(".")));
+        assert_eq!(report.passed, 7);
+        assert_eq!(report.failed, 7);
+
+        std::env::remove_var("TDML_DEBUG");
+        std::env::remove_var("TDML_DEBUG_COMPARE");
     }
 }

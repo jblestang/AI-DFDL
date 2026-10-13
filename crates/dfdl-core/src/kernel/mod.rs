@@ -1389,4 +1389,145 @@ mod tests {
         let mut parser2 = ParserEngine::new(&schema, &mut reader2, &mut budget2);
         assert!(parser2.parse_document().is_ok());
     }
+
+    #[test]
+    fn test_choice_budget_exhaustion_does_not_backtrack() {
+        use crate::schema::ir::CompiledChoice;
+
+        let mut builder = SchemaBuilder::new();
+        let elem_a = CompiledElement {
+            name: QName::local("BranchA"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let props_a = crate::schema::ir::ResolvedProperties {
+            representation: crate::schema::ir::Representation::Text,
+            initiator: Some(alloc::string::String::from("A:")),
+            ..Default::default()
+        };
+        let id_a = builder
+            .add_term_with_props(QName::local("BranchA"), TermKind::Element(elem_a), props_a)
+            .unwrap();
+
+        let elem_b = CompiledElement {
+            name: QName::local("BranchB"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let props_b = crate::schema::ir::ResolvedProperties {
+            representation: crate::schema::ir::Representation::Text,
+            initiator: Some(alloc::string::String::from("B:")),
+            ..Default::default()
+        };
+        let id_b = builder
+            .add_term_with_props(QName::local("BranchB"), TermKind::Element(elem_b), props_b)
+            .unwrap();
+
+        let choice_term = TermKind::Choice(CompiledChoice {
+            branches: alloc::vec![id_a, id_b],
+        });
+        let choice_id = builder
+            .add_term_with_props(QName::local("choice"), choice_term, Default::default())
+            .unwrap();
+
+        let root_elem = CompiledElement {
+            name: QName::local("ChoiceRecord"),
+            type_ir: CompiledType::Complex(choice_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder
+            .add_term_with_props(
+                QName::local("ChoiceRecord"),
+                TermKind::Element(root_elem),
+                Default::default(),
+            )
+            .unwrap();
+
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+
+        let data = b"A:42";
+        let src = SliceByteSource::new(data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+
+        // Budget of 2 is exhausted when entering Branch A (root + choice consume 2)
+        let mut budget = WorkBudget::new(2);
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let err = parser.parse_document().unwrap_err();
+        // Crucial test: it must be WorkBudgetExhausted, NOT "Parse Error: All Choice Alternatives Failed"
+        assert_eq!(err.kind, crate::error::DFDLErrorKind::WorkBudgetExhausted);
+    }
+
+    #[test]
+    fn test_array_budget_exhaustion_does_not_truncate() {
+        let mut builder = SchemaBuilder::new();
+        let item_elem = CompiledElement {
+            name: QName::local("Item"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Int),
+            min_occurs: 0,
+            max_occurs: Some(3),
+            is_nillable: false,
+            default_value: None,
+        };
+        let item_props = crate::schema::ir::ResolvedProperties {
+            representation: crate::schema::ir::Representation::Binary,
+            length_kind: crate::schema::ir::LengthKind::Explicit,
+            length: Some(1),
+            length_units: crate::schema::ir::LengthUnits::Bytes,
+            occurs_count_kind: crate::schema::ir::OccursCountKind::Implicit,
+            ..Default::default()
+        };
+        let item_id = builder
+            .add_term_with_props(QName::local("Item"), TermKind::Element(item_elem), item_props)
+            .unwrap();
+
+        let seq_term = TermKind::Sequence(crate::schema::ir::CompiledSequence {
+            members: alloc::vec![item_id],
+        });
+        let seq_id = builder
+            .add_term_with_props(QName::local("seq"), seq_term, Default::default())
+            .unwrap();
+
+        let root_elem = CompiledElement {
+            name: QName::local("root"),
+            type_ir: CompiledType::Complex(seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+        };
+        let root_id = builder
+            .add_term_with_props(
+                QName::local("root"),
+                TermKind::Element(root_elem),
+                Default::default(),
+            )
+            .unwrap();
+
+        builder.set_root(root_id);
+        let schema = builder.build().unwrap();
+
+        let data = [1u8, 2u8, 3u8];
+        let src = SliceByteSource::new(&data);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+
+        // Budget of 3: root(1) + seq(1) + Item#1(1). Item#2 will exhaust budget.
+        // Even though minOccurs = 0 has been satisfied by Item#1, it must NOT swallow
+        // WorkBudgetExhausted and return a partial/truncated infoset!
+        let mut budget = WorkBudget::new(3);
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let err = parser.parse_document().unwrap_err();
+        assert_eq!(err.kind, crate::error::DFDLErrorKind::WorkBudgetExhausted);
+    }
 }
