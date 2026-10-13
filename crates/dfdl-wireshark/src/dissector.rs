@@ -9,6 +9,41 @@ use crate::schema_meta::SchemaMetadataRegistry;
 use dfdl_core::infoset::state::ElementState;
 use dfdl_core::infoset::tree::{InfosetDocument, InfosetElement, InfosetNode};
 
+/// Severity level of a Wireshark dissection anomaly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnomalySeverity {
+    /// Informational or protocol events.
+    Chat,
+    /// Noteworthy protocol state or operational condition.
+    Note,
+    /// Protocol warning or unexpected range (e.g. out of schema min/max bounds).
+    Warn,
+    /// Critical protocol error or anomaly (e.g. schema constraint violation, malformed trailing bytes).
+    Error,
+}
+
+impl AnomalySeverity {
+    /// Returns the Wireshark-compatible string representation of the severity.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Chat => "Chat",
+            Self::Note => "Note",
+            Self::Warn => "Warn",
+            Self::Error => "Error",
+        }
+    }
+}
+
+/// A protocol anomaly, constraint violation, or operational event flagged on a dissection node.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DissectionAnomaly {
+    /// Severity level of the anomaly.
+    pub severity: AnomalySeverity,
+    /// Human-readable message explaining the anomaly.
+    pub message: String,
+}
+
 /// A single node in the Wireshark protocol dissection tree.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DissectionNode {
@@ -36,6 +71,12 @@ pub struct DissectionNode {
     pub bit_offset: usize,
     /// Bit length in the raw packet data.
     pub bit_length: usize,
+    /// Sub-byte bitmask within the enclosing byte (e.g. `0x04`, `0x80`), or 0 if byte-aligned.
+    pub bitmask: u32,
+    /// Formatted dotted bit breakdown (e.g. `.... .1..` or `.010 ....`).
+    pub bitmask_dots: String,
+    /// Detected protocol anomalies, range violations, or operational alerts.
+    pub anomalies: Vec<DissectionAnomaly>,
     /// Nested child fields or sub-records.
     pub children: Vec<DissectionNode>,
 }
@@ -103,6 +144,92 @@ impl DissectionNode {
             0
         };
 
+        // Enhancement 6: Sub-Byte Bitfield Dotted Mask Breakdown (e.g. ".... .1..")
+        let mut bitmask: u32 = 0;
+        let mut bitmask_dots = String::new();
+        if bit_length > 0 && bit_length < 8 {
+            let bit_in_byte = bit_offset % 8;
+            if bit_in_byte.saturating_add(bit_length) <= 8 {
+                let shift = 8usize.saturating_sub(bit_in_byte.saturating_add(bit_length));
+                let ones = (1u32.checked_shl(bit_length as u32).unwrap_or(0)).saturating_sub(1);
+                bitmask = ones.checked_shl(shift as u32).unwrap_or(0);
+
+                let val_int = raw_val.trim().parse::<u64>().unwrap_or(0);
+                let mut dots = String::with_capacity(10);
+                for i in 0..8 {
+                    if i == 4 {
+                        dots.push(' ');
+                    }
+                    if i >= bit_in_byte && i < bit_in_byte.saturating_add(bit_length) {
+                        let bit_idx_in_field = i.saturating_sub(bit_in_byte);
+                        let bit_weight = 1u64.checked_shl((bit_length.saturating_sub(1).saturating_sub(bit_idx_in_field)) as u32).unwrap_or(0);
+                        if (val_int & bit_weight) != 0 {
+                            dots.push('1');
+                        } else {
+                            dots.push('0');
+                        }
+                    } else {
+                        dots.push('.');
+                    }
+                }
+                bitmask_dots = dots;
+            }
+        }
+
+        // Enhancement 5: Wireshark Expert Info & Anomaly Detection
+        let mut anomalies = Vec::new();
+
+        // 1. Schema constraint bounds validation (<xs:minInclusive>, <xs:maxInclusive>)
+        if let Some(meta) = meta_opt {
+            if let Ok(num) = raw_val.trim().parse::<f64>() {
+                if let Some(min) = meta.min_inclusive {
+                    if num < min {
+                        anomalies.push(DissectionAnomaly {
+                            severity: AnomalySeverity::Warn,
+                            message: format!("Field '{name}' value {num} is below schema minInclusive ({min})"),
+                        });
+                    }
+                }
+                if let Some(max) = meta.max_inclusive {
+                    if num > max {
+                        anomalies.push(DissectionAnomaly {
+                            severity: AnomalySeverity::Warn,
+                            message: format!("Field '{name}' value {num} exceeds schema maxInclusive ({max})"),
+                        });
+                    }
+                }
+            }
+        }
+
+        // 2. Schema-driven enumeration alert / status detection
+        if let Some(meta) = meta_opt {
+            if let Ok(num) = raw_val.trim().parse::<i64>() {
+                if let Some(label) = meta.get_enum_label(num) {
+                    let lower = label.to_ascii_lowercase();
+                    if lower.contains("emergency")
+                        || lower.contains("hijack")
+                        || lower.contains("failure")
+                        || lower.contains("alarm")
+                        || lower.contains("fatal")
+                    {
+                        anomalies.push(DissectionAnomaly {
+                            severity: AnomalySeverity::Error,
+                            message: format!("{name}: {label}"),
+                        });
+                    } else if lower.contains("warn")
+                        || lower.contains("alert")
+                        || lower.contains("fault")
+                        || lower.contains("invalid")
+                    {
+                        anomalies.push(DissectionAnomaly {
+                            severity: AnomalySeverity::Warn,
+                            message: format!("{name}: {label}"),
+                        });
+                    }
+                }
+            }
+        }
+
         // If this is a parent node whose length is 0, span the bounding box of its children
         let mut final_offset = offset;
         let mut final_length = length;
@@ -133,6 +260,9 @@ impl DissectionNode {
             length: final_length,
             bit_offset,
             bit_length,
+            bitmask,
+            bitmask_dots,
+            anomalies,
             children,
         }
     }
@@ -140,16 +270,24 @@ impl DissectionNode {
     /// Renders the node and its children as Wireshark-like indented ASCII text.
     pub fn render_ascii(&self, indent_level: usize, out: &mut String) {
         let indent = "  ".repeat(indent_level);
-        if self.children.is_empty() {
-            out.push_str(&format!("{indent}- {}\n", self.label));
+        let display_label = if !self.bitmask_dots.is_empty() {
+            format!("{} = {}", self.bitmask_dots, self.label)
         } else {
-            out.push_str(&format!("{indent}+ {}\n", self.label));
+            self.label.clone()
+        };
+        if self.children.is_empty() {
+            out.push_str(&format!("{indent}- {display_label}\n"));
+        } else {
+            out.push_str(&format!("{indent}+ {display_label}\n"));
             for child in &self.children {
                 child.render_ascii(match indent_level.checked_add(1) {
                     Some(lvl) => lvl,
                     None => indent_level,
                 }, out);
             }
+        }
+        for an in &self.anomalies {
+            out.push_str(&format!("{indent}  [!] [{}] {}\n", an.severity.as_str(), an.message));
         }
     }
 
@@ -226,6 +364,22 @@ impl DissectionNode {
         out.push_str(&self.bit_offset.to_string());
         out.push_str(",\"bit_length\":");
         out.push_str(&self.bit_length.to_string());
+        out.push_str(",\"bitmask\":");
+        out.push_str(&self.bitmask.to_string());
+        out.push_str(",\"bitmask_dots\":");
+        escape_json_str(&self.bitmask_dots, out);
+        out.push_str(",\"anomalies\":[");
+        for (i, an) in self.anomalies.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push_str("{\"severity\":\"");
+            out.push_str(an.severity.as_str());
+            out.push_str("\",\"message\":");
+            escape_json_str(&an.message, out);
+            out.push('}');
+        }
+        out.push(']');
         out.push_str(",\"children\":[");
         for (i, child) in self.children.iter().enumerate() {
             if i > 0 {
@@ -244,6 +398,8 @@ pub struct DissectionTree {
     pub protocol_name: String,
     /// Root node of the dissection hierarchy.
     pub root: Option<DissectionNode>,
+    /// Root-level anomalies (e.g. leftover unparsed bytes, malformed packet tail).
+    pub anomalies: Vec<DissectionAnomaly>,
 }
 
 impl DissectionTree {
@@ -263,6 +419,7 @@ impl DissectionTree {
         Self {
             protocol_name: proto,
             root,
+            anomalies: Vec::new(),
         }
     }
 
@@ -273,10 +430,8 @@ impl DissectionTree {
             return self.protocol_name.clone();
         };
 
-        // Find records: either direct children of root, or root itself if it has no record children
-        let records: Vec<&DissectionNode> = if root.children.iter().any(|c| c.name.to_lowercase().contains("record")) {
-            root.children.iter().filter(|c| c.name.to_lowercase().contains("record")).collect()
-        } else if !root.children.is_empty() {
+        // Find records: either direct children of root, or root itself if it has no children
+        let records: Vec<&DissectionNode> = if !root.children.is_empty() {
             root.children.iter().collect()
         } else {
             vec![root]
@@ -288,62 +443,70 @@ impl DissectionTree {
 
         let mut record_summaries = Vec::new();
         for rec in &records {
-            let mut cat_str = String::new();
             let mut highlights = Vec::new();
 
-            // Recursively search for key summary fields within this record
-            fn find_highlights(node: &DissectionNode, cat: &mut String, highlights: &mut Vec<String>) {
-                let lower = node.name.to_lowercase();
-                if cat.is_empty() && (lower == "category" || lower == "cat" || lower == "cat_number") {
-                    let val = if !node.converted_value.is_empty() {
-                        &node.converted_value
+            // Recursively search for up to 4 prominent leaf fields within this record
+            fn find_highlights(node: &DissectionNode, highlights: &mut Vec<String>) {
+                if highlights.len() >= 4 {
+                    return;
+                }
+                if node.children.is_empty() {
+                    let display_val = if !node.converted_value.is_empty() {
+                        node.converted_value.trim()
                     } else {
-                        &node.raw_value
+                        node.raw_value.trim()
                     };
-                    if let Ok(num) = val.trim().parse::<u32>() {
-                        *cat = format!("Cat {:03}", num);
-                    } else if !val.is_empty() {
-                        *cat = format!("Cat {}", val);
-                    }
-                } else if highlights.len() < 4 {
-                    // Look for key identifiers
-                    let is_highlight_field = matches!(
-                        lower.as_str(),
-                        "callsign"
-                            | "targetidentification"
-                            | "aircraftaddress"
-                            | "targetaddress"
-                            | "acid"
-                            | "mode3acode"
-                            | "modesc"
-                            | "flightlevel"
-                            | "measuredflightlevel"
-                            | "altitude"
-                            | "messagetype"
-                            | "recordtype"
-                            | "sectorsign"
-                            | "sectornumber"
-                    );
-                    if is_highlight_field {
-                        let display_val = if !node.converted_value.is_empty() {
-                            node.converted_value.trim()
-                        } else {
-                            node.raw_value.trim()
-                        };
-                        if !display_val.is_empty() && !highlights.iter().any(|h| h == display_val) {
-                            highlights.push(display_val.to_string());
+                    if !display_val.is_empty() {
+                        let lower = node.name.to_ascii_lowercase();
+                        // Prioritize salient identifiers, types, status or numbers
+                        let is_salient = lower.contains("id")
+                            || lower.contains("type")
+                            || lower.contains("code")
+                            || lower.contains("status")
+                            || lower.contains("num")
+                            || lower.contains("addr")
+                            || lower.contains("time")
+                            || lower.contains("cat");
+                        if is_salient {
+                            let entry = format!("{}: {}", node.name, display_val);
+                            if !highlights.contains(&entry) {
+                                highlights.push(entry);
+                            }
                         }
                     }
                 }
                 for child in &node.children {
-                    find_highlights(child, cat, highlights);
+                    find_highlights(child, highlights);
                 }
             }
 
-            find_highlights(rec, &mut cat_str, &mut highlights);
+            find_highlights(rec, &mut highlights);
 
-            let prefix = if !cat_str.is_empty() {
-                cat_str
+            // If no salient fields were found, fallback to the first few leaf fields
+            if highlights.is_empty() {
+                fn find_first_leaves(node: &DissectionNode, leaves: &mut Vec<String>) {
+                    if leaves.len() >= 3 {
+                        return;
+                    }
+                    if node.children.is_empty() {
+                        let val = if !node.converted_value.is_empty() {
+                            node.converted_value.trim()
+                        } else {
+                            node.raw_value.trim()
+                        };
+                        if !val.is_empty() {
+                            leaves.push(format!("{}: {}", node.name, val));
+                        }
+                    }
+                    for child in &node.children {
+                        find_first_leaves(child, leaves);
+                    }
+                }
+                find_first_leaves(rec, &mut highlights);
+            }
+
+            let prefix = if !rec.description.is_empty() && rec.description != rec.name {
+                rec.description.clone()
             } else {
                 rec.name.clone()
             };
@@ -396,6 +559,18 @@ impl DissectionTree {
         let summary = self.summary();
         out.push_str(",\"summary\":");
         escape_json_str(&summary, &mut out);
+        out.push_str(",\"anomalies\":[");
+        for (i, an) in self.anomalies.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push_str("{\"severity\":\"");
+            out.push_str(an.severity.as_str());
+            out.push_str("\",\"message\":");
+            escape_json_str(&an.message, &mut out);
+            out.push('}');
+        }
+        out.push(']');
         out.push_str(",\"root\":");
         if let Some(ref r) = self.root {
             r.to_json(&mut out);
@@ -436,3 +611,125 @@ pub fn escape_json_str(input: &str, out: &mut String) {
     }
     out.push('"');
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema_meta::FieldMetadata;
+    use dfdl_core::infoset::state::ElementState;
+    use dfdl_core::infoset::tree::InfosetElement;
+    use dfdl_core::infoset::value::DfdlValue;
+    use dfdl_core::types::QName;
+
+    #[test]
+    fn test_sub_byte_bitmask_and_dots_typ() {
+        let registry = SchemaMetadataRegistry::new();
+        let mut elem = InfosetElement::simple(QName::local("typ"), ElementState::Value(DfdlValue::String("5".into())));
+        // bit_offset = 0, bit_length = 3
+        elem.location = Some((0, 3));
+
+        let node = DissectionNode::from_element(&elem, &registry);
+        assert_eq!(node.bitmask, 0xE0);
+        assert_eq!(node.bitmask_dots, "101. ....");
+    }
+
+    #[test]
+    fn test_sub_byte_bitmask_and_dots_flags() {
+        let registry = SchemaMetadataRegistry::new();
+
+        // SIM flag: bit_offset = 3, bit_length = 1, val = 0
+        let mut sim_elem = InfosetElement::simple(QName::local("sim"), ElementState::Value(DfdlValue::String("0".into())));
+        sim_elem.location = Some((3, 1));
+        let sim_node = DissectionNode::from_element(&sim_elem, &registry);
+        assert_eq!(sim_node.bitmask, 0x10);
+        assert_eq!(sim_node.bitmask_dots, "...0 ....");
+
+        // SPI flag: bit_offset = 5, bit_length = 1, val = 1
+        let mut spi_elem = InfosetElement::simple(QName::local("spi"), ElementState::Value(DfdlValue::String("1".into())));
+        spi_elem.location = Some((5, 1));
+        let spi_node = DissectionNode::from_element(&spi_elem, &registry);
+        assert_eq!(spi_node.bitmask, 0x04);
+        assert_eq!(spi_node.bitmask_dots, ".... .1..");
+    }
+
+    #[test]
+    fn test_schema_bounds_anomaly_detection() {
+        let mut registry = SchemaMetadataRegistry::new();
+        let mut meta = FieldMetadata::new("flightLevel");
+        meta.min_inclusive = Some(0.0);
+        meta.max_inclusive = Some(600.0);
+        registry.insert(meta);
+
+        // Within bounds
+        let elem_ok = InfosetElement::simple(QName::local("flightLevel"), ElementState::Value(DfdlValue::String("330".into())));
+        let node_ok = DissectionNode::from_element(&elem_ok, &registry);
+        assert!(node_ok.anomalies.is_empty());
+
+        // Above maxInclusive
+        let elem_high = InfosetElement::simple(QName::local("flightLevel"), ElementState::Value(DfdlValue::String("750".into())));
+        let node_high = DissectionNode::from_element(&elem_high, &registry);
+        assert_eq!(node_high.anomalies.len(), 1);
+        if let Some(an_high) = node_high.anomalies.first() {
+            assert_eq!(an_high.severity, AnomalySeverity::Warn);
+            assert!(an_high.message.contains("exceeds schema maxInclusive"));
+        }
+
+        // Below minInclusive
+        let elem_low = InfosetElement::simple(QName::local("flightLevel"), ElementState::Value(DfdlValue::String("-10".into())));
+        let node_low = DissectionNode::from_element(&elem_low, &registry);
+        assert_eq!(node_low.anomalies.len(), 1);
+        if let Some(an_low) = node_low.anomalies.first() {
+            assert_eq!(an_low.severity, AnomalySeverity::Warn);
+            assert!(an_low.message.contains("below schema minInclusive"));
+        }
+    }
+
+    #[test]
+    fn test_schema_driven_enum_anomalies() {
+        let mut registry = SchemaMetadataRegistry::new();
+        let mut meta = FieldMetadata::new("status");
+        meta.enum_map.insert(0, "Nominal".to_string());
+        meta.enum_map.insert(1, "Subsystem Warning Alert".to_string());
+        meta.enum_map.insert(2, "Critical Failure Emergency".to_string());
+        registry.insert(meta);
+
+        // Nominal
+        let elem_norm = InfosetElement::simple(QName::local("status"), ElementState::Value(DfdlValue::String("0".into())));
+        let node_norm = DissectionNode::from_element(&elem_norm, &registry);
+        assert!(node_norm.anomalies.is_empty());
+
+        // Warning Alert
+        let elem_warn = InfosetElement::simple(QName::local("status"), ElementState::Value(DfdlValue::String("1".into())));
+        let node_warn = DissectionNode::from_element(&elem_warn, &registry);
+        assert_eq!(node_warn.anomalies.len(), 1);
+        if let Some(an_warn) = node_warn.anomalies.first() {
+            assert_eq!(an_warn.severity, AnomalySeverity::Warn);
+            assert!(an_warn.message.contains("Subsystem Warning Alert"));
+        }
+
+        // Critical Failure Emergency
+        let elem_crit = InfosetElement::simple(QName::local("status"), ElementState::Value(DfdlValue::String("2".into())));
+        let node_crit = DissectionNode::from_element(&elem_crit, &registry);
+        assert_eq!(node_crit.anomalies.len(), 1);
+        if let Some(an_crit) = node_crit.anomalies.first() {
+            assert_eq!(an_crit.severity, AnomalySeverity::Error);
+            assert!(an_crit.message.contains("Critical Failure Emergency"));
+        }
+    }
+
+    #[test]
+    fn test_tree_json_serialization_with_anomalies() {
+        let tree = DissectionTree {
+            protocol_name: "TestProto".to_string(),
+            root: None,
+            anomalies: vec![DissectionAnomaly {
+                severity: AnomalySeverity::Error,
+                message: "Malformed packet: 10 residual bytes".to_string(),
+            }],
+        };
+
+        let json = tree.to_json();
+        assert!(json.contains("\"anomalies\":[{\"severity\":\"Error\",\"message\":\"Malformed packet: 10 residual bytes\"}]"));
+    }
+}
+

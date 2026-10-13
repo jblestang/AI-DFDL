@@ -6,7 +6,7 @@
 //!
 //! This engine is completely generic and contains zero hardcoded protocol rules.
 
-use crate::dissector::{DissectionNode, DissectionTree};
+use crate::dissector::{AnomalySeverity, DissectionAnomaly, DissectionNode, DissectionTree};
 use crate::schema_meta::SchemaMetadataRegistry;
 use dfdl_core::error::DFDLResult;
 use dfdl_core::io::bitstream::BitReader;
@@ -102,6 +102,7 @@ impl DfdlDissectorEngine {
             return Ok(DissectionTree {
                 protocol_name: self.protocol_name().to_string(),
                 root: None,
+                anomalies: Vec::new(),
             });
         }
 
@@ -114,6 +115,7 @@ impl DfdlDissectorEngine {
         let mut budget = WorkBudget::new(2_000_000);
 
         let mut documents = Vec::new();
+        let mut root_anomalies = Vec::new();
 
         while !reader.is_eof() && reader.remaining_bytes() > 0 {
             let prev_pos = reader.position();
@@ -131,9 +133,22 @@ impl DfdlDissectorEngine {
                     if documents.is_empty() {
                         return Err(e);
                     }
+                    root_anomalies.push(DissectionAnomaly {
+                        severity: AnomalySeverity::Error,
+                        message: format!("Dissection truncated early: {e}"),
+                    });
                     break;
                 }
             }
+        }
+
+        // Enhancement 5: Detect leftover / residual trailing bytes in payload
+        if reader.remaining_bytes() > 0 {
+            let leftover = reader.remaining_bytes();
+            root_anomalies.push(DissectionAnomaly {
+                severity: AnomalySeverity::Warn,
+                message: format!("Malformed packet: {leftover} unparsed trailing residual byte(s)"),
+            });
         }
 
         if documents.len() == 1 {
@@ -143,14 +158,22 @@ impl DfdlDissectorEngine {
                     return Ok(DissectionTree {
                         protocol_name: self.protocol_name().to_string(),
                         root: None,
+                        anomalies: root_anomalies,
                     })
                 }
             };
-            return Ok(DissectionTree::from_infoset(
+            let mut tree = DissectionTree::from_infoset(
                 &doc,
                 &self.registry,
                 self.protocol_name(),
-            ));
+            );
+            if !root_anomalies.is_empty() {
+                if let Some(ref mut r) = tree.root {
+                    r.anomalies.extend(root_anomalies.clone());
+                }
+                tree.anomalies.extend(root_anomalies);
+            }
+            return Ok(tree);
         }
 
         // Multiple top-level records or messages found in payload
@@ -182,12 +205,16 @@ impl DfdlDissectorEngine {
             length: total_length,
             bit_offset: total_offset.saturating_mul(8),
             bit_length: total_length.saturating_mul(8),
+            bitmask: 0,
+            bitmask_dots: String::new(),
+            anomalies: root_anomalies.clone(),
             children: root_children,
         };
 
         Ok(DissectionTree {
             protocol_name: self.protocol_name().to_string(),
             root: Some(root_node),
+            anomalies: root_anomalies,
         })
     }
 

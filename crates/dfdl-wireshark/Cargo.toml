@@ -19,6 +19,7 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "dfdl-wireshark"
 path = "src/main.rs"
+test = false
 
 [lints]
 workspace = true

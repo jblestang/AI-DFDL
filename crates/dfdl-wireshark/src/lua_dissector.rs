@@ -118,6 +118,13 @@ local proto_fields = {{}}
 local proto_field_types = {{}}
 local fields_list = {{}}
 
+-- Enhancement 5: Wireshark Expert Info declarations for anomalies and operational alerts
+local expert_error = ProtoExpert.new("{proto_id}.expert.error", "DFDL Error", expert.group.MALFORMED, expert.severity.ERROR)
+local expert_warn = ProtoExpert.new("{proto_id}.expert.warn", "DFDL Warning", expert.group.PROTOCOL, expert.severity.WARN)
+local expert_note = ProtoExpert.new("{proto_id}.expert.note", "DFDL Note", expert.group.SEQUENCE, expert.severity.NOTE)
+local expert_chat = ProtoExpert.new("{proto_id}.expert.chat", "DFDL Info", expert.group.PROTOCOL, expert.severity.CHAT)
+proto.experts = {{ expert_error, expert_warn, expert_note, expert_chat }}
+
 local native_dfdl = nil
 local dylib_candidates = {{
 {dylib_candidates_lua}
@@ -403,13 +410,36 @@ local function populate_node(tree_item, tvb, node)
             end
             item_label = string.format("%s: %s", prefix, tostring(node.converted or node.raw or ""))
         end
+        -- Enhancement 6: Sub-byte bitfield dotted mask breakdown (e.g. ".... .1.. = ...")
+        if node.bitmask_dots and node.bitmask_dots ~= "" then
+            item_label = string.format("%s = %s", node.bitmask_dots, item_label)
+        end
         sub_item:set_text(item_label)
     else
         local label = node.label or node.name or "Item"
         if (not node.label or node.label == node.name) and node.description and node.description ~= "" and node.description ~= node.name then
             label = string.format("%s (%s)", node.description, node.name)
         end
+        -- Enhancement 6: Sub-byte bitfield dotted mask breakdown for generic items
+        if node.bitmask_dots and node.bitmask_dots ~= "" then
+            label = string.format("%s = %s", node.bitmask_dots, label)
+        end
         sub_item = tree_item:add(proto, item_tvb, label)
+    end
+
+    -- Enhancement 5: Attach expert info / anomalies to tree item
+    if node.anomalies and #node.anomalies > 0 then
+        for _, an in ipairs(node.anomalies) do
+            local ef = expert_warn
+            if an.severity == "Error" then
+                ef = expert_error
+            elseif an.severity == "Note" then
+                ef = expert_note
+            elseif an.severity == "Chat" then
+                ef = expert_chat
+            end
+            sub_item:add_proto_expert_info(ef, an.message)
+        end
     end
 
     if node.children and #node.children > 0 then
@@ -480,6 +510,19 @@ function proto.dissector(tvb, pinfo, tree)
         end
 
         local root_tree = tree:add(proto, payload_tvb(), string.format("%s (%d bytes)", tree_data.protocol or "{title}", payload_tvb:len()))
+        if tree_data.anomalies and #tree_data.anomalies > 0 then
+            for _, an in ipairs(tree_data.anomalies) do
+                local ef = expert_warn
+                if an.severity == "Error" then
+                    ef = expert_error
+                elseif an.severity == "Note" then
+                    ef = expert_note
+                elseif an.severity == "Chat" then
+                    ef = expert_chat
+                end
+                root_tree:add_proto_expert_info(ef, an.message)
+            end
+        end
         populate_node(root_tree, payload_tvb, tree_data.root)
     end
 end
