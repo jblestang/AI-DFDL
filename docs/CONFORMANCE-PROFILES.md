@@ -22,7 +22,7 @@ activate the **Daffodil alignment profile**.
 - `dfdl:lengthKind='endOfParent'`
 - `dfdl:textBidi='yes'`, `dfdl:floating='yes'`
 - Many `textNumberRep='zoned'` type combinations
-- Selected calendar/binary combinations (see Project conformance gap analyses: dfdl-schema, dfdl-core, IR)
+- Selected calendar/binary combinations (see [dfdl-schema-standard-implementation-gaps.md](dfdl-schema-standard-implementation-gaps.md))
 
 **Not in this profile:** Any property in the `dfdlx` or `daf` namespaces (see below).
 
@@ -57,15 +57,15 @@ activate the **Daffodil alignment profile**.
 |------|--------|
 | Strict OGF-only | Reject schemas containing `dfdlx:` / `daf:` attributes (not enforced automatically today). |
 | TDML / Daffodil | Default compiler settings + extension properties as required by corpus. |
-| Document gaps | See Project conformance gap analyses (dfdl-schema, dfdl-core, IR). |
+| Document gaps | [dfdl-schema-standard-implementation-gaps.md](dfdl-schema-standard-implementation-gaps.md), [dfdl-standard-implementation-gaps.md](dfdl-standard-implementation-gaps.md) (kernel/runtime), [dfdl-ir-standard-implementation-gaps.md](dfdl-ir-standard-implementation-gaps.md) (compiled IR), [dfdl-core-indepth-assessment.md](dfdl-core-indepth-assessment.md), [dfdl-expert-reassessment.md](dfdl-expert-reassessment.md), [dfdl-test-summary.md](dfdl-test-summary.md). |
 
 ## 4. Relationship to runtime
 
 Compilation success under the Daffodil profile **does not** imply full GFD runtime
 semantics. Kernel gaps (e.g. `binaryFloatRep`, `ValidationMode::Full`) are documented
-separately in Project conformance gap analyses (dfdl-schema, dfdl-core, IR).
+separately in [dfdl-standard-implementation-gaps.md](dfdl-standard-implementation-gaps.md), [dfdl-ir-standard-implementation-gaps.md](dfdl-ir-standard-implementation-gaps.md), and [dfdl-schema-standard-implementation-gaps.md](dfdl-schema-standard-implementation-gaps.md).
 
 ## 5. Maintenance
 
 - Regenerate SDE tables: `rg 'Schema Definition Error|not implemented|not supported' crates/dfdl-schema`
-- After compiler changes: `graft build` (if graph indexed) and update Project conformance gap analyses.
+- After compiler changes: `graft build` (if graph indexed) and update the gap analyses in this directory (`dfdl-*-gaps.md`, assessments, [dfdl-test-summary.md](dfdl-test-summary.md)).
