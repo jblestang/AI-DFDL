@@ -10,4 +10,8 @@ Review and conformance gap analyses for the AI-DFDL workspace. Start with [CONFO
 | [dfdl-standard-implementation-gaps.md](dfdl-standard-implementation-gaps.md) | GFD-R-P.240 vs runtime (`dfdl-core` + compile path): top gaps, POU/delimiter/expression deep dives. |
 | [dfdl-ir-standard-implementation-gaps.md](dfdl-ir-standard-implementation-gaps.md) | Compiled schema IR (`dfdl-core::schema`) vs spec: dead enum variants, `DfdlProp`, compiler alignment. |
 | [dfdl-schema-standard-implementation-gaps.md](dfdl-schema-standard-implementation-gaps.md) | `dfdl-schema` XSD→IR compilation gaps, SDE catalog, extension properties. |
+| [dfdl-xml-and-properties-standard-gaps.md](dfdl-xml-and-properties-standard-gaps.md) | `dfdl-xml` (XML 1.0 + Namespaces) and §6.3 property resolution vs GFD-R-P.240. |
+| [dfdl-unparse-escape-standard-gaps.md](dfdl-unparse-escape-standard-gaps.md) | §19 escapes and §20 unparse: kernel, IR, and parse/unparse symmetry gaps. |
+| [dfdl-expressions-section18-gaps.md](dfdl-expressions-section18-gaps.md) | §18 / §23 expression language in `dfdl-core::expr` (syntax, paths, functions). |
+| [dfdl-tdml-appendix-f-gaps.md](dfdl-tdml-appendix-f-gaps.md) | Appendix F TDML harness vs OGF / Daffodil runner semantics (`dfdl-tests`). |
 | [CONFORMANCE-PROFILES.md](CONFORMANCE-PROFILES.md) | OGF core vs Daffodil alignment profiles and links to gap analyses. |
