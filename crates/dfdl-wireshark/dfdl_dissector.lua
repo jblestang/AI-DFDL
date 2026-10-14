@@ -220,7 +220,7 @@ local function register_fields_from_schema(schema_file)
             f:close()
             for elem_name in string.gmatch(xsd_text, '<xs:element%s+name="([%w_]+)"') do
                 if not proto_fields[elem_name] then
-                    proto_fields[elem_name] = ProtoField.string(string.format("%s.%s", "dfdl", elem_name), elem_name, base.NONE, nil, 0, "")
+                    proto_fields[elem_name] = ProtoField.string(string.format("%s.%s", "dfdl", elem_name), elem_name, base.NONE, elem_name)
                     table.insert(fields_list, proto_fields[elem_name])
                 end
             end
@@ -232,26 +232,40 @@ local function register_fields_from_schema(schema_file)
     if fields_data and type(fields_data) == "table" then
         for _, item in ipairs(fields_data) do
             local name = item.name
+            local path = item.path or name
             local label = item.label or name
             local tooltip = item.tooltip or ""
+            local desc = tooltip
+            if not desc or desc == "" then
+                desc = item.description or label or name
+            end
             local ptype = item.proto_type or "string"
-            if name and not proto_fields[name] then
-                proto_field_types[name] = ptype
-                proto_field_types[string.lower(name)] = ptype
+            local filter_abbr = string.format("%s.%s", "dfdl", path)
+            if name and not proto_fields[filter_abbr] then
+                proto_field_types[path] = ptype
+                proto_field_types[string.lower(path)] = ptype
                 local field
                 if ptype == "double" then
-                    field = ProtoField.double(string.format("%s.%s", "dfdl", name), label)
+                    field = ProtoField.double(filter_abbr, label, desc)
                 elseif ptype == "uint32" or ptype == "uint" then
-                    field = ProtoField.uint32(string.format("%s.%s", "dfdl", name), label, base.DEC)
+                    field = ProtoField.uint32(filter_abbr, label, base.DEC, nil, 0, desc)
                 elseif ptype == "int32" or ptype == "int" then
-                    field = ProtoField.int32(string.format("%s.%s", "dfdl", name), label, base.DEC)
+                    field = ProtoField.int32(filter_abbr, label, base.DEC, nil, 0, desc)
                 elseif ptype == "bool" then
-                    field = ProtoField.bool(string.format("%s.%s", "dfdl", name), label)
+                    field = ProtoField.bool(filter_abbr, label, base.NONE, nil, 0, desc)
                 else
-                    field = ProtoField.string(string.format("%s.%s", "dfdl", name), label, base.NONE, nil, 0, tooltip)
+                    field = ProtoField.string(filter_abbr, label, base.NONE, desc)
                 end
-                proto_fields[name] = field
-                proto_fields[string.lower(name)] = field
+                proto_fields[filter_abbr] = field
+                proto_fields[string.lower(filter_abbr)] = field
+                proto_fields[path] = field
+                proto_fields[string.lower(path)] = field
+                if not proto_fields[name] then
+                    proto_fields[name] = field
+                    proto_fields[string.lower(name)] = field
+                    proto_field_types[name] = ptype
+                    proto_field_types[string.lower(name)] = ptype
+                end
                 table.insert(fields_list, field)
             end
         end
@@ -277,8 +291,10 @@ local function populate_node(tree_item, tvb, node)
     end
 
     local sub_item
-    local pf = proto_fields[node.name] or proto_fields[string.lower(node.name)]
-    local ptype = proto_field_types[node.name] or proto_field_types[string.lower(node.name)] or "string"
+    local path = node.path or node.name
+    local pf = proto_fields[path] or proto_fields[string.lower(path)] or proto_fields[node.name] or proto_fields[string.lower(node.name)]
+    local flat_pf = proto_fields[node.name] or proto_fields[string.lower(node.name)]
+    local ptype = proto_field_types[path] or proto_field_types[string.lower(path)] or proto_field_types[node.name] or proto_field_types[string.lower(node.name)] or "string"
 
     if pf and (not node.children or #node.children == 0) then
         local num_val = nil
@@ -298,14 +314,23 @@ local function populate_node(tree_item, tvb, node)
             end
         end
 
+        local display_val = node.converted
+        if not display_val or display_val == "" then
+            display_val = node.raw or ""
+        end
+
         if num_val and (ptype == "uint32" or ptype == "int32" or ptype == "double") then
             sub_item = tree_item:add(pf, item_tvb, num_val)
-        else
-            local display_val = node.converted
-            if not display_val or display_val == "" then
-                display_val = node.raw or ""
+            if flat_pf and flat_pf ~= pf then
+                local h = tree_item:add(flat_pf, item_tvb, num_val)
+                h:set_hidden()
             end
+        else
             sub_item = tree_item:add(pf, item_tvb, tostring(display_val))
+            if flat_pf and flat_pf ~= pf then
+                local h = tree_item:add(flat_pf, item_tvb, tostring(display_val))
+                h:set_hidden()
+            end
         end
 
         local item_label = node.label
@@ -330,7 +355,11 @@ local function populate_node(tree_item, tvb, node)
         if node.bitmask_dots and node.bitmask_dots ~= "" then
             label = string.format("%s = %s", node.bitmask_dots, label)
         end
-        sub_item = tree_item:add(proto, item_tvb, label)
+        if pf then
+            sub_item = tree_item:add(pf, item_tvb, label)
+        else
+            sub_item = tree_item:add(proto, item_tvb, label)
+        end
     end
 
     -- Enhancement 5: Attach expert info / anomalies to tree item

@@ -194,6 +194,7 @@ impl DfdlDissectorEngine {
         let container_name = format!("{}_Block", self.protocol_name());
         let root_node = DissectionNode {
             name: container_name.clone(),
+            path: container_name.clone(),
             description: String::new(),
             label: format!("{} ({} items)", self.protocol_name(), root_children.len()),
             raw_value: String::new(),

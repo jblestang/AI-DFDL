@@ -8,7 +8,7 @@
 //! dynamically from the supplied DFDL schema.
 
 use dfdl_xml::{XmlEvent, XmlReader};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Metadata associated with an XML Schema element or simpleType.
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +73,12 @@ pub struct SchemaMetadataRegistry {
     pub root_element: Option<String>,
     /// Protocol name inferred from schema root element or targetNamespace.
     pub protocol_name: String,
+    /// Discovered record-level elements that start a hierarchical scope.
+    pub record_elements: HashSet<String>,
+    /// Child containment mapping: parent element or complexType -> list of (child_element_name, child_type).
+    pub containment: HashMap<String, Vec<(String, String)>>,
+    /// Precomputed hierarchical paths: `(hierarchical_path, leaf_element_name)`.
+    pub hierarchical_fields: Vec<(String, String)>,
     /// Map of metadata indexed by lowercase element or type name.
     entries: HashMap<String, FieldMetadata>,
     /// Map of element names to their associated simpleType names.
@@ -92,9 +98,18 @@ impl SchemaMetadataRegistry {
         Self {
             root_element: None,
             protocol_name: String::new(),
+            record_elements: HashSet::new(),
+            containment: HashMap::new(),
+            hierarchical_fields: Vec::new(),
             entries: HashMap::new(),
             element_to_type: HashMap::new(),
         }
+    }
+
+    /// Returns `true` if the element name is a record-level element.
+    #[must_use]
+    pub fn is_record_element(&self, name: &str) -> bool {
+        self.record_elements.contains(name) || self.record_elements.contains(&name.to_lowercase())
     }
 
     /// Registers a field metadata entry.
@@ -153,25 +168,31 @@ impl SchemaMetadataRegistry {
     /// `<xs:annotation>` elements without any hardcoded protocol assumptions.
     #[must_use]
     pub fn from_schema_xml(schema_xml: &str) -> Self {
+        #[derive(Debug, Default)]
+        struct DeclContext {
+            tag: String,
+            name: String,
+            type_name: String,
+            is_ref: bool,
+            doc: String,
+            item: String,
+            desc: String,
+            unit: String,
+            res: String,
+            lsb: String,
+            min: Option<f64>,
+            max: Option<f64>,
+            enums: HashMap<i64, String>,
+        }
+
         let mut registry = Self::new();
         let mut reader = XmlReader::new(schema_xml);
 
-        let mut current_name = String::new();
-        let mut current_type = String::new();
-        let mut current_doc = String::new();
-        let mut current_item = String::new();
-        let mut current_desc = String::new();
-        let mut current_unit = String::new();
-        let mut current_res = String::new();
-        let mut current_lsb = String::new();
-        let mut current_min = None;
-        let mut current_max = None;
-
-        let mut in_decl = false;
+        let mut decl_stack: Vec<DeclContext> = Vec::new();
         let mut in_doc = false;
         let mut in_appinfo = false;
+        let mut choice_depth = 0usize;
         let mut current_appinfo_tag = String::new();
-        let mut current_enums: HashMap<i64, String> = HashMap::new();
         let mut pending_enum_val: Option<i64> = None;
 
         while let Ok(Some(ev)) = reader.next_event() {
@@ -190,34 +211,75 @@ impl SchemaMetadataRegistry {
                                 }
                             }
                         }
-                    } else if local == "simpleType" || local == "element" || local == "complexType" {
-                        if let Some(n) = attributes.iter().find(|a| a.name.local_name == "name") {
-                            current_name = n.value.to_string();
-                            if local == "element" && registry.root_element.is_none() {
-                                registry.root_element = Some(current_name.clone());
-                                if registry.protocol_name.is_empty() {
-                                    registry.protocol_name = current_name.clone();
+                    } else if local == "choice" {
+                        choice_depth = choice_depth.saturating_add(1);
+                    } else if local == "simpleType" || local == "element" || local == "complexType" || local == "group" {
+                        let name_attr = attributes.iter().find(|a| a.name.local_name == "name");
+                        let ref_attr = attributes.iter().find(|a| a.name.local_name == "ref");
+                        let type_attr = attributes.iter().find(|a| a.name.local_name == "type");
+                        // An element declared as a direct branch of a top-level dispatching choice
+                        // represents an independent message/record variant in the protocol hierarchy.
+                        let is_top_choice_branch = choice_depth > 0
+                            && decl_stack.len() <= 2
+                            && decl_stack.first().map(|d| d.tag.as_str()) == Some("element");
+
+                        if let Some(r) = ref_attr {
+                            let ref_val = clean_type_name(r.value.as_ref());
+                            if let Some(parent) = decl_stack.last() {
+                                registry.containment.entry(parent.name.clone()).or_default().push((ref_val.clone(), ref_val.clone()));
+                                if !parent.type_name.is_empty() {
+                                    registry.containment.entry(parent.type_name.clone()).or_default().push((ref_val.clone(), ref_val.clone()));
                                 }
                             }
-                            current_type.clear();
-                            current_doc.clear();
-                            current_item.clear();
-                            current_desc.clear();
-                            current_unit.clear();
-                            current_res.clear();
-                            current_lsb.clear();
-                            current_min = None;
-                            current_max = None;
-                            current_enums.clear();
-                            pending_enum_val = None;
-                            in_decl = true;
-
-                            if let Some(t) = attributes.iter().find(|a| a.name.local_name == "type") {
-                                current_type = clean_type_name(t.value.as_ref());
-                                registry.link_element_type(&current_name, &current_type);
+                            if is_top_choice_branch {
+                                registry.record_elements.insert(ref_val.clone());
                             }
+                            decl_stack.push(DeclContext {
+                                tag: local.to_string(),
+                                name: ref_val,
+                                is_ref: true,
+                                ..Default::default()
+                            });
+                        } else if let Some(n) = name_attr {
+                            let name_val = n.value.to_string();
+                            if local == "element" {
+                                if registry.root_element.is_none() {
+                                    registry.root_element = Some(name_val.clone());
+                                    if registry.protocol_name.is_empty() {
+                                        registry.protocol_name = name_val.clone();
+                                    }
+                                }
+                                if is_top_choice_branch {
+                                    registry.record_elements.insert(name_val.clone());
+                                }
+                            }
+                            let mut type_val = String::new();
+                            if let Some(t) = type_attr {
+                                type_val = clean_type_name(t.value.as_ref());
+                                registry.link_element_type(&name_val, &type_val);
+                            }
+                            if let Some(parent) = decl_stack.last() {
+                                registry.containment.entry(parent.name.clone()).or_default().push((name_val.clone(), type_val.clone()));
+                                if !parent.type_name.is_empty() {
+                                    registry.containment.entry(parent.type_name.clone()).or_default().push((name_val.clone(), type_val.clone()));
+                                }
+                            }
+                            decl_stack.push(DeclContext {
+                                tag: local.to_string(),
+                                name: name_val,
+                                type_name: type_val,
+                                is_ref: false,
+                                ..Default::default()
+                            });
+                        } else if local == "complexType" {
+                            let parent_name = decl_stack.last().map(|d| d.name.clone()).unwrap_or_default();
+                            decl_stack.push(DeclContext {
+                                tag: local.to_string(),
+                                name: parent_name,
+                                ..Default::default()
+                            });
                         }
-                    } else if (local == "enum" || local == "enumeration") && in_decl {
+                    } else if (local == "enum" || local == "enumeration") && !decl_stack.is_empty() {
                         let val_opt = attributes
                             .iter()
                             .find(|a| a.name.local_name == "value")
@@ -232,122 +294,141 @@ impl SchemaMetadataRegistry {
                             .map(|a| a.value.trim().to_string());
 
                         if let (Some(val), Some(label)) = (val_opt, label_opt) {
-                            current_enums.insert(val, label);
+                            if let Some(top) = decl_stack.last_mut() {
+                                top.enums.insert(val, label);
+                            }
                         } else if let Some(val) = val_opt {
                             pending_enum_val = Some(val);
                         }
-                    } else if local == "documentation" && in_decl {
+                    } else if local == "documentation" && !decl_stack.is_empty() {
                         in_doc = true;
-                        current_doc.clear();
-                    } else if local == "appinfo" && in_decl {
+                        if let Some(top) = decl_stack.last_mut() {
+                            top.doc.clear();
+                        }
+                    } else if local == "appinfo" && !decl_stack.is_empty() {
                         in_appinfo = true;
                     } else if in_appinfo {
                         current_appinfo_tag = local.to_string();
-                    } else if in_decl && local == "minInclusive" {
+                    } else if !decl_stack.is_empty() && local == "minInclusive" {
                         if let Some(v) = attributes.iter().find(|a| a.name.local_name == "value") {
-                            current_min = v.value.trim().parse::<f64>().ok();
+                            if let Some(top) = decl_stack.last_mut() {
+                                top.min = v.value.trim().parse::<f64>().ok();
+                            }
                         }
-                    } else if in_decl && local == "maxInclusive" {
+                    } else if !decl_stack.is_empty() && local == "maxInclusive" {
                         if let Some(v) = attributes.iter().find(|a| a.name.local_name == "value") {
-                            current_max = v.value.trim().parse::<f64>().ok();
+                            if let Some(top) = decl_stack.last_mut() {
+                                top.max = v.value.trim().parse::<f64>().ok();
+                            }
                         }
-                    } else if in_decl && local == "restriction" {
+                    } else if !decl_stack.is_empty() && local == "restriction" {
                         if let Some(b) = attributes.iter().find(|a| a.name.local_name == "base") {
                             let base_type = clean_type_name(b.value.as_ref());
-                            if current_type.is_empty() {
-                                current_type = base_type.clone();
+                            if let Some(top) = decl_stack.last_mut() {
+                                if top.type_name.is_empty() {
+                                    top.type_name = base_type.clone();
+                                }
+                                registry.link_element_type(&top.name, &base_type);
                             }
-                            registry.link_element_type(&current_name, &base_type);
                         }
                     }
                 }
                 XmlEvent::Text { ref content, .. } => {
                     let text = content.as_ref();
                     if in_doc {
-                        current_doc.push_str(text);
-                        if let Some(val) = pending_enum_val {
-                            let label = text.trim();
-                            if !label.is_empty() {
-                                current_enums.insert(val, label.to_string());
+                        if let Some(top) = decl_stack.last_mut() {
+                            top.doc.push_str(text);
+                            if let Some(val) = pending_enum_val {
+                                let label = text.trim();
+                                if !label.is_empty() {
+                                    top.enums.insert(val, label.to_string());
+                                }
                             }
                         }
                     } else if in_appinfo {
                         let t = text.trim();
-                        match current_appinfo_tag.as_str() {
-                            "item" | "itemReference" | "ref" => current_item.push_str(t),
-                            "description" | "itemDescription" | "title" => current_desc.push_str(t),
-                            "unit" | "units" => current_unit.push_str(t),
-                            "resolution" | "quantum" | "scale" => current_res.push_str(t),
-                            "lsb" => current_lsb.push_str(t),
-                            _ => {}
+                        if let Some(top) = decl_stack.last_mut() {
+                            match current_appinfo_tag.as_str() {
+                                "item" | "itemReference" | "ref" => top.item.push_str(t),
+                                "description" | "itemDescription" | "title" => top.desc.push_str(t),
+                                "unit" | "units" => top.unit.push_str(t),
+                                "resolution" | "quantum" | "scale" => top.res.push_str(t),
+                                "lsb" => top.lsb.push_str(t),
+                                _ => {}
+                            }
                         }
                     }
                 }
                 XmlEvent::CData { content, .. } => {
                     if in_doc {
-                        current_doc.push_str(content);
-                        if let Some(val) = pending_enum_val {
-                            let label = content.trim();
-                            if !label.is_empty() {
-                                current_enums.insert(val, label.to_string());
+                        if let Some(top) = decl_stack.last_mut() {
+                            top.doc.push_str(content);
+                            if let Some(val) = pending_enum_val {
+                                let label = content.trim();
+                                if !label.is_empty() {
+                                    top.enums.insert(val, label.to_string());
+                                }
                             }
                         }
                     } else if in_appinfo {
                         let t = content.trim();
-                        match current_appinfo_tag.as_str() {
-                            "item" | "itemReference" | "ref" => current_item.push_str(t),
-                            "description" | "itemDescription" | "title" => current_desc.push_str(t),
-                            "unit" | "units" => current_unit.push_str(t),
-                            "resolution" | "quantum" | "scale" => current_res.push_str(t),
-                            "lsb" => current_lsb.push_str(t),
-                            _ => {}
+                        if let Some(top) = decl_stack.last_mut() {
+                            match current_appinfo_tag.as_str() {
+                                "item" | "itemReference" | "ref" => top.item.push_str(t),
+                                "description" | "itemDescription" | "title" => top.desc.push_str(t),
+                                "unit" | "units" => top.unit.push_str(t),
+                                "resolution" | "quantum" | "scale" => top.res.push_str(t),
+                                "lsb" => top.lsb.push_str(t),
+                                _ => {}
+                            }
                         }
                     }
                 }
                 XmlEvent::EndElement { name, .. } => {
                     let local = name.local_name.as_str();
-                    if local == "enumeration" || local == "enum" {
+                    if local == "choice" {
+                        choice_depth = choice_depth.saturating_sub(1);
+                    } else if local == "enumeration" || local == "enum" {
                         pending_enum_val = None;
                     } else if local == "documentation" {
                         in_doc = false;
                     } else if local == "appinfo" {
                         in_appinfo = false;
                         current_appinfo_tag.clear();
-                    } else if (local == "simpleType" || local == "element" || local == "complexType") && in_decl {
-                        if !current_name.is_empty() {
-                            let doc_clean = current_doc.trim().to_string();
-                            let scale = parse_generic_scale(&current_res, &doc_clean);
+                    } else if local == "simpleType" || local == "element" || local == "complexType" || local == "group" {
+                        if let Some(pos) = decl_stack.iter().rposition(|d| d.tag == local) {
+                            let mut decl = decl_stack.remove(pos);
+                            if !decl.is_ref && !decl.name.is_empty() {
+                                let doc_clean = decl.doc.trim().to_string();
+                                let scale = parse_generic_scale(&decl.res, &doc_clean);
 
-                            // Extract enums from documentation if none explicitly defined
-                            parse_enums_from_text(&doc_clean, &mut current_enums);
+                                parse_enums_from_text(&doc_clean, &mut decl.enums);
 
-                            let desc = if !current_desc.is_empty() {
-                                current_desc.clone()
-                            } else {
-                                extract_concise_description(&doc_clean)
-                            };
+                                let desc = if !decl.desc.is_empty() {
+                                    decl.desc
+                                } else {
+                                    extract_concise_description(&doc_clean)
+                                };
 
-                            let ptype = infer_proto_type(&current_type, scale);
+                                let ptype = infer_proto_type(&decl.type_name, scale);
 
-                            let meta = FieldMetadata {
-                                name: current_name.clone(),
-                                item_ref: current_item.clone(),
-                                description: desc,
-                                documentation: doc_clean,
-                                unit: current_unit.clone(),
-                                resolution_str: current_res.clone(),
-                                lsb_str: current_lsb.clone(),
-                                scale_factor: scale,
-                                min_inclusive: current_min,
-                                max_inclusive: current_max,
-                                proto_type: ptype,
-                                enum_map: current_enums.clone(),
-                            };
-                            registry.insert(meta);
+                                let meta = FieldMetadata {
+                                    name: decl.name,
+                                    item_ref: decl.item,
+                                    description: desc,
+                                    documentation: doc_clean,
+                                    unit: decl.unit,
+                                    resolution_str: decl.res,
+                                    lsb_str: decl.lsb,
+                                    scale_factor: scale,
+                                    min_inclusive: decl.min,
+                                    max_inclusive: decl.max,
+                                    proto_type: ptype,
+                                    enum_map: decl.enums,
+                                };
+                                registry.insert(meta);
+                            }
                         }
-                        in_decl = false;
-                        current_name.clear();
-                        current_enums.clear();
                         pending_enum_val = None;
                     }
                 }
@@ -355,7 +436,7 @@ impl SchemaMetadataRegistry {
             }
         }
 
-        // Propagate simpleType metadata to linked elements
+        // Propagate simpleType and complexType metadata to linked elements
         let links: Vec<(String, String)> = registry
             .element_to_type
             .iter()
@@ -404,6 +485,28 @@ impl SchemaMetadataRegistry {
             }
         }
 
+        // If no sub-records were identified, treat root element as record
+        if registry.record_elements.is_empty() {
+            if let Some(ref root) = registry.root_element {
+                registry.record_elements.insert(root.clone());
+            }
+        }
+
+        let record_names: Vec<String> = registry.record_elements.iter().cloned().collect();
+        for rec_name in record_names {
+            registry.hierarchical_fields.push((rec_name.clone(), rec_name.clone()));
+            let mut path_set = HashSet::new();
+            expand_hierarchy(
+                &rec_name,
+                &rec_name,
+                &registry.containment,
+                &registry.element_to_type,
+                &mut registry.hierarchical_fields,
+                &mut path_set,
+                0,
+            );
+        }
+
         registry
     }
 
@@ -426,6 +529,17 @@ impl SchemaMetadataRegistry {
         if !meta.lsb_str.is_empty() {
             parts.push(format!("LSB: {}", meta.lsb_str));
         }
+        if !meta.enum_map.is_empty() {
+            let mut sorted_enums: Vec<_> = meta.enum_map.iter().collect();
+            sorted_enums.sort_by_key(|(k, _)| **k);
+            let enum_str = sorted_enums
+                .into_iter()
+                .take(8)
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            parts.push(format!("Values: [{enum_str}]"));
+        }
         if !meta.documentation.is_empty() {
             let single_line = meta
                 .documentation
@@ -434,7 +548,11 @@ impl SchemaMetadataRegistry {
                 .join(" ");
             parts.push(single_line);
         }
-        parts.join(" | ")
+        if parts.is_empty() {
+            meta.name.clone()
+        } else {
+            parts.join(" | ")
+        }
     }
 
     /// Serializes registered fields into a JSON array for dynamic Lua / FFI dissectors.
@@ -442,6 +560,48 @@ impl SchemaMetadataRegistry {
     pub fn to_fields_json(&self) -> String {
         let mut out = String::from("[");
         let mut first = true;
+
+        // 1. Output all hierarchical fields (primary display filters)
+        for (path, leaf_name) in &self.hierarchical_fields {
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            let meta_opt = self.get(leaf_name);
+            let description = meta_opt
+                .map(|m| m.description.as_str())
+                .unwrap_or("")
+                .trim();
+            let label = if !description.is_empty() && description != leaf_name {
+                format!("{description} ({leaf_name})")
+            } else {
+                leaf_name.clone()
+            };
+            let unit = meta_opt.map(|m| m.unit.as_str()).unwrap_or("");
+            let ptype = meta_opt.map(|m| m.proto_type.as_str()).unwrap_or("string");
+            let tooltip = meta_opt
+                .map(Self::build_field_tooltip)
+                .unwrap_or_else(|| leaf_name.clone());
+
+            out.push('{');
+            out.push_str("\"name\":");
+            crate::dissector::escape_json_str(leaf_name, &mut out);
+            out.push_str(",\"path\":");
+            crate::dissector::escape_json_str(path, &mut out);
+            out.push_str(",\"label\":");
+            crate::dissector::escape_json_str(&label, &mut out);
+            out.push_str(",\"description\":");
+            crate::dissector::escape_json_str(description, &mut out);
+            out.push_str(",\"unit\":");
+            crate::dissector::escape_json_str(unit, &mut out);
+            out.push_str(",\"proto_type\":");
+            crate::dissector::escape_json_str(ptype, &mut out);
+            out.push_str(",\"tooltip\":");
+            crate::dissector::escape_json_str(&tooltip, &mut out);
+            out.push('}');
+        }
+
+        // 2. Also output leaf entries for flat fallback
         for meta in self.entries.values() {
             if !first {
                 out.push(',');
@@ -458,6 +618,8 @@ impl SchemaMetadataRegistry {
             out.push('{');
             out.push_str("\"name\":");
             crate::dissector::escape_json_str(name, &mut out);
+            out.push_str(",\"path\":");
+            crate::dissector::escape_json_str(name, &mut out);
             out.push_str(",\"label\":");
             crate::dissector::escape_json_str(&label, &mut out);
             out.push_str(",\"description\":");
@@ -473,6 +635,60 @@ impl SchemaMetadataRegistry {
         out.push(']');
         out
     }
+}
+
+/// Recursively computes hierarchical dot-separated paths for all nested child elements.
+fn expand_hierarchy(
+    curr_path: &str,
+    curr_key: &str,
+    containment: &HashMap<String, Vec<(String, String)>>,
+    element_to_type: &HashMap<String, String>,
+    out: &mut Vec<(String, String)>,
+    path_set: &mut HashSet<String>,
+    depth: usize,
+) {
+    if depth > 12 || path_set.contains(curr_key) {
+        return;
+    }
+    path_set.insert(curr_key.to_string());
+
+    let mut children = containment.get(curr_key).cloned().unwrap_or_default();
+    if children.is_empty() {
+        if let Some(type_name) = element_to_type.get(&curr_key.to_lowercase()) {
+            if let Some(ch) = containment.get(type_name) {
+                children = ch.clone();
+            }
+        }
+    }
+
+    for (child_name, child_type) in children {
+        let is_group = child_name.ends_with("Group") || child_type.ends_with("Group");
+        let child_path = if is_group {
+            curr_path.to_string()
+        } else {
+            format!("{curr_path}.{child_name}")
+        };
+        if !is_group {
+            out.push((child_path.clone(), child_name.clone()));
+        }
+
+        let next_key = if !child_type.is_empty() {
+            child_type
+        } else {
+            child_name
+        };
+        expand_hierarchy(
+            &child_path,
+            &next_key,
+            containment,
+            element_to_type,
+            out,
+            path_set,
+            depth.saturating_add(1),
+        );
+    }
+
+    path_set.remove(curr_key);
 }
 
 /// Infers Wireshark ProtoField type based on XML Schema type and scale factor.

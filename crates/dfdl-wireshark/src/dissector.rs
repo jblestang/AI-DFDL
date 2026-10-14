@@ -49,6 +49,8 @@ pub struct DissectionAnomaly {
 pub struct DissectionNode {
     /// XML element name (e.g. `timeOfDay`, `rho`, `record`).
     pub name: String,
+    /// Hierarchical dot-separated display filter path (e.g. `Cat048Record.record.targetDescriptor.typ`).
+    pub path: String,
     /// Human-readable field description from schema metadata.
     pub description: String,
     /// Full display title shown in the Wireshark tree pane.
@@ -85,8 +87,32 @@ impl DissectionNode {
     /// Creates a leaf or parent dissection node from an [`InfosetElement`].
     #[must_use]
     pub fn from_element(elem: &InfosetElement, registry: &SchemaMetadataRegistry) -> Self {
+        Self::from_element_with_parent(elem, registry, None)
+    }
+
+    /// Recursively creates a dissection node while tracking the hierarchical record-level path.
+    fn from_element_with_parent(
+        elem: &InfosetElement,
+        registry: &SchemaMetadataRegistry,
+        parent_path: Option<&str>,
+    ) -> Self {
         let name = elem.name.local_name.clone();
         let meta_opt = registry.get(&name);
+
+        let is_rec = registry.is_record_element(&name);
+        let path = if is_rec {
+            name.clone()
+        } else if let Some(p) = parent_path {
+            format!("{p}.{name}")
+        } else {
+            name.clone()
+        };
+
+        let child_parent_path = if is_rec || parent_path.is_some() {
+            Some(path.as_str())
+        } else {
+            None
+        };
 
         let mut raw_val = String::new();
         let mut children = Vec::new();
@@ -98,7 +124,7 @@ impl DissectionNode {
             ElementState::NoValue | ElementState::Empty => {
                 for child_node in &elem.children {
                     let InfosetNode::Element(ref child_elem) = child_node;
-                    children.push(Self::from_element(child_elem, registry));
+                    children.push(Self::from_element_with_parent(child_elem, registry, child_parent_path));
                 }
             }
             ElementState::Nil | ElementState::Absent => {}
@@ -201,9 +227,18 @@ impl DissectionNode {
             }
         }
 
-        // 2. Schema-driven enumeration alert / status detection
+        // 2. Schema-driven enumeration alert and out-of-bounds validation
         if let Some(meta) = meta_opt {
-            if let Ok(num) = raw_val.trim().parse::<i64>() {
+            let parsed_int = raw_val.trim().parse::<i64>().ok().or_else(|| {
+                let t = raw_val.trim();
+                if let Some(hex_str) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+                    i64::from_str_radix(hex_str, 16).ok()
+                } else {
+                    None
+                }
+            });
+
+            if let Some(num) = parsed_int {
                 if let Some(label) = meta.get_enum_label(num) {
                     let lower = label.to_ascii_lowercase();
                     if lower.contains("emergency")
@@ -226,6 +261,11 @@ impl DissectionNode {
                             message: format!("{name}: {label}"),
                         });
                     }
+                } else if !meta.enum_map.is_empty() {
+                    anomalies.push(DissectionAnomaly {
+                        severity: AnomalySeverity::Warn,
+                        message: format!("Field '{name}' value {num} is outside expected enum values"),
+                    });
                 }
             }
         }
@@ -249,6 +289,7 @@ impl DissectionNode {
 
         Self {
             name,
+            path,
             description,
             label,
             raw_value: raw,
@@ -342,6 +383,8 @@ impl DissectionNode {
         out.push('{');
         out.push_str("\"name\":");
         escape_json_str(&self.name, out);
+        out.push_str(",\"path\":");
+        escape_json_str(&self.path, out);
         out.push_str(",\"description\":");
         escape_json_str(&self.description, out);
         out.push_str(",\"label\":");
@@ -715,6 +758,16 @@ mod tests {
             assert_eq!(an_crit.severity, AnomalySeverity::Error);
             assert!(an_crit.message.contains("Critical Failure Emergency"));
         }
+
+        // Out-of-bounds enum value (e.g. 99)
+        let elem_unknown = InfosetElement::simple(QName::local("status"), ElementState::Value(DfdlValue::String("99".into())));
+        let node_unknown = DissectionNode::from_element(&elem_unknown, &registry);
+        assert_eq!(node_unknown.anomalies.len(), 1);
+        if let Some(an_un) = node_unknown.anomalies.first() {
+            assert_eq!(an_un.severity, AnomalySeverity::Warn);
+            assert!(an_un.message.contains("outside expected enum values"));
+        }
+        assert!(node_unknown.converted_value.contains("Unknown (99)"));
     }
 
     #[test]

@@ -243,6 +243,32 @@ mod tests {
 
         let conv2 = converter::convert_value("status", "2", Some(status_meta));
         assert_eq!(conv2.formatted, "Failure (2)");
+
+        let conv_unknown = converter::convert_value("status", "7", Some(status_meta));
+        assert_eq!(conv_unknown.formatted, "Unknown (7)");
+    }
+
+    #[test]
+    fn test_schema_hierarchical_fields() {
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+        let candidates = [
+            std::path::PathBuf::from(&manifest_dir).join("../../crates/dfdl-example/schemas/asterix.dfdl.xsd"),
+            std::path::PathBuf::from(&manifest_dir).join("../dfdl-example/schemas/asterix.dfdl.xsd"),
+            std::path::PathBuf::from("crates/dfdl-example/schemas/asterix.dfdl.xsd"),
+        ];
+        let path = candidates
+            .iter()
+            .find(|p| p.exists())
+            .expect("asterix.dfdl.xsd not found in candidates");
+        let xsd = std::fs::read_to_string(path).expect("asterix.dfdl.xsd must exist");
+        let reg = SchemaMetadataRegistry::from_schema_xml(&xsd);
+        println!("RECORD_ELEMENTS: {:?}", reg.record_elements);
+        println!("CONTAINMENT_KEYS: {:?}", reg.containment.keys());
+        println!("HIERARCHICAL_FIELDS count: {}", reg.hierarchical_fields.len());
+        for (p, n) in reg.hierarchical_fields.iter().take(20) {
+            println!("FIELD: {p} (leaf: {n})");
+        }
+        assert!(!reg.hierarchical_fields.is_empty());
     }
 }
 

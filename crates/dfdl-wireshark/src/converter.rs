@@ -74,6 +74,15 @@ fn convert_numeric_value(raw_num: f64, raw_str: &str, meta: &FieldMetadata) -> C
                 resolution: meta.resolution_str.clone(),
                 tooltip: build_tooltip(meta),
             };
+        } else if !meta.enum_map.is_empty() {
+            let formatted = format!("Unknown ({raw_int})");
+            return ConvertedValue {
+                raw: raw_str.to_string(),
+                formatted,
+                unit: meta.unit.clone(),
+                resolution: meta.resolution_str.clone(),
+                tooltip: build_tooltip(meta),
+            };
         }
     }
 
@@ -202,11 +211,11 @@ fn format_seconds_with_time(seconds: f64, _raw: f64) -> String {
 /// Generates a documentation tooltip string describing the field and its resolution.
 fn build_tooltip(meta: &FieldMetadata) -> String {
     let mut parts = Vec::new();
-    if !meta.item_ref.is_empty() {
-        parts.push(format!("Item: {}", meta.item_ref));
-    }
     if !meta.description.is_empty() {
         parts.push(meta.description.clone());
+    }
+    if !meta.item_ref.is_empty() {
+        parts.push(format!("Item: {}", meta.item_ref));
     }
     if !meta.unit.is_empty() {
         parts.push(format!("Unit: {}", meta.unit));
@@ -217,8 +226,28 @@ fn build_tooltip(meta: &FieldMetadata) -> String {
     if !meta.lsb_str.is_empty() {
         parts.push(format!("LSB: {}", meta.lsb_str));
     }
-    if !meta.documentation.is_empty() && meta.documentation != meta.description {
-        parts.push(meta.documentation.clone());
+    if !meta.enum_map.is_empty() {
+        let mut sorted_enums: Vec<_> = meta.enum_map.iter().collect();
+        sorted_enums.sort_by_key(|(k, _)| **k);
+        let enum_str = sorted_enums
+            .into_iter()
+            .take(8)
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        parts.push(format!("Values: [{enum_str}]"));
     }
-    parts.join(" | ")
+    if !meta.documentation.is_empty() && meta.documentation != meta.description {
+        let single_line = meta
+            .documentation
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        parts.push(single_line);
+    }
+    if parts.is_empty() {
+        meta.name.clone()
+    } else {
+        parts.join(" | ")
+    }
 }
