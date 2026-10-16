@@ -3,7 +3,13 @@
 pub mod tdml;
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects
+)]
 mod tests {
     use dfdl_core::error::DFDLErrorKind;
     use dfdl_core::infoset::events::{InfosetEvent, InfosetEventSink, InfosetSource};
@@ -1763,7 +1769,10 @@ mod tests {
                     let path = entry.path();
                     if path.is_dir() {
                         collect_tdml_files(&path, files);
-                    } else if path.extension().and_then(|s| s.to_str()) == Some("tdml") {
+                    } else if path.extension().and_then(|s| s.to_str()) == Some("tdml")
+                        && path.file_name().and_then(|s| s.to_str())
+                            != Some("conformance_reporter_test.tdml")
+                    {
                         files.push(path);
                     }
                 }
@@ -1842,7 +1851,9 @@ mod tests {
         let mut other_sample_tests: Vec<String> = Vec::new();
 
         let test_filter = std::env::var("TDML_FILTER").ok();
-        let file_filter = override_file_filter.map(String::from).or_else(|| std::env::var("TDML_FILE_FILTER").ok());
+        let file_filter = override_file_filter
+            .map(String::from)
+            .or_else(|| std::env::var("TDML_FILE_FILTER").ok());
         for path in &tdml_files {
             if let Some(ref ff) = file_filter {
                 if !path.to_string_lossy().contains(ff) {
@@ -1948,9 +1959,7 @@ mod tests {
                                         unsupported_type_sample_tests.push(format!(
                                             "{} in {}",
                                             msg,
-                                            path.file_name()
-                                                .and_then(|n| n.to_str())
-                                                .unwrap_or("")
+                                            path.file_name().and_then(|n| n.to_str()).unwrap_or("")
                                         ));
                                     }
                                 } else if err_str.contains("separator")
@@ -2055,12 +2064,10 @@ mod tests {
                                 *expected_error_clusters
                                     .entry(exp_str.to_string())
                                     .or_insert(0usize) += 1;
-                                if !p_str.contains("TestLayers") && expected_sample_tests.len() < 120 {
-                                    expected_sample_tests.push(format!(
-                                        "{} in {}",
-                                        msg,
-                                        p_str
-                                    ));
+                                if !p_str.contains("TestLayers")
+                                    && expected_sample_tests.len() < 120
+                                {
+                                    expected_sample_tests.push(format!("{} in {}", msg, p_str));
                                 }
                             } else if msg.contains("infoset mismatch") {
                                 cat_infoset_mismatch = cat_infoset_mismatch.saturating_add(1);
@@ -2076,24 +2083,21 @@ mod tests {
                                 || msg.contains("unparse output bytes mismatch")
                             {
                                 cat_unparse_failure = cat_unparse_failure.saturating_add(1);
-                                let cluster_key = if let Some(err_part) = msg.split("unparse failed: ").nth(1) {
-                                    if let Some(idx) = err_part.find("DFDLError {") {
-                                        &err_part[idx..]
+                                let cluster_key =
+                                    if let Some(err_part) = msg.split("unparse failed: ").nth(1) {
+                                        if let Some(idx) = err_part.find("DFDLError {") {
+                                            &err_part[idx..]
+                                        } else {
+                                            err_part
+                                        }
                                     } else {
-                                        err_part
-                                    }
-                                } else {
-                                    "unparse output bytes mismatch"
-                                };
+                                        "unparse output bytes mismatch"
+                                    };
                                 *unparse_failure_clusters
                                     .entry(cluster_key.to_string())
                                     .or_insert(0usize) += 1;
                                 if unparse_sample_tests.len() < 120 {
-                                    unparse_sample_tests.push(format!(
-                                        "{} in {}",
-                                        msg,
-                                        p_str
-                                    ));
+                                    unparse_sample_tests.push(format!("{} in {}", msg, p_str));
                                 }
                             } else if msg.contains("error message mismatch")
                                 || msg.contains("validation error mismatch")
@@ -2328,7 +2332,10 @@ mod tests {
         for (err, count) in sorted_expected.iter().take(50) {
             eprintln!("{:65} : {} test cases", err, count);
         }
-        eprintln!("\n--- EXPECTED ERROR NOT RAISED SAMPLE TESTS ({} collected) ---", expected_sample_tests.len());
+        eprintln!(
+            "\n--- EXPECTED ERROR NOT RAISED SAMPLE TESTS ({} collected) ---",
+            expected_sample_tests.len()
+        );
         for (idx, sample) in expected_sample_tests.iter().enumerate() {
             eprintln!("[ExpectedError Sample {}] {}", idx + 1, sample);
         }
@@ -2339,12 +2346,18 @@ mod tests {
         for (err, count) in sorted_unparse.iter().take(50) {
             eprintln!("{:65} : {} test cases", err, count);
         }
-        eprintln!("\n--- UNPARSE EXECUTION FAILURE SAMPLE TESTS ({} collected) ---", unparse_sample_tests.len());
+        eprintln!(
+            "\n--- UNPARSE EXECUTION FAILURE SAMPLE TESTS ({} collected) ---",
+            unparse_sample_tests.len()
+        );
         for (idx, sample) in unparse_sample_tests.iter().enumerate() {
             eprintln!("[Unparse Sample {}] {}", idx + 1, sample);
         }
 
-        eprintln!("\n--- OTHER UNCATEGORIZED SAMPLE TESTS ({} collected) ---", other_sample_tests.len());
+        eprintln!(
+            "\n--- OTHER UNCATEGORIZED SAMPLE TESTS ({} collected) ---",
+            other_sample_tests.len()
+        );
         for (idx, sample) in other_sample_tests.iter().enumerate() {
             eprintln!("[Other Sample {}] {}", idx + 1, sample);
         }
@@ -2355,14 +2368,17 @@ mod tests {
         for (file, count) in sorted_infoset.iter() {
             eprintln!("{:65} : {} test cases", file, count);
         }
-        eprintln!("\n--- INFOSET MISMATCH SAMPLE TESTS ({} collected) ---", infoset_sample_tests.len());
+        eprintln!(
+            "\n--- INFOSET MISMATCH SAMPLE TESTS ({} collected) ---",
+            infoset_sample_tests.len()
+        );
         for (idx, sample) in infoset_sample_tests.iter().enumerate() {
-            eprintln!("[InfosetMismatch Sample {}] {}", idx + 1, sample);
+            eprintln!("[InfosetMismatch Sample {}] {}", idx.saturating_add(1), sample);
         }
 
         eprintln!("\n--- SAMPLE PARSE FAILURE DIAGNOSTICS ---");
         for (idx, sample) in sample_messages.iter().enumerate() {
-            eprintln!("[Sample {}] {}", idx + 1, sample);
+            eprintln!("[Sample {}] {}", idx.saturating_add(1), sample);
         }
 
         assert!(
@@ -2377,10 +2393,16 @@ mod tests {
             total_passed > 0,
             "Passed 0 test cases from Apache Daffodil section TDML files"
         );
+        if override_file_filter.is_none() {
+            assert_eq!(
+                total_failed, 0,
+                "Apache Daffodil official TDML benchmark suite has {} failing test cases out of {}",
+                total_failed, total_cases
+            );
+        }
     }
 
     #[test]
-    #[ignore = "Full Apache Daffodil official TDML benchmark suite (4,337 test cases) - run explicitly with -- --ignored"]
     fn test_apache_daffodil_official_tdml_suite() {
         run_apache_daffodil_official_tdml_suite_impl(None);
     }
@@ -3184,12 +3206,14 @@ mod tests {
         }
 
         // 5. Exponent representations with character entities from TextNumberProps.tdml
-        let p_tnp = Path::new("crates/dfdl-tests/tests/daffodil/section13/text_number_props/TextNumberProps.tdml");
+        let p_tnp = Path::new(
+            "crates/dfdl-tests/tests/daffodil/section13/text_number_props/TextNumberProps.tdml",
+        );
         if let Ok(tdml) = fs::read_to_string(p_tnp) {
             if let Ok(mut suite) = TdmlTestSuite::parse_xml(&tdml) {
-                suite.test_cases.retain(|tc| {
-                    tc.name == "expCharEntities" || tc.name == "expCharEntities2"
-                });
+                suite
+                    .test_cases
+                    .retain(|tc| tc.name == "expCharEntities" || tc.name == "expCharEntities2");
                 let report =
                     TdmlRunner::run_suite_with_base_dir(&suite, default_schema, p_tnp.parent());
                 for msg in &report.failure_messages {
@@ -3520,11 +3544,17 @@ mod tests {
         use dfdl_schema::SchemaCompiler;
 
         // 1. IBM 4690 Packed Decimal roundtrip codec across multiple values
-        for val in [0i64, 5, 42, 123, 9999, -7, -42, -123, -9999, 1234567, -1234567] {
+        for val in [
+            0i64, 5, 42, 123, 9999, -7, -42, -123, -9999, 1234567, -1234567,
+        ] {
             let encoded = dfdl_core::util::encode_ibm4690_packed(val);
             let decoded = dfdl_core::util::decode_ibm4690_packed(&encoded)
                 .expect("Failed to decode IBM 4690 packed");
-            assert_eq!(decoded, val, "IBM 4690 codec roundtrip mismatch for {}", val);
+            assert_eq!(
+                decoded, val,
+                "IBM 4690 codec roundtrip mismatch for {}",
+                val
+            );
         }
 
         // 2. Text number patterns, affixes, padding and separators
@@ -3546,17 +3576,25 @@ mod tests {
 </xs:schema>"#;
 
         let compiler = SchemaCompiler::new();
-        let schema = compiler.compile_str(num_xsd).expect("Failed to compile num_xsd");
+        let schema = compiler
+            .compile_str(num_xsd)
+            .expect("Failed to compile num_xsd");
 
         let data = b"***$1:234^56***";
         let src = SliceByteSource::new(data);
-        let mut reader = BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader =
+            BitReader::new(src, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut budget = WorkBudget::new(100);
         let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
-        let doc = parser.parse_document().expect("Failed to parse positive decimal");
+        let doc = parser
+            .parse_document()
+            .expect("Failed to parse positive decimal");
         let root = doc.root.as_ref().unwrap();
         let InfosetNode::Element(ref el) = root.children.first().unwrap();
-        assert_eq!(el.state, ElementState::Value(DfdlValue::Decimal(String::from("1234.56"))));
+        assert_eq!(
+            el.state,
+            ElementState::Value(DfdlValue::Decimal(String::from("1234.56")))
+        );
 
         // 3. Custom NaN and Infinity representations
         let float_xsd = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -3574,13 +3612,21 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_flt = compiler.compile_str(float_xsd).expect("Failed to compile float_xsd");
+        let schema_flt = compiler
+            .compile_str(float_xsd)
+            .expect("Failed to compile float_xsd");
         let data_flt = b"notanumberforever";
         let src_flt = SliceByteSource::new(data_flt);
-        let mut reader_flt = BitReader::new(src_flt, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_flt = BitReader::new(
+            src_flt,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_flt = WorkBudget::new(100);
         let mut parser_flt = ParserEngine::new(&schema_flt, &mut reader_flt, &mut budget_flt);
-        let doc_flt = parser_flt.parse_document().expect("Failed to parse float document");
+        let doc_flt = parser_flt
+            .parse_document()
+            .expect("Failed to parse float document");
         let root_flt = doc_flt.root.as_ref().unwrap();
         let InfosetNode::Element(ref el_nan) = root_flt.children.first().unwrap();
         if let ElementState::Value(DfdlValue::Float(f)) = el_nan.state {
@@ -3589,7 +3635,10 @@ mod tests {
             panic!("Expected float NaN");
         }
         let InfosetNode::Element(ref el_inf) = root_flt.children.get(1).unwrap();
-        assert_eq!(el_inf.state, ElementState::Value(DfdlValue::Double(f64::INFINITY)));
+        assert_eq!(
+            el_inf.state,
+            ElementState::Value(DfdlValue::Double(f64::INFINITY))
+        );
 
         // 4. Calendar pattern and padChar trimming
         let cal_xsd = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -3608,16 +3657,27 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_cal = compiler.compile_str(cal_xsd).expect("Failed to compile cal_xsd");
+        let schema_cal = compiler
+            .compile_str(cal_xsd)
+            .expect("Failed to compile cal_xsd");
         let data_cal = b"....Today is March 24, 2013....";
         let src_cal = SliceByteSource::new(data_cal);
-        let mut reader_cal = BitReader::new(src_cal, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_cal = BitReader::new(
+            src_cal,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_cal = WorkBudget::new(100);
         let mut parser_cal = ParserEngine::new(&schema_cal, &mut reader_cal, &mut budget_cal);
-        let doc_cal = parser_cal.parse_document().expect("Failed to parse calendar document");
+        let doc_cal = parser_cal
+            .parse_document()
+            .expect("Failed to parse calendar document");
         let root_cal = doc_cal.root.as_ref().unwrap();
         let InfosetNode::Element(ref el_cal) = root_cal.children.first().unwrap();
-        assert_eq!(el_cal.state, ElementState::Value(DfdlValue::Date(String::from("2013-03-24"))));
+        assert_eq!(
+            el_cal.state,
+            ElementState::Value(DfdlValue::Date(String::from("2013-03-24")))
+        );
 
         // 5. IBM 4690 Packed Decimal element in schema
         let ibm_xsd = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -3633,14 +3693,22 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_ibm = compiler.compile_str(ibm_xsd).expect("Failed to compile ibm_xsd");
+        let schema_ibm = compiler
+            .compile_str(ibm_xsd)
+            .expect("Failed to compile ibm_xsd");
         // 0xF1, 0x23 decodes as 123 in IBM 4690 packed decimal
         let data_ibm = [0xF1u8, 0x23u8];
         let src_ibm = SliceByteSource::new(&data_ibm);
-        let mut reader_ibm = BitReader::new(src_ibm, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_ibm = BitReader::new(
+            src_ibm,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_ibm = WorkBudget::new(100);
         let mut parser_ibm = ParserEngine::new(&schema_ibm, &mut reader_ibm, &mut budget_ibm);
-        let doc_ibm = parser_ibm.parse_document().expect("Failed to parse IBM 4690 packed element");
+        let doc_ibm = parser_ibm
+            .parse_document()
+            .expect("Failed to parse IBM 4690 packed element");
         let root_ibm = doc_ibm.root.as_ref().unwrap();
         let InfosetNode::Element(ref el_ibm) = root_ibm.children.first().unwrap();
         assert_eq!(el_ibm.state, ElementState::Value(DfdlValue::Int(123)));
@@ -3676,13 +3744,22 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_float = compiler.compile_str(float_xsd).expect("Failed to compile float_xsd");
+        let schema_float = compiler
+            .compile_str(float_xsd)
+            .expect("Failed to compile float_xsd");
         let data_float = b"1.25@2;3.5@1";
         let src_float = SliceByteSource::new(data_float);
-        let mut reader_float = BitReader::new(src_float, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_float = BitReader::new(
+            src_float,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_float = WorkBudget::new(100);
-        let mut parser_float = ParserEngine::new(&schema_float, &mut reader_float, &mut budget_float);
-        let doc_float = parser_float.parse_document().expect("Failed to parse custom exponent float document");
+        let mut parser_float =
+            ParserEngine::new(&schema_float, &mut reader_float, &mut budget_float);
+        let doc_float = parser_float
+            .parse_document()
+            .expect("Failed to parse custom exponent float document");
         let root_float = doc_float.root.as_ref().unwrap();
         let InfosetNode::Element(ref el_f1) = root_float.children[0];
         let InfosetNode::Element(ref el_f2) = root_float.children[1];
@@ -3704,13 +3781,21 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_bool = compiler.compile_str(bool_xsd).expect("Failed to compile bool_xsd");
+        let schema_bool = compiler
+            .compile_str(bool_xsd)
+            .expect("Failed to compile bool_xsd");
         let data_bool = b"YES,no";
         let src_bool = SliceByteSource::new(data_bool);
-        let mut reader_bool = BitReader::new(src_bool, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_bool = BitReader::new(
+            src_bool,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_bool = WorkBudget::new(100);
         let mut parser_bool = ParserEngine::new(&schema_bool, &mut reader_bool, &mut budget_bool);
-        let doc_bool = parser_bool.parse_document().expect("Failed to parse boolean document");
+        let doc_bool = parser_bool
+            .parse_document()
+            .expect("Failed to parse boolean document");
         let root_bool = doc_bool.root.as_ref().unwrap();
         let InfosetNode::Element(ref el_b1) = root_bool.children[0];
         let InfosetNode::Element(ref el_b2) = root_bool.children[1];
@@ -3734,17 +3819,28 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_pad = compiler.compile_str(pad_xsd).expect("Failed to compile pad_xsd");
+        let schema_pad = compiler
+            .compile_str(pad_xsd)
+            .expect("Failed to compile pad_xsd");
         let data_pad = b"****begin: 42 :end;(__99)";
         let src_pad = SliceByteSource::new(data_pad);
-        let mut reader_pad = BitReader::new(src_pad, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_pad = BitReader::new(
+            src_pad,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_pad = WorkBudget::new(100);
         let mut parser_pad = ParserEngine::new(&schema_pad, &mut reader_pad, &mut budget_pad);
-        let doc_pad = parser_pad.parse_document().expect("Failed to parse pattern padding document");
+        let doc_pad = parser_pad
+            .parse_document()
+            .expect("Failed to parse pattern padding document");
         let root_pad = doc_pad.root.as_ref().unwrap();
         let InfosetNode::Element(ref el_dec) = root_pad.children[0];
         let InfosetNode::Element(ref el_neg) = root_pad.children[1];
-        assert_eq!(el_dec.state, ElementState::Value(DfdlValue::Decimal(String::from("42"))));
+        assert_eq!(
+            el_dec.state,
+            ElementState::Value(DfdlValue::Decimal(String::from("42")))
+        );
         assert_eq!(el_neg.state, ElementState::Value(DfdlValue::Int(-99)));
 
         // 4. Character entity delimiters (%LS;, %NEL;, %VT;, %#65;)
@@ -3760,15 +3856,24 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_delim = compiler.compile_str(delim_xsd).expect("Failed to compile delim_xsd");
+        let schema_delim = compiler
+            .compile_str(delim_xsd)
+            .expect("Failed to compile delim_xsd");
         // UTF-8 bytes for: "first" + \u{2028} + "second" + \u{0085} + "third" + \x0B + "fourth" + 'A' + "fifth"
         let mut data_delim = Vec::new();
         data_delim.extend_from_slice(b"first\xE2\x80\xA8second\xC2\x85third\x0BfourthAfifth");
         let src_delim = SliceByteSource::new(&data_delim);
-        let mut reader_delim = BitReader::new(src_delim, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_delim = BitReader::new(
+            src_delim,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_delim = WorkBudget::new(100);
-        let mut parser_delim = ParserEngine::new(&schema_delim, &mut reader_delim, &mut budget_delim);
-        let doc_delim = parser_delim.parse_document().expect("Failed to parse character entity delimited document");
+        let mut parser_delim =
+            ParserEngine::new(&schema_delim, &mut reader_delim, &mut budget_delim);
+        let doc_delim = parser_delim
+            .parse_document()
+            .expect("Failed to parse character entity delimited document");
         let root_delim = doc_delim.root.as_ref().unwrap();
         assert_eq!(root_delim.children.len(), 5);
 
@@ -3786,13 +3891,21 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
 
-        let schema_arr = compiler.compile_str(parsed_arr_xsd).expect("Failed to compile parsed_arr_xsd");
+        let schema_arr = compiler
+            .compile_str(parsed_arr_xsd)
+            .expect("Failed to compile parsed_arr_xsd");
         let data_arr = b"";
         let src_arr = SliceByteSource::new(data_arr);
-        let mut reader_arr = BitReader::new(src_arr, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_arr = BitReader::new(
+            src_arr,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_arr = WorkBudget::new(100);
         let mut parser_arr = ParserEngine::new(&schema_arr, &mut reader_arr, &mut budget_arr);
-        let doc_arr = parser_arr.parse_document().expect("Failed to parse empty parsed array");
+        let doc_arr = parser_arr
+            .parse_document()
+            .expect("Failed to parse empty parsed array");
         let root_arr = doc_arr.root.as_ref().unwrap();
         assert_eq!(root_arr.children.len(), 0);
     }
@@ -3815,7 +3928,9 @@ mod tests {
                 panic!("Failed to parse TDML: {}", e);
             }
         };
-        suite.test_cases.retain(|tc| tc.name == "textBoolean_IgnoreCase");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "textBoolean_IgnoreCase");
         assert_eq!(suite.test_cases.len(), 1);
 
         let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
@@ -3831,14 +3946,21 @@ mod tests {
         use crate::tdml::{TdmlRunner, TdmlTestSuite};
         use std::path::Path;
 
-        let path = if Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml").exists() {
+        let path = if Path::new(
+            "tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml",
+        )
+        .exists()
+        {
             Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
         } else {
             Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
         let mut suite = TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name.starts_with("arrayExpressions02"));
+        suite
+            .test_cases
+            .retain(|tc| tc.name.starts_with("arrayExpressions02"));
         let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         assert_eq!(report.failed, 0);
         assert_eq!(report.passed, 4);
@@ -3860,7 +3982,9 @@ mod tests {
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read Entities.tdml");
         let mut suite = TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "byte_entities_6_01" || tc.name == "byte_entities_6_02");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "byte_entities_6_01" || tc.name == "byte_entities_6_02");
         let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         assert_eq!(report.failed, 0);
         assert_eq!(report.passed, 2);
@@ -3875,12 +3999,17 @@ mod tests {
         use crate::tdml::{TdmlRunner, TdmlTestSuite};
         use std::path::Path;
 
-        let path = if Path::new("tests/daffodil/section13/text_number_props/TextNumberProps.tdml").exists() {
+        let path = if Path::new("tests/daffodil/section13/text_number_props/TextNumberProps.tdml")
+            .exists()
+        {
             Path::new("tests/daffodil/section13/text_number_props/TextNumberProps.tdml")
         } else {
-            Path::new("crates/dfdl-tests/tests/daffodil/section13/text_number_props/TextNumberProps.tdml")
+            Path::new(
+                "crates/dfdl-tests/tests/daffodil/section13/text_number_props/TextNumberProps.tdml",
+            )
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read TextNumberProps.tdml");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read TextNumberProps.tdml");
         let mut suite = TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| {
             tc.name == "textNumberPattern_specialChar03"
@@ -3902,13 +4031,18 @@ mod tests {
     /// compile and execute correctly without SDE or XML tokenization errors.
     #[test]
     fn test_ibm_format_and_multi_encoding() {
-        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/namespaces/namespaces.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section06/namespaces/namespaces.tdml",
+            )
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read namespaces.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| {
             tc.name == "ibm_format_compat_01"
                 || tc.name == "ibm_format_compat_02"
@@ -3928,15 +4062,25 @@ mod tests {
 
     #[test]
     fn test_cluster1_and_cluster4_namespaces() {
-        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/namespaces/namespaces.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section06/namespaces/namespaces.tdml",
+            )
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read namespaces.tdml");
-        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        eprintln!("namespaces.tdml summary: passed={}, failed={}, total={}", report.passed, report.failed, suite.test_cases.len());
+        eprintln!(
+            "namespaces.tdml summary: passed={}, failed={}, total={}",
+            report.passed,
+            report.failed,
+            suite.test_cases.len()
+        );
         for msg in &report.failure_messages {
             eprintln!("[FAILURE namespaces] {}", msg);
         }
@@ -3948,29 +4092,46 @@ mod tests {
     /// an annotation rather than the enclosing element or schema root.
     #[test]
     fn test_namespaces_qnames_expression_prefix_scoping() {
-        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section06/namespaces/namespaces.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/namespaces/namespaces.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section06/namespaces/namespaces.tdml",
+            )
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read namespaces.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| tc.name == "namespaces_qnames");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        assert_eq!(report.failed, 0, "namespaces_qnames failed: {:?}", report.failure_messages);
+        assert_eq!(
+            report.failed, 0,
+            "namespaces_qnames failed: {:?}",
+            report.failure_messages
+        );
         assert_eq!(report.passed, 1);
     }
 
     #[test]
     fn test_ock_implicit_24() {
-        let path = if std::path::Path::new("tests/daffodil/section14/occursCountKind/ockImplicit.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section14/occursCountKind/ockImplicit.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/occursCountKind/ockImplicit.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section14/occursCountKind/ockImplicit.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section14/occursCountKind/ockImplicit.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section14/occursCountKind/ockImplicit.tdml",
+                )
+            };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read ockImplicit.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "ockImplicit19" || tc.name == "ockImplicit24" || tc.name == "ockImplicit8");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| {
+            tc.name == "ockImplicit19" || tc.name == "ockImplicit24" || tc.name == "ockImplicit8"
+        });
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[FAILURE] {}", msg);
@@ -3984,13 +4145,15 @@ mod tests {
     /// per DFDL v1.0 §14.2 and §16.1.
     #[test]
     fn test_nul_pad_2() {
-        let path = if std::path::Path::new("tests/daffodil/section05/facets/NulChars.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section05/facets/NulChars.tdml").exists()
+        {
             std::path::Path::new("tests/daffodil/section05/facets/NulChars.tdml")
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section05/facets/NulChars.tdml")
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read NulChars.tdml");
-        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Test all test cases in NulChars.tdml
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
@@ -4000,16 +4163,21 @@ mod tests {
         assert_eq!(report.passed, 3);
     }
 
-
     #[test]
     fn test_general_format_04() {
-        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/namespaces/includeImport.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section06/namespaces/includeImport.tdml",
+            )
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read includeImport.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read includeImport.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| tc.name == "generalFormat04");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
@@ -4023,14 +4191,22 @@ mod tests {
     /// parse correctly.
     #[test]
     fn test_nested_prefixed_length() {
-        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml",
+            )
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "pl_text_string_pl_txt_bytes");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "pl_text_string_pl_txt_bytes");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[FAILURE] {}", msg);
@@ -4041,13 +4217,20 @@ mod tests {
     /// Tests PUA (Unicode Private Use Area) control character remapping on unparse.
     #[test]
     fn test_pua_infoset_chars() {
-        let path = if std::path::Path::new("tests/daffodil/section00/general/testUnparserGeneral.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section00/general/testUnparserGeneral.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section00/general/testUnparserGeneral.tdml")
-        };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read testUnparserGeneral.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let path =
+            if std::path::Path::new("tests/daffodil/section00/general/testUnparserGeneral.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section00/general/testUnparserGeneral.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section00/general/testUnparserGeneral.tdml",
+                )
+            };
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read testUnparserGeneral.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| {
             tc.name == "puaInfosetChars_01"
                 || tc.name == "puaInfosetChars_02"
@@ -4060,22 +4243,34 @@ mod tests {
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
         assert_eq!(report.passed, 3);
 
-        let ffb_path = if std::path::Path::new("tests/daffodil/section00/general/testUnparserFileBuffering.tdml").exists() {
+        let ffb_path = if std::path::Path::new(
+            "tests/daffodil/section00/general/testUnparserFileBuffering.tdml",
+        )
+        .exists()
+        {
             std::path::Path::new("tests/daffodil/section00/general/testUnparserFileBuffering.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section00/general/testUnparserFileBuffering.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section00/general/testUnparserFileBuffering.tdml",
+            )
         };
-        let ffb_content = std::fs::read_to_string(ffb_path).expect("Failed to read testUnparserFileBuffering.tdml");
-        let mut ffb_suite = crate::tdml::TdmlTestSuite::parse_xml(&ffb_content).expect("Failed to parse TDML");
+        let ffb_content = std::fs::read_to_string(ffb_path)
+            .expect("Failed to read testUnparserFileBuffering.tdml");
+        let mut ffb_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&ffb_content).expect("Failed to parse TDML");
         ffb_suite.test_cases.retain(|tc| {
-            tc.name == "puaInfosetChars_01_ffb"
-                || tc.name == "puaInfosetChars_02_ffb"
+            tc.name == "puaInfosetChars_01_ffb" || tc.name == "puaInfosetChars_02_ffb"
         });
-        let ffb_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&ffb_suite, "", ffb_path.parent());
+        let ffb_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&ffb_suite, "", ffb_path.parent());
         for msg in &ffb_report.failure_messages {
             eprintln!("[FAILURE] {}", msg);
         }
-        assert_eq!(ffb_report.failed, 0, "Failures: {:?}", ffb_report.failure_messages);
+        assert_eq!(
+            ffb_report.failed, 0,
+            "Failures: {:?}",
+            ffb_report.failure_messages
+        );
         assert_eq!(ffb_report.passed, 2);
     }
 
@@ -4084,34 +4279,62 @@ mod tests {
     /// - `dateTextNumberRep` in `SimpleTypes.tdml`
     #[test]
     fn test_schema_rejection_fixes() {
-        let inc_path = if std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/namespaces/includeImport.tdml")
-        };
-        let inc_content = std::fs::read_to_string(inc_path).expect("Failed to read includeImport.tdml");
-        let mut inc_suite = crate::tdml::TdmlTestSuite::parse_xml(&inc_content).expect("Failed to parse TDML");
-        inc_suite.test_cases.retain(|tc| tc.name == "include01" || tc.name == "include02");
-        let inc_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&inc_suite, "", inc_path.parent());
+        let inc_path =
+            if std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section06/namespaces/includeImport.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section06/namespaces/includeImport.tdml",
+                )
+            };
+        let inc_content =
+            std::fs::read_to_string(inc_path).expect("Failed to read includeImport.tdml");
+        let mut inc_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&inc_content).expect("Failed to parse TDML");
+        inc_suite
+            .test_cases
+            .retain(|tc| tc.name == "include01" || tc.name == "include02");
+        let inc_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&inc_suite, "", inc_path.parent());
         for msg in &inc_report.failure_messages {
             eprintln!("[FAILURE inc] {}", msg);
         }
-        assert_eq!(inc_report.failed, 0, "Failures: {:?}", inc_report.failure_messages);
+        assert_eq!(
+            inc_report.failed, 0,
+            "Failures: {:?}",
+            inc_report.failure_messages
+        );
         assert_eq!(inc_report.passed, 2);
 
-        let date_path = if std::path::Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section05/simple_types/SimpleTypes.tdml")
-        };
-        let date_content = std::fs::read_to_string(date_path).expect("Failed to read SimpleTypes.tdml");
-        let mut date_suite = crate::tdml::TdmlTestSuite::parse_xml(&date_content).expect("Failed to parse TDML");
-        date_suite.test_cases.retain(|tc| tc.name == "dateTextNumberRep");
-        let date_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&date_suite, "", date_path.parent());
+        let date_path =
+            if std::path::Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section05/simple_types/SimpleTypes.tdml",
+                )
+            };
+        let date_content =
+            std::fs::read_to_string(date_path).expect("Failed to read SimpleTypes.tdml");
+        let mut date_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&date_content).expect("Failed to parse TDML");
+        date_suite
+            .test_cases
+            .retain(|tc| tc.name == "dateTextNumberRep");
+        let date_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&date_suite, "", date_path.parent());
         for msg in &date_report.failure_messages {
             eprintln!("[FAILURE date] {}", msg);
         }
-        assert_eq!(date_report.failed, 0, "Failures: {:?}", date_report.failure_messages);
+        assert_eq!(
+            date_report.failed, 0,
+            "Failures: {:?}",
+            date_report.failure_messages
+        );
         assert_eq!(date_report.passed, 1);
     }
 
@@ -4120,64 +4343,107 @@ mod tests {
     /// - `blob_04` and `blob_06` in `Blobs.tdml`
     #[test]
     fn test_unparse_blobs_and_literal_nils() {
-        let nil_path = if std::path::Path::new("tests/daffodil/section13/nillable/literal-character-nils-unparse.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section13/nillable/literal-character-nils-unparse.tdml")
+        let nil_path = if std::path::Path::new(
+            "tests/daffodil/section13/nillable/literal-character-nils-unparse.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section13/nillable/literal-character-nils-unparse.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section13/nillable/literal-character-nils-unparse.tdml")
         };
-        let nil_content = std::fs::read_to_string(nil_path).expect("Failed to read literal-character-nils-unparse.tdml");
-        let mut nil_suite = crate::tdml::TdmlTestSuite::parse_xml(&nil_content).expect("Failed to parse TDML");
-        nil_suite.test_cases.retain(|tc| tc.name == "text_01" || tc.name == "text_01a");
-        let nil_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&nil_suite, "", nil_path.parent());
+        let nil_content = std::fs::read_to_string(nil_path)
+            .expect("Failed to read literal-character-nils-unparse.tdml");
+        let mut nil_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&nil_content).expect("Failed to parse TDML");
+        nil_suite
+            .test_cases
+            .retain(|tc| tc.name == "text_01" || tc.name == "text_01a");
+        let nil_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&nil_suite, "", nil_path.parent());
         for msg in &nil_report.failure_messages {
             eprintln!("[FAILURE nil] {}", msg);
         }
-        assert_eq!(nil_report.failed, 0, "Failures: {:?}", nil_report.failure_messages);
+        assert_eq!(
+            nil_report.failed, 0,
+            "Failures: {:?}",
+            nil_report.failure_messages
+        );
         assert_eq!(nil_report.passed, 2);
 
-        let blob_path = if std::path::Path::new("tests/daffodil/section05/simple_types/Blobs.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section05/simple_types/Blobs.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section05/simple_types/Blobs.tdml")
-        };
+        let blob_path =
+            if std::path::Path::new("tests/daffodil/section05/simple_types/Blobs.tdml").exists() {
+                std::path::Path::new("tests/daffodil/section05/simple_types/Blobs.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section05/simple_types/Blobs.tdml",
+                )
+            };
         let blob_content = std::fs::read_to_string(blob_path).expect("Failed to read Blobs.tdml");
-        let mut blob_suite = crate::tdml::TdmlTestSuite::parse_xml(&blob_content).expect("Failed to parse TDML");
-        blob_suite.test_cases.retain(|tc| tc.name == "blob_04" || tc.name == "blob_06");
-        let blob_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&blob_suite, "", blob_path.parent());
+        let mut blob_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&blob_content).expect("Failed to parse TDML");
+        blob_suite
+            .test_cases
+            .retain(|tc| tc.name == "blob_04" || tc.name == "blob_06");
+        let blob_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&blob_suite, "", blob_path.parent());
         for msg in &blob_report.failure_messages {
             eprintln!("[FAILURE blob] {}", msg);
         }
-        assert_eq!(blob_report.failed, 0, "Failures: {:?}", blob_report.failure_messages);
+        assert_eq!(
+            blob_report.failed, 0,
+            "Failures: {:?}",
+            blob_report.failure_messages
+        );
         assert_eq!(blob_report.passed, 2);
 
-        let ab_path = if std::path::Path::new("tests/daffodil/section12/lengthKind/AB.tdml").exists() {
+        let ab_path = if std::path::Path::new("tests/daffodil/section12/lengthKind/AB.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section12/lengthKind/AB.tdml")
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/AB.tdml")
         };
         let ab_content = std::fs::read_to_string(ab_path).expect("Failed to read AB.tdml");
-        let mut ab_suite = crate::tdml::TdmlTestSuite::parse_xml(&ab_content).expect("Failed to parse TDML");
+        let mut ab_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&ab_content).expect("Failed to parse TDML");
         ab_suite.test_cases.retain(|tc| tc.name == "AB005_unparse");
-        let ab_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&ab_suite, "", ab_path.parent());
+        let ab_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&ab_suite, "", ab_path.parent());
         for msg in &ab_report.failure_messages {
             eprintln!("[FAILURE ab] {}", msg);
         }
-        assert_eq!(ab_report.failed, 0, "Failures: {:?}", ab_report.failure_messages);
+        assert_eq!(
+            ab_report.failed, 0,
+            "Failures: {:?}",
+            ab_report.failure_messages
+        );
         assert_eq!(ab_report.passed, 1);
     }
 
     #[test]
     fn test_reptype_debug() {
-        let path = if std::path::Path::new("tests/daffodil/charsets/TestBitsCharsetDefinition.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/charsets/TestBitsCharsetDefinition.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/charsets/TestBitsCharsetDefinition.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/charsets/TestBitsCharsetDefinition.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/charsets/TestBitsCharsetDefinition.tdml",
+            )
         };
-        let content = std::fs::read_to_string(path).expect("Failed to read TestBitsCharsetDefinition.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        let content =
+            std::fs::read_to_string(path).expect("Failed to read TestBitsCharsetDefinition.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| tc.name != "unparse_charsets");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        eprintln!("TestBitsCharsetDefinition.tdml: passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "TestBitsCharsetDefinition.tdml: passed={}, failed={}",
+            report.passed, report.failed
+        );
         for msg in &report.failure_messages {
             eprintln!("   Msg: {}", msg);
         }
@@ -4187,16 +4453,28 @@ mod tests {
 
     #[test]
     fn test_var_instance_13() {
-        let path = if std::path::Path::new("tests/daffodil/section07/variables/variables.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section07/variables/variables.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section07/variables/variables.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section07/variables/variables.tdml").exists() {
+                std::path::Path::new("tests/daffodil/section07/variables/variables.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section07/variables/variables.tdml",
+                )
+            };
         let content = std::fs::read_to_string(path).expect("Failed to read variables.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "varInstance_13" || tc.name == "resetVar_01" || tc.name == "varDirection_1" || tc.name == "varInstance_08");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| {
+            tc.name == "varInstance_13"
+                || tc.name == "resetVar_01"
+                || tc.name == "varDirection_1"
+                || tc.name == "varInstance_08"
+        });
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        eprintln!("variables.tdml subset: passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "variables.tdml subset: passed={}, failed={}",
+            report.passed, report.failed
+        );
         for msg in &report.failure_messages {
             eprintln!("   Msg: {}", msg);
         }
@@ -4211,14 +4489,18 @@ mod tests {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section05/facets/Facets.tdml")
         };
         let content = std::fs::read_to_string(path).expect("Failed to read Facets.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| {
             tc.name == "checkEnumeration_Fail_Subset"
                 || tc.name == "facetEnum05"
                 || tc.name == "facetEnum06"
         });
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        eprintln!("Facets.tdml subset: passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "Facets.tdml subset: passed={}, failed={}",
+            report.passed, report.failed
+        );
         for msg in &report.failure_messages {
             eprintln!("   Msg: {}", msg);
         }
@@ -4228,16 +4510,28 @@ mod tests {
 
     #[test]
     fn test_input_value_calc_negative() {
-        let path = if std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
         };
         let content = std::fs::read_to_string(path).expect("Failed to read inputValueCalc.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "InputValueCalc_circular_ref" || tc.name == "InputValueCalc_global_elem");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        suite.test_cases.retain(|tc| {
+            tc.name == "InputValueCalc_circular_ref" || tc.name == "InputValueCalc_global_elem"
+        });
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        eprintln!("inputValueCalc.tdml subset: passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "inputValueCalc.tdml subset: passed={}, failed={}",
+            report.passed, report.failed
+        );
         for msg in &report.failure_messages {
             eprintln!("   Msg: {}", msg);
         }
@@ -4247,20 +4541,29 @@ mod tests {
 
     #[test]
     fn test_expressions_negative_cases() {
-        let path = if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml",
+                )
+            };
         let content = std::fs::read_to_string(path).expect("Failed to read expressions.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| {
             tc.name == "asterisk_01"
                 || tc.name == "expressionRules06"
                 || tc.name == "expresion_bad_path_to_element"
         });
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        eprintln!("expressions.tdml subset: passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "expressions.tdml subset: passed={}, failed={}",
+            report.passed, report.failed
+        );
         for msg in &report.failure_messages {
             eprintln!("   Msg: {}", msg);
         }
@@ -4277,14 +4580,20 @@ mod tests {
     /// 2. %NL; delimiter matching recognizes Unicode Next Line (0xC285) and Line Separator (0xE280A8).
     #[test]
     fn test_text_entities_utf16_and_nl_delimiters() {
-        let path = if std::path::Path::new("tests/daffodil/section06/entities/Entities.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section06/entities/Entities.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section06/entities/Entities.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section06/entities/Entities.tdml").exists() {
+                std::path::Path::new("tests/daffodil/section06/entities/Entities.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section06/entities/Entities.tdml",
+                )
+            };
         let content = std::fs::read_to_string(path).expect("Failed to read Entities.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "text_entities_6_03b");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "text_entities_6_03b");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
         assert_eq!(report.passed, 1);
@@ -4300,15 +4609,24 @@ mod tests {
     /// 3. Hidden and visible group references inside nested sequences correctly process infix separators.
     #[test]
     fn test_sequence_groups_nested_group_refs() {
-        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroup.tdml",
+                )
+            };
         let content = std::fs::read_to_string(path).expect("Failed to read SequenceGroup.tdml");
         let suite = crate::tdml::TdmlTestSuite::parse_xml(&content).expect("Failed to parse TDML");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
-        assert_eq!(report.failed, 0, "Failures in SequenceGroup.tdml: {:?}", report.failure_messages);
+        assert_eq!(
+            report.failed, 0,
+            "Failures in SequenceGroup.tdml: {:?}",
+            report.failure_messages
+        );
         assert_eq!(report.passed, 39);
     }
 
@@ -4323,13 +4641,16 @@ mod tests {
         use std::path::Path;
 
         // 1. Verify SimpleTypes.tdml whitespace and implicit datetime pattern fail cases
-        let st_path = if Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml").exists() {
+        let st_path = if Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml")
+            .exists()
+        {
             Path::new("tests/daffodil/section05/simple_types/SimpleTypes.tdml")
         } else {
             Path::new("crates/dfdl-tests/tests/daffodil/section05/simple_types/SimpleTypes.tdml")
         };
         let st_content = std::fs::read_to_string(st_path).expect("Failed to read SimpleTypes.tdml");
-        let mut st_suite = TdmlTestSuite::parse_xml(&st_content).expect("Failed to parse SimpleTypes.tdml");
+        let mut st_suite =
+            TdmlTestSuite::parse_xml(&st_content).expect("Failed to parse SimpleTypes.tdml");
         let target_st_tests = [
             "whiteSpaceDuringValidInt",
             "whiteSpaceDuringValidShort",
@@ -4342,9 +4663,15 @@ mod tests {
             "dateTimeImplicitPatternFail2",
             "dateTimeImplicitPatternFail4",
         ];
-        st_suite.test_cases.retain(|tc| target_st_tests.contains(&tc.name.as_str()));
+        st_suite
+            .test_cases
+            .retain(|tc| target_st_tests.contains(&tc.name.as_str()));
         let st_report = TdmlRunner::run_suite_with_base_dir(&st_suite, "", st_path.parent());
-        assert_eq!(st_report.failed, 0, "Failures in SimpleTypes.tdml: {:?}", st_report.failure_messages);
+        assert_eq!(
+            st_report.failed, 0,
+            "Failures in SimpleTypes.tdml: {:?}",
+            st_report.failure_messages
+        );
         assert_eq!(st_report.passed, target_st_tests.len());
 
         // 2. Verify repType.tdml cross-namespace schema inclusion format inheritance
@@ -4354,10 +4681,17 @@ mod tests {
             Path::new("crates/dfdl-tests/tests/daffodil/extensions/repType/repType.tdml")
         };
         let rep_content = std::fs::read_to_string(rep_path).expect("Failed to read repType.tdml");
-        let mut rep_suite = TdmlTestSuite::parse_xml(&rep_content).expect("Failed to parse repType.tdml");
-        rep_suite.test_cases.retain(|tc| tc.name == "repType_different_namespaces_01");
+        let mut rep_suite =
+            TdmlTestSuite::parse_xml(&rep_content).expect("Failed to parse repType.tdml");
+        rep_suite
+            .test_cases
+            .retain(|tc| tc.name == "repType_different_namespaces_01");
         let rep_report = TdmlRunner::run_suite_with_base_dir(&rep_suite, "", rep_path.parent());
-        assert_eq!(rep_report.failed, 0, "Failures in repType.tdml: {:?}", rep_report.failure_messages);
+        assert_eq!(
+            rep_report.failed, 0,
+            "Failures in repType.tdml: {:?}",
+            rep_report.failure_messages
+        );
         assert_eq!(rep_report.passed, 1);
 
         // 3. Verify enums.tdml bit-aligned representation types
@@ -4367,10 +4701,17 @@ mod tests {
             Path::new("crates/dfdl-tests/tests/daffodil/extensions/enum/enums.tdml")
         };
         let enum_content = std::fs::read_to_string(enum_path).expect("Failed to read enums.tdml");
-        let mut enum_suite = TdmlTestSuite::parse_xml(&enum_content).expect("Failed to parse enums.tdml");
-        enum_suite.test_cases.retain(|tc| tc.name == "repTypeAlignment");
+        let mut enum_suite =
+            TdmlTestSuite::parse_xml(&enum_content).expect("Failed to parse enums.tdml");
+        enum_suite
+            .test_cases
+            .retain(|tc| tc.name == "repTypeAlignment");
         let enum_report = TdmlRunner::run_suite_with_base_dir(&enum_suite, "", enum_path.parent());
-        assert_eq!(enum_report.failed, 0, "Failures in enums.tdml: {:?}", enum_report.failure_messages);
+        assert_eq!(
+            enum_report.failed, 0,
+            "Failures in enums.tdml: {:?}",
+            enum_report.failure_messages
+        );
         assert_eq!(enum_report.passed, 1);
     }
 
@@ -4384,14 +4725,24 @@ mod tests {
     /// prefix before decoding the two 7-bit characters (total 16 bits).
     #[test]
     fn test_framing_leading_skip_and_alignment() {
-        let path = if std::path::Path::new("tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section11/content_framing_properties/ContentFramingProps.tdml")
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ContentFramingProps.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "alignmentPacked7BitASCII_04");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read ContentFramingProps.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "alignmentPacked7BitASCII_04");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
         assert_eq!(report.passed, 1);
@@ -4404,13 +4755,18 @@ mod tests {
     /// and their separators must never be suppressed as trailing.
     #[test]
     fn test_dfdl_2262() {
-        let path = if std::path::Path::new("tests/daffodil/usertests/UserSubmittedTests.tdml").exists() {
-            std::path::Path::new("tests/daffodil/usertests/UserSubmittedTests.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/usertests/UserSubmittedTests.tdml")
-        };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read UserSubmittedTests.tdml");
-        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let path =
+            if std::path::Path::new("tests/daffodil/usertests/UserSubmittedTests.tdml").exists() {
+                std::path::Path::new("tests/daffodil/usertests/UserSubmittedTests.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/usertests/UserSubmittedTests.tdml",
+                )
+            };
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read UserSubmittedTests.tdml");
+        let suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[USER SUBMITTED FAILURE] {}", msg);
@@ -4425,13 +4781,20 @@ mod tests {
     /// (length=0) parses cleanly without error into an empty infoset item.
     #[test]
     fn test_nada_parser() {
-        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
-        };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SequenceGroup.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let path =
+            if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroup.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroup.tdml",
+                )
+            };
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read SequenceGroup.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| tc.name == "nadaParser");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
@@ -4448,18 +4811,29 @@ mod tests {
     /// assertions or parse errors cause the element and sequence to fail without backtracking.
     #[test]
     fn test_sequence_group_initiated_content() {
-        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroupInitiatedContent.tdml")
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SequenceGroupInitiatedContent.tdml");
-        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content = std::fs::read_to_string(path)
+            .expect("Failed to read SequenceGroupInitiatedContent.tdml");
+        let suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[SEQ DISC FAILURE] {}", msg);
         }
-        eprintln!("[SEQ DISC TOTAL] passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "[SEQ DISC TOTAL] passed={}, failed={}",
+            report.passed, report.failed
+        );
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
     }
 
@@ -4470,18 +4844,29 @@ mod tests {
     /// and that failed alternatives do not backtrack across discriminated choices.
     #[test]
     fn test_choice_group_initiated_content() {
-        let path = if std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section15/choice_groups/ChoiceGroupInitiatedContent.tdml")
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ChoiceGroupInitiatedContent.tdml");
-        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read ChoiceGroupInitiatedContent.tdml");
+        let suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[CHOICE INIT FAILURE] {}", msg);
         }
-        eprintln!("[CHOICE INIT TOTAL] passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "[CHOICE INIT TOTAL] passed={}, failed={}",
+            report.passed, report.failed
+        );
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
     }
 
@@ -4491,14 +4876,21 @@ mod tests {
     /// scanned over binary data interpreted under the element's encoding (e.g. ISO-8859-1).
     #[test]
     fn test_hex_binary_length_kind_pattern_01() {
-        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PatternTests.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PatternTests.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section12/lengthKind/PatternTests.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PatternTests.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section12/lengthKind/PatternTests.tdml",
+            )
         };
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read PatternTests.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "hexBinaryLengthKindPattern01");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "hexBinaryLengthKindPattern01");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[HEX PATTERN FAILURE] {}", msg);
@@ -4513,14 +4905,22 @@ mod tests {
     /// (e.g. dfdl:textNumberPadCharacter="X") strip pad characters and correctly decode the prefix length.
     #[test]
     fn test_pl_text_string_txt_chars_padding() {
-        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml",
+            )
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
-        suite.test_cases.retain(|tc| tc.name == "pl_text_string_txt_chars_padding");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "pl_text_string_txt_chars_padding");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[PREFIX PADDING FAILURE] {}", msg);
@@ -4532,18 +4932,27 @@ mod tests {
     /// Run full PrefixedTests.tdml suite to verify all prefixed length features.
     #[test]
     fn test_prefixed_tests_suite() {
-        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section12/lengthKind/PrefixedTests.tdml",
+            )
         };
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
-        let suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read PrefixedTests.tdml");
+        let suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[PREFIXED SUITE FAILURE] {}", msg);
         }
-        eprintln!("[PREFIXED SUITE TOTAL] passed={}, failed={}", report.passed, report.failed);
+        eprintln!(
+            "[PREFIXED SUITE TOTAL] passed={}, failed={}",
+            report.passed, report.failed
+        );
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
     }
 
@@ -4559,16 +4968,24 @@ mod tests {
     #[test]
     fn test_hidden_data_expression_parsed_occurs() {
         // Locate expressions.tdml in tests/daffodil or crates/dfdl-tests/tests/daffodil
-        let path = if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml",
+                )
+            };
         // Load the TDML suite content
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read expressions.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Filter suite to run only hiddenDataExpression and hiddenDataExpression2
-        suite.test_cases.retain(|tc| tc.name == "hiddenDataExpression" || tc.name == "hiddenDataExpression2");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "hiddenDataExpression" || tc.name == "hiddenDataExpression2");
         // Execute the filtered test cases against the DFDL processor
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Verify both test cases executed and passed with zero failures
@@ -4590,16 +5007,26 @@ mod tests {
     #[test]
     fn test_missing_appinfo_source() {
         // Locate SchemaDefinitionErrors.tdml across potential test roots
-        let path = if std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
         };
         // Read TDML XML content from disk
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SchemaDefinitionErrors.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read SchemaDefinitionErrors.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain only missing_appinfo_source test cases
-        suite.test_cases.retain(|tc| tc.name.starts_with("missing_appinfo_source"));
+        suite
+            .test_cases
+            .retain(|tc| tc.name.starts_with("missing_appinfo_source"));
         // Execute suite with base directory
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Assert all test cases pass with zero failures
@@ -4610,16 +5037,26 @@ mod tests {
     #[test]
     fn test_delims_ignorecase_02() {
         // Locate DelimiterProperties.tdml
-        let path = if std::path::Path::new("tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/delimiter_properties/DelimiterProperties.tdml")
         };
         // Read TDML XML content from disk
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read DelimiterProperties.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read DelimiterProperties.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain only delims_ignorecase_02
-        suite.test_cases.retain(|tc| tc.name == "delims_ignorecase_02");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "delims_ignorecase_02");
         // Execute suite with base directory
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         println!("Failure messages: {:?}", report.failure_messages);
@@ -4648,9 +5085,12 @@ mod tests {
         };
         // Read TDML test suite file
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read SepTests.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain test cases test_sep_ssp_never_6 and test_sep_ssp_never_7
-        suite.test_cases.retain(|tc| tc.name == "test_sep_ssp_never_6" || tc.name == "test_sep_ssp_never_7");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "test_sep_ssp_never_6" || tc.name == "test_sep_ssp_never_7");
         // Run test cases against runner
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Verify both test cases pass without regressions
@@ -4670,14 +5110,22 @@ mod tests {
     #[test]
     fn test_cat_2c_input_value_calc_06() {
         // Locate inputValueCalc.tdml file
-        let path = if std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section17/calc_value_properties/inputValueCalc.tdml")
         };
         // Load TDML XML content from disk
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read inputValueCalc.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read inputValueCalc.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain InputValueCalc_06 test case
         suite.test_cases.retain(|tc| tc.name == "InputValueCalc_06");
         // Run suite
@@ -4696,16 +5144,26 @@ mod tests {
     #[test]
     fn test_cat_2c_array_parsed_and_implicit() {
         // Locate implicitvparsed.tdml file
-        let path = if std::path::Path::new("tests/daffodil/section14/occursCountKind/implicitvparsed.tdml").exists() {
+        let path = if std::path::Path::new(
+            "tests/daffodil/section14/occursCountKind/implicitvparsed.tdml",
+        )
+        .exists()
+        {
             std::path::Path::new("tests/daffodil/section14/occursCountKind/implicitvparsed.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/occursCountKind/implicitvparsed.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section14/occursCountKind/implicitvparsed.tdml",
+            )
         };
         // Read TDML XML content
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read implicitvparsed.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read implicitvparsed.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Filter for test_array_parsed and test_array_implicit
-        suite.test_cases.retain(|tc| tc.name == "test_array_parsed" || tc.name == "test_array_implicit");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "test_array_parsed" || tc.name == "test_array_implicit");
         // Execute suite
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Assert all test cases pass
@@ -4721,14 +5179,16 @@ mod tests {
     #[test]
     fn test_cat_2c_lit_nil1_full_path() {
         // Locate general.tdml
-        let path = if std::path::Path::new("tests/daffodil/section00/general/general.tdml").exists() {
+        let path = if std::path::Path::new("tests/daffodil/section00/general/general.tdml").exists()
+        {
             std::path::Path::new("tests/daffodil/section00/general/general.tdml")
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section00/general/general.tdml")
         };
         // Read TDML XML content
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read general.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain litNil1FullPath
         suite.test_cases.retain(|tc| tc.name == "litNil1FullPath");
         // Run test
@@ -4748,14 +5208,22 @@ mod tests {
     #[test]
     fn test_cat4_error01_extra_separator_leftover_data() {
         // Locate ArrayOptionalElem.tdml
-        let path = if std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
         };
         // Read TDML content
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain error01 test case
         suite.test_cases.retain(|tc| tc.name == "error01");
         // Run test case
@@ -4774,21 +5242,34 @@ mod tests {
     #[test]
     fn test_cat4_trailing_empty_strict_occurs_count_kind() {
         // Locate ArrayOptionalElem.tdml
-        let path = if std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/ArrayOptionalElem.tdml")
         };
         // Read TDML content
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read ArrayOptionalElem.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain occursCountKindImplicitSeparators01b test case
-        suite.test_cases.retain(|tc| tc.name == "occursCountKindImplicitSeparators01b");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "occursCountKindImplicitSeparators01b");
         // Run test case
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Assert that the expected processing error was correctly raised
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
-        assert_eq!(report.passed, 1, "Expected occursCountKindImplicitSeparators01b to pass");
+        assert_eq!(
+            report.passed, 1,
+            "Expected occursCountKindImplicitSeparators01b to pass"
+        );
     }
 
     /// Category 4 Test: schema_component_err in SchemaDefinitionErrors.tdml.
@@ -4800,16 +5281,26 @@ mod tests {
     #[test]
     fn test_cat4_missing_leading_skip_sde() {
         // Locate SchemaDefinitionErrors.tdml
-        let path = if std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section02/schema_definition_errors/SchemaDefinitionErrors.tdml")
         };
         // Read TDML content
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SchemaDefinitionErrors.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read SchemaDefinitionErrors.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain schema_component_err test case
-        suite.test_cases.retain(|tc| tc.name == "schema_component_err");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "schema_component_err");
         // Run test case
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Assert that the expected Schema Definition Error was correctly raised
@@ -4827,14 +5318,22 @@ mod tests {
     #[test]
     fn test_cat4_seq_grp_02_occurs_count_kind_parsed_min_occurs() {
         // Locate SequenceGroupDelimiters.tdml
-        let path = if std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section14/sequence_groups/SequenceGroupDelimiters.tdml")
         };
         // Read TDML content
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read SequenceGroupDelimiters.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read SequenceGroupDelimiters.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain SeqGrp_02 test case
         suite.test_cases.retain(|tc| tc.name == "SeqGrp_02");
         // Run test case
@@ -4853,14 +5352,21 @@ mod tests {
     #[test]
     fn test_cat4_choice_branch_e6_array_default_unsupported() {
         // Locate ChoiceBranches.tdml
-        let path = if std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceBranches.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceBranches.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section15/choice_groups/ChoiceBranches.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceBranches.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceBranches.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section15/choice_groups/ChoiceBranches.tdml",
+                )
+            };
         // Read TDML content
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read ChoiceBranches.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read ChoiceBranches.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain choiceBranch_e6 test case
         suite.test_cases.retain(|tc| tc.name == "choiceBranch_e6");
         // Run test case
@@ -4879,16 +5385,24 @@ mod tests {
     #[test]
     fn test_cat4_regex_lookahead_check_constraints() {
         // Locate expressions.tdml
-        let path = if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml")
-        };
+        let path =
+            if std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section23/dfdl_expressions/expressions.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section23/dfdl_expressions/expressions.tdml",
+                )
+            };
         // Read TDML content
         let tdml_content = std::fs::read_to_string(path).expect("Failed to read expressions.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Retain regexLookaheadFail2 test case
-        suite.test_cases.retain(|tc| tc.name == "regexLookaheadFail2");
+        suite
+            .test_cases
+            .retain(|tc| tc.name == "regexLookaheadFail2");
         // Run test case
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         // Assert that the expected constraint assertion error was correctly raised
@@ -4906,14 +5420,22 @@ mod tests {
     #[test]
     fn test_cat5_ovc_and_qualified_path_step_resolution() {
         // Resolve path to outputValueCalc.tdml
-        let path = if std::path::Path::new("tests/daffodil/section17/calc_value_properties/outputValueCalc.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section17/calc_value_properties/outputValueCalc.tdml")
+        let path = if std::path::Path::new(
+            "tests/daffodil/section17/calc_value_properties/outputValueCalc.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section17/calc_value_properties/outputValueCalc.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section17/calc_value_properties/outputValueCalc.tdml")
         };
         // Load and parse TDML test suite
-        let tdml_content = std::fs::read_to_string(path).expect("Failed to read outputValueCalc.tdml");
-        let mut suite = crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
+        let tdml_content =
+            std::fs::read_to_string(path).expect("Failed to read outputValueCalc.tdml");
+        let mut suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         // Filter test cases covering OVC prefix resolution and array following OVC
         let target_tests = [
             "OutputValueCalc_01",
@@ -4926,7 +5448,9 @@ mod tests {
             "OutputValueCalc_08",
             "arrayWithFollowingOVC",
         ];
-        suite.test_cases.retain(|tc| target_tests.contains(&tc.name.as_str()));
+        suite
+            .test_cases
+            .retain(|tc| target_tests.contains(&tc.name.as_str()));
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[FAILURE OVC] {}", msg);
@@ -4945,55 +5469,101 @@ mod tests {
     #[test]
     fn test_cat5_separator_suppression_vs_element_padding() {
         // Resolve path to UnparseArrayParsedOptionalElem.tdml
-        let parsed_path = if std::path::Path::new("tests/daffodil/section16/array_optional_elem/UnparseArrayParsedOptionalElem.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section16/array_optional_elem/UnparseArrayParsedOptionalElem.tdml")
+        let parsed_path = if std::path::Path::new(
+            "tests/daffodil/section16/array_optional_elem/UnparseArrayParsedOptionalElem.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section16/array_optional_elem/UnparseArrayParsedOptionalElem.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/UnparseArrayParsedOptionalElem.tdml")
         };
         // Load and parse UnparseArrayParsedOptionalElem suite
-        let parsed_content = std::fs::read_to_string(parsed_path).expect("Failed to read UnparseArrayParsedOptionalElem.tdml");
-        let mut parsed_suite = crate::tdml::TdmlTestSuite::parse_xml(&parsed_content).expect("Failed to parse TDML");
-        parsed_suite.test_cases.retain(|tc| tc.name == "parsedOptArrayThenScalar02");
-        let parsed_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&parsed_suite, "", parsed_path.parent());
+        let parsed_content = std::fs::read_to_string(parsed_path)
+            .expect("Failed to read UnparseArrayParsedOptionalElem.tdml");
+        let mut parsed_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&parsed_content).expect("Failed to parse TDML");
+        parsed_suite
+            .test_cases
+            .retain(|tc| tc.name == "parsedOptArrayThenScalar02");
+        let parsed_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(
+            &parsed_suite,
+            "",
+            parsed_path.parent(),
+        );
         for msg in &parsed_report.failure_messages {
             eprintln!("[FAILURE parsed] {}", msg);
         }
-        assert_eq!(parsed_report.failed, 0, "Failures: {:?}", parsed_report.failure_messages);
+        assert_eq!(
+            parsed_report.failed, 0,
+            "Failures: {:?}",
+            parsed_report.failure_messages
+        );
         assert_eq!(parsed_report.passed, 1);
 
         // Resolve path to UnparseArrayImplicitOptionalElem.tdml
-        let imp_path = if std::path::Path::new("tests/daffodil/section16/array_optional_elem/UnparseArrayImplicitOptionalElem.tdml").exists() {
+        let imp_path = if std::path::Path::new(
+            "tests/daffodil/section16/array_optional_elem/UnparseArrayImplicitOptionalElem.tdml",
+        )
+        .exists()
+        {
             std::path::Path::new("tests/daffodil/section16/array_optional_elem/UnparseArrayImplicitOptionalElem.tdml")
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section16/array_optional_elem/UnparseArrayImplicitOptionalElem.tdml")
         };
         // Load and parse UnparseArrayImplicitOptionalElem suite
-        let imp_content = std::fs::read_to_string(imp_path).expect("Failed to read UnparseArrayImplicitOptionalElem.tdml");
-        let mut imp_suite = crate::tdml::TdmlTestSuite::parse_xml(&imp_content).expect("Failed to parse TDML");
-        imp_suite.test_cases.retain(|tc| tc.name == "impOptArrayThenScalar02");
-        let imp_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&imp_suite, "", imp_path.parent());
+        let imp_content = std::fs::read_to_string(imp_path)
+            .expect("Failed to read UnparseArrayImplicitOptionalElem.tdml");
+        let mut imp_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&imp_content).expect("Failed to parse TDML");
+        imp_suite
+            .test_cases
+            .retain(|tc| tc.name == "impOptArrayThenScalar02");
+        let imp_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&imp_suite, "", imp_path.parent());
         for msg in &imp_report.failure_messages {
             eprintln!("[FAILURE imp] {}", msg);
         }
-        assert_eq!(imp_report.failed, 0, "Failures: {:?}", imp_report.failure_messages);
+        assert_eq!(
+            imp_report.failed, 0,
+            "Failures: {:?}",
+            imp_report.failure_messages
+        );
         assert_eq!(imp_report.passed, 1);
 
         // Resolve path to ProcessingErrorsUnparse.tdml
-        let cb_path = if std::path::Path::new("tests/daffodil/section02/processing_errors/ProcessingErrorsUnparse.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section02/processing_errors/ProcessingErrorsUnparse.tdml")
+        let cb_path = if std::path::Path::new(
+            "tests/daffodil/section02/processing_errors/ProcessingErrorsUnparse.tdml",
+        )
+        .exists()
+        {
+            std::path::Path::new(
+                "tests/daffodil/section02/processing_errors/ProcessingErrorsUnparse.tdml",
+            )
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section02/processing_errors/ProcessingErrorsUnparse.tdml")
         };
         // Load and parse ProcessingErrorsUnparse suite
-        let cb_content = std::fs::read_to_string(cb_path).expect("Failed to read ProcessingErrorsUnparse.tdml");
-        let mut cb_suite = crate::tdml::TdmlTestSuite::parse_xml(&cb_content).expect("Failed to parse TDML");
+        let cb_content =
+            std::fs::read_to_string(cb_path).expect("Failed to read ProcessingErrorsUnparse.tdml");
+        let mut cb_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&cb_content).expect("Failed to parse TDML");
         // Filter roundTripErrorHalfwayThrough
-        cb_suite.test_cases.retain(|tc| tc.name == "roundTripErrorHalfwayThrough");
-        let cb_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&cb_suite, "", cb_path.parent());
+        cb_suite
+            .test_cases
+            .retain(|tc| tc.name == "roundTripErrorHalfwayThrough");
+        let cb_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&cb_suite, "", cb_path.parent());
         for msg in &cb_report.failure_messages {
             eprintln!("[FAILURE cb] {}", msg);
         }
-        assert_eq!(cb_report.failed, 0, "Failures: {:?}", cb_report.failure_messages);
+        assert_eq!(
+            cb_report.failed, 0,
+            "Failures: {:?}",
+            cb_report.failure_messages
+        );
         assert_eq!(cb_report.passed, 1);
     }
 
@@ -5006,39 +5576,66 @@ mod tests {
     #[test]
     fn test_cat5_explicit_length_string_padding() {
         // Resolve path to ChoiceLengthExplicit.tdml
-        let ch_path = if std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceLengthExplicit.tdml").exists() {
+        let ch_path = if std::path::Path::new(
+            "tests/daffodil/section15/choice_groups/ChoiceLengthExplicit.tdml",
+        )
+        .exists()
+        {
             std::path::Path::new("tests/daffodil/section15/choice_groups/ChoiceLengthExplicit.tdml")
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/section15/choice_groups/ChoiceLengthExplicit.tdml")
         };
         // Load and parse ChoiceLengthExplicit suite
-        let ch_content = std::fs::read_to_string(ch_path).expect("Failed to read ChoiceLengthExplicit.tdml");
-        let mut ch_suite = crate::tdml::TdmlTestSuite::parse_xml(&ch_content).expect("Failed to parse TDML");
+        let ch_content =
+            std::fs::read_to_string(ch_path).expect("Failed to read ChoiceLengthExplicit.tdml");
+        let mut ch_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&ch_content).expect("Failed to parse TDML");
         // Filter explicit_unparse_02
-        ch_suite.test_cases.retain(|tc| tc.name == "explicit_unparse_02");
-        let ch_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&ch_suite, "", ch_path.parent());
+        ch_suite
+            .test_cases
+            .retain(|tc| tc.name == "explicit_unparse_02");
+        let ch_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&ch_suite, "", ch_path.parent());
         for msg in &ch_report.failure_messages {
             eprintln!("[FAILURE choice] {}", msg);
         }
-        assert_eq!(ch_report.failed, 0, "Failures: {:?}", ch_report.failure_messages);
+        assert_eq!(
+            ch_report.failed, 0,
+            "Failures: {:?}",
+            ch_report.failure_messages
+        );
         assert_eq!(ch_report.passed, 1);
 
         // Resolve path to OVCAndLengthTest.tdml
-        let ovc_len_path = if std::path::Path::new("tests/daffodil/unparser/OVCAndLengthTest.tdml").exists() {
+        let ovc_len_path = if std::path::Path::new("tests/daffodil/unparser/OVCAndLengthTest.tdml")
+            .exists()
+        {
             std::path::Path::new("tests/daffodil/unparser/OVCAndLengthTest.tdml")
         } else {
             std::path::Path::new("crates/dfdl-tests/tests/daffodil/unparser/OVCAndLengthTest.tdml")
         };
         // Load and parse OVCAndLengthTest suite
-        let ovc_len_content = std::fs::read_to_string(ovc_len_path).expect("Failed to read OVCAndLengthTest.tdml");
-        let mut ovc_len_suite = crate::tdml::TdmlTestSuite::parse_xml(&ovc_len_content).expect("Failed to parse TDML");
+        let ovc_len_content =
+            std::fs::read_to_string(ovc_len_path).expect("Failed to read OVCAndLengthTest.tdml");
+        let mut ovc_len_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&ovc_len_content).expect("Failed to parse TDML");
         // Filter ovcContentLengthCycle2
-        ovc_len_suite.test_cases.retain(|tc| tc.name == "ovcContentLengthCycle2");
-        let ovc_len_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&ovc_len_suite, "", ovc_len_path.parent());
+        ovc_len_suite
+            .test_cases
+            .retain(|tc| tc.name == "ovcContentLengthCycle2");
+        let ovc_len_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(
+            &ovc_len_suite,
+            "",
+            ovc_len_path.parent(),
+        );
         for msg in &ovc_len_report.failure_messages {
             eprintln!("[FAILURE ovc_len] {}", msg);
         }
-        assert_eq!(ovc_len_report.failed, 0, "Failures: {:?}", ovc_len_report.failure_messages);
+        assert_eq!(
+            ovc_len_report.failed, 0,
+            "Failures: {:?}",
+            ovc_len_report.failure_messages
+        );
         assert_eq!(ovc_len_report.passed, 1);
     }
 
@@ -5051,39 +5648,68 @@ mod tests {
     #[test]
     fn test_cat5_delimiter_mta_and_pua_remapping() {
         // Resolve path to Aligned_Data.tdml
-        let mta_path = if std::path::Path::new("tests/daffodil/section12/aligned_data/Aligned_Data.tdml").exists() {
-            std::path::Path::new("tests/daffodil/section12/aligned_data/Aligned_Data.tdml")
-        } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section12/aligned_data/Aligned_Data.tdml")
-        };
+        let mta_path =
+            if std::path::Path::new("tests/daffodil/section12/aligned_data/Aligned_Data.tdml")
+                .exists()
+            {
+                std::path::Path::new("tests/daffodil/section12/aligned_data/Aligned_Data.tdml")
+            } else {
+                std::path::Path::new(
+                    "crates/dfdl-tests/tests/daffodil/section12/aligned_data/Aligned_Data.tdml",
+                )
+            };
         // Load and parse Aligned_Data suite
-        let mta_content = std::fs::read_to_string(mta_path).expect("Failed to read Aligned_Data.tdml");
-        let mut mta_suite = crate::tdml::TdmlTestSuite::parse_xml(&mta_content).expect("Failed to parse TDML");
+        let mta_content =
+            std::fs::read_to_string(mta_path).expect("Failed to read Aligned_Data.tdml");
+        let mut mta_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&mta_content).expect("Failed to parse TDML");
         // Filter separatorMTA_01
-        mta_suite.test_cases.retain(|tc| tc.name == "separatorMTA_01");
-        let mta_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&mta_suite, "", mta_path.parent());
+        mta_suite
+            .test_cases
+            .retain(|tc| tc.name == "separatorMTA_01");
+        let mta_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&mta_suite, "", mta_path.parent());
         for msg in &mta_report.failure_messages {
             eprintln!("[FAILURE mta] {}", msg);
         }
-        assert_eq!(mta_report.failed, 0, "Failures: {:?}", mta_report.failure_messages);
+        assert_eq!(
+            mta_report.failed, 0,
+            "Failures: {:?}",
+            mta_report.failure_messages
+        );
         assert_eq!(mta_report.passed, 1);
 
         // Resolve path to testUnparserFileBuffering.tdml
-        let pua_path = if std::path::Path::new("tests/daffodil/section00/general/testUnparserFileBuffering.tdml").exists() {
+        let pua_path = if std::path::Path::new(
+            "tests/daffodil/section00/general/testUnparserFileBuffering.tdml",
+        )
+        .exists()
+        {
             std::path::Path::new("tests/daffodil/section00/general/testUnparserFileBuffering.tdml")
         } else {
-            std::path::Path::new("crates/dfdl-tests/tests/daffodil/section00/general/testUnparserFileBuffering.tdml")
+            std::path::Path::new(
+                "crates/dfdl-tests/tests/daffodil/section00/general/testUnparserFileBuffering.tdml",
+            )
         };
         // Load and parse testUnparserFileBuffering suite
-        let pua_content = std::fs::read_to_string(pua_path).expect("Failed to read testUnparserFileBuffering.tdml");
-        let mut pua_suite = crate::tdml::TdmlTestSuite::parse_xml(&pua_content).expect("Failed to parse TDML");
+        let pua_content = std::fs::read_to_string(pua_path)
+            .expect("Failed to read testUnparserFileBuffering.tdml");
+        let mut pua_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&pua_content).expect("Failed to parse TDML");
         // Filter puaInfosetChars_04_ffb
-        pua_suite.test_cases.retain(|tc| tc.name == "puaInfosetChars_04_ffb");
-        let pua_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&pua_suite, "", pua_path.parent());
+        pua_suite
+            .test_cases
+            .retain(|tc| tc.name == "puaInfosetChars_04_ffb");
+        let pua_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&pua_suite, "", pua_path.parent());
         for msg in &pua_report.failure_messages {
             eprintln!("[FAILURE pua] {}", msg);
         }
-        assert_eq!(pua_report.failed, 0, "Failures: {:?}", pua_report.failure_messages);
+        assert_eq!(
+            pua_report.failed, 0,
+            "Failures: {:?}",
+            pua_report.failure_messages
+        );
         assert_eq!(pua_report.passed, 1);
     }
 
@@ -5122,7 +5748,8 @@ mod tests {
                 || tc.name == "test_checkDigit_bad_invalid"
                 || tc.name == "test_checkDigit_unparse_ok_01"
         });
-        let cd_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&cd_suite, "", cd_path.parent());
+        let cd_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&cd_suite, "", cd_path.parent());
         assert_eq!(
             cd_report.failed, 0,
             "CheckDigit Category 1 failures: {:?}",
@@ -5145,7 +5772,8 @@ mod tests {
                 || tc.name == "namespace_scope_02"
                 || tc.name == "combinations_03"
         });
-        let ns_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&ns_suite, "", ns_path.parent());
+        let ns_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&ns_suite, "", ns_path.parent());
         assert_eq!(
             ns_report.failed, 0,
             "Namespaces Category 1 failures: {:?}",
@@ -5159,10 +5787,10 @@ mod tests {
         let df_content = std::fs::read_to_string(&df_path).expect("Read defineFormat.tdml");
         let mut df_suite = crate::tdml::TdmlTestSuite::parse_xml(&df_content).expect("Parse TDML");
         df_suite.test_cases.retain(|tc| {
-            tc.name == "Lesson3_inherit_defineFormat"
-                || tc.name == "format_with_comment"
+            tc.name == "Lesson3_inherit_defineFormat" || tc.name == "format_with_comment"
         });
-        let df_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&df_suite, "", df_path.parent());
+        let df_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&df_suite, "", df_path.parent());
         assert_eq!(
             df_report.failed, 0,
             "DefineFormat Category 1 failures: {:?}",
@@ -5191,13 +5819,16 @@ mod tests {
         // 1. Cluster 1: RuntimeCalendarLanguage.tdml (unparseRuntimeCalendarLanguageOVC, unparseRuntimeCalendarLanguageOVCCacheCheck)
         let rcl_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/daffodil/section05/simple_types/RuntimeCalendarLanguage.tdml");
-        let rcl_content = std::fs::read_to_string(&rcl_path).expect("Read RuntimeCalendarLanguage.tdml");
-        let mut rcl_suite = crate::tdml::TdmlTestSuite::parse_xml(&rcl_content).expect("Parse TDML");
+        let rcl_content =
+            std::fs::read_to_string(&rcl_path).expect("Read RuntimeCalendarLanguage.tdml");
+        let mut rcl_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&rcl_content).expect("Parse TDML");
         rcl_suite.test_cases.retain(|tc| {
             tc.name == "unparseRuntimeCalendarLanguageOVC"
                 || tc.name == "unparseRuntimeCalendarLanguageOVCCacheCheck"
         });
-        let rcl_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&rcl_suite, "", rcl_path.parent());
+        let rcl_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&rcl_suite, "", rcl_path.parent());
         assert_eq!(
             rcl_report.failed, 0,
             "RuntimeCalendarLanguage Cluster 1 failures: {:?}",
@@ -5209,11 +5840,13 @@ mod tests {
         let utf8_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/daffodil/section23/dfdl_functions/Functions_UTF8.tdml");
         let utf8_content = std::fs::read_to_string(&utf8_path).expect("Read Functions_UTF8.tdml");
-        let mut utf8_suite = crate::tdml::TdmlTestSuite::parse_xml(&utf8_content).expect("Parse TDML");
-        utf8_suite.test_cases.retain(|tc| {
-            tc.name == "lowercase_05" || tc.name == "uppercase_05"
-        });
-        let utf8_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&utf8_suite, "", utf8_path.parent());
+        let mut utf8_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&utf8_content).expect("Parse TDML");
+        utf8_suite
+            .test_cases
+            .retain(|tc| tc.name == "lowercase_05" || tc.name == "uppercase_05");
+        let utf8_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&utf8_suite, "", utf8_path.parent());
         assert_eq!(
             utf8_report.failed, 0,
             "Functions_UTF8 Cluster 1 failures: {:?}",
@@ -5224,10 +5857,15 @@ mod tests {
         // 3. Cluster 2: TestBitsCharsetDefinition.tdml (unparse_charsets)
         let bcs_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/daffodil/charsets/TestBitsCharsetDefinition.tdml");
-        let bcs_content = std::fs::read_to_string(&bcs_path).expect("Read TestBitsCharsetDefinition.tdml");
-        let mut bcs_suite = crate::tdml::TdmlTestSuite::parse_xml(&bcs_content).expect("Parse TDML");
-        bcs_suite.test_cases.retain(|tc| tc.name == "unparse_charsets");
-        let bcs_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&bcs_suite, "", bcs_path.parent());
+        let bcs_content =
+            std::fs::read_to_string(&bcs_path).expect("Read TestBitsCharsetDefinition.tdml");
+        let mut bcs_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&bcs_content).expect("Parse TDML");
+        bcs_suite
+            .test_cases
+            .retain(|tc| tc.name == "unparse_charsets");
+        let bcs_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&bcs_suite, "", bcs_path.parent());
         assert_eq!(
             bcs_report.failed, 0,
             "TestBitsCharsetDefinition Cluster 2 failures: {:?}",
@@ -5239,9 +5877,13 @@ mod tests {
         let tnp_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/daffodil/section13/text_number_props/TextNumberProps.tdml");
         let tnp_content = std::fs::read_to_string(&tnp_path).expect("Read TextNumberProps.tdml");
-        let mut tnp_suite = crate::tdml::TdmlTestSuite::parse_xml(&tnp_content).expect("Parse TDML");
-        tnp_suite.test_cases.retain(|tc| tc.name == "infnanCaseInsensitive");
-        let tnp_report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&tnp_suite, "", tnp_path.parent());
+        let mut tnp_suite =
+            crate::tdml::TdmlTestSuite::parse_xml(&tnp_content).expect("Parse TDML");
+        tnp_suite
+            .test_cases
+            .retain(|tc| tc.name == "infnanCaseInsensitive");
+        let tnp_report =
+            crate::tdml::TdmlRunner::run_suite_with_base_dir(&tnp_suite, "", tnp_path.parent());
         assert_eq!(
             tnp_report.failed, 0,
             "TextNumberProps Cluster 3 failures: {:?}",
@@ -5306,8 +5948,11 @@ mod tests {
 
         // 2. Unparse back to binary stream and verify 2 bytes output
         let sink = VecByteSink::new();
-        let mut writer =
-            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut writer = BitWriter::new(
+            sink,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut unparse_budget = WorkBudget::new(100);
 
         let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut unparse_budget);
@@ -5421,7 +6066,9 @@ mod tests {
 
         assert_eq!(err.kind, DFDLErrorKind::Validation);
         assert!(
-            err.message.as_str().contains("occurs 1 times, less than minOccurs 2"),
+            err.message
+                .as_str()
+                .contains("occurs 1 times, less than minOccurs 2"),
             "Unexpected error message: {}",
             err.message
         );
@@ -5535,8 +6182,11 @@ mod tests {
         let doc = builder.build().expect("Build infoset");
 
         let sink = VecByteSink::new();
-        let mut writer =
-            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut writer = BitWriter::new(
+            sink,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget = WorkBudget::new(100);
 
         let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
@@ -5582,12 +6232,13 @@ mod tests {
         let mut budget = WorkBudget::new(100);
 
         let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
-        let doc = parser
-            .parse_document()
-            .expect("Parsing 5,000 'A's with lengthPattern=A+ must not fail or leave trailing data");
+        let doc = parser.parse_document().expect(
+            "Parsing 5,000 'A's with lengthPattern=A+ must not fail or leave trailing data",
+        );
 
         let root = doc.root.as_ref().unwrap();
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s)) = root.state {
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s)) = root.state
+        {
             assert_eq!(s.len(), 5000);
             assert!(s.chars().all(|c| c == 'A'));
         } else {
@@ -5647,8 +6298,13 @@ mod tests {
 
         let dfdl_core::infoset::tree::InfosetNode::Element(ref f1) = root.children[0];
         assert_eq!(f1.name.local_name, "Field1");
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s1)) = f1.state {
-            assert_eq!(s1.len(), 5000, "Field1 must consume all 5000 'A' characters");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s1)) = f1.state
+        {
+            assert_eq!(
+                s1.len(),
+                5000,
+                "Field1 must consume all 5000 'A' characters"
+            );
             assert!(s1.chars().all(|c| c == 'A'));
         } else {
             panic!("Expected Value(String) state for Field1");
@@ -5656,8 +6312,12 @@ mod tests {
 
         let dfdl_core::infoset::tree::InfosetNode::Element(ref f2) = root.children[1];
         assert_eq!(f2.name.local_name, "Field2");
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s2)) = f2.state {
-            assert_eq!(s2, "END", "Field2 must only contain 'END', not stolen 'A' characters");
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref s2)) = f2.state
+        {
+            assert_eq!(
+                s2, "END",
+                "Field2 must only contain 'END', not stolen 'A' characters"
+            );
         } else {
             panic!("Expected Value(String) state for Field2");
         }
@@ -5722,7 +6382,8 @@ mod tests {
 
         let dfdl_core::infoset::tree::InfosetNode::Element(ref s) = p.children[0];
         assert_eq!(s.name.local_name, "s");
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val)) = s.state {
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val)) = s.state
+        {
             assert_eq!(val, "éA", "Child element 's' must receive 'éA'");
         } else {
             panic!("Expected Value(String) state for element 's'");
@@ -5792,7 +6453,9 @@ mod tests {
 
         let dfdl_core::infoset::tree::InfosetNode::Element(ref s) = p.children[0];
         assert_eq!(s.name.local_name, "s");
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val_s)) = s.state {
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val_s)) =
+            s.state
+        {
             assert_eq!(val_s, "éA", "p/s must receive 'éA'");
         } else {
             panic!("Expected Value(String) state for p/s");
@@ -5800,7 +6463,9 @@ mod tests {
 
         let dfdl_core::infoset::tree::InfosetNode::Element(ref tail) = root.children[1];
         assert_eq!(tail.name.local_name, "tail");
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val_tail)) = tail.state {
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val_tail)) =
+            tail.state
+        {
             assert_eq!(val_tail, "Z", "tail must receive 'Z', not 'AZ'");
         } else {
             panic!("Expected Value(String) state for tail");
@@ -5857,8 +6522,11 @@ mod tests {
         // Must succeed and parse Branch1 as "A".
         let full_data = b"A***";
         let src_full = SliceByteSource::new(full_data);
-        let mut reader_full =
-            BitReader::new(src_full, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader_full = BitReader::new(
+            src_full,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget_full = WorkBudget::new(100);
 
         let mut parser_full = ParserEngine::new(&schema, &mut reader_full, &mut budget_full);
@@ -5870,7 +6538,8 @@ mod tests {
         assert_eq!(root.children.len(), 1);
         let dfdl_core::infoset::tree::InfosetNode::Element(ref b1) = root.children[0];
         assert_eq!(b1.name.local_name, "Branch1");
-        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val)) = b1.state {
+        if let dfdl_core::infoset::state::ElementState::Value(DfdlValue::String(ref val)) = b1.state
+        {
             assert_eq!(val, "A");
         } else {
             panic!("Expected Value(String) state for Branch1");
@@ -5953,8 +6622,11 @@ mod tests {
         let doc = builder.build().expect("Build infoset");
 
         let sink = VecByteSink::new();
-        let mut writer =
-            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut writer = BitWriter::new(
+            sink,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget = WorkBudget::new(100);
 
         let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
@@ -6045,8 +6717,11 @@ mod tests {
         let doc = builder.build().expect("Build infoset");
 
         let sink = VecByteSink::new();
-        let mut writer =
-            BitWriter::new(sink, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut writer = BitWriter::new(
+            sink,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut budget = WorkBudget::new(100);
 
         let mut unparser = UnparserEngine::new(&schema, &mut writer, &mut budget);
@@ -6089,10 +6764,16 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
         let res_overflow = compiler.compile_str(xml_overflow);
-        assert!(res_overflow.is_err(), "Compile must reject 16-bit xs:byte at schema load time");
+        assert!(
+            res_overflow.is_err(),
+            "Compile must reject 16-bit xs:byte at schema load time"
+        );
         let err_overflow = res_overflow.unwrap_err();
         assert!(
-            err_overflow.message.as_str().contains("Length in bits 16 out of range"),
+            err_overflow
+                .message
+                .as_str()
+                .contains("Length in bits 16 out of range"),
             "Error must specify bit length overflow: {}",
             err_overflow.message.as_str()
         );
@@ -6110,10 +6791,16 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
         let res_zoned_float = compiler.compile_str(xml_zoned_float);
-        assert!(res_zoned_float.is_err(), "Compile must reject zoned float at schema load time");
+        assert!(
+            res_zoned_float.is_err(),
+            "Compile must reject zoned float at schema load time"
+        );
         let err_zoned = res_zoned_float.unwrap_err();
         assert!(
-            err_zoned.message.as_str().contains("textNumberRep=\"zoned\" is not allowed for Float"),
+            err_zoned
+                .message
+                .as_str()
+                .contains("textNumberRep=\"zoned\" is not allowed for Float"),
             "Error must identify invalid zoned float: {}",
             err_zoned.message.as_str()
         );
@@ -6137,7 +6824,10 @@ mod tests {
     </xs:element>
 </xs:schema>"#;
         let res_bad_assert = compiler.compile_str(xml_bad_assert);
-        assert!(res_bad_assert.is_err(), "Compile must reject malformed assert expression at load time");
+        assert!(
+            res_bad_assert.is_err(),
+            "Compile must reject malformed assert expression at load time"
+        );
 
         // 4. Facet validation respects ValidationMode in ParserEngine
         let xml_facet = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -6156,48 +6846,87 @@ mod tests {
         </xs:complexType>
     </xs:element>
 </xs:schema>"#;
-        let schema_facet = compiler.compile_str(xml_facet).expect("Compile schema with Min5 facet");
+        let schema_facet = compiler
+            .compile_str(xml_facet)
+            .expect("Compile schema with Min5 facet");
 
         // ValidationMode::Off must parse without error (§21)
         let src_off = SliceByteSource::new(b"03");
-        let mut r_off = BitReader::new(src_off, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut r_off = BitReader::new(
+            src_off,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut b_off = WorkBudget::new(100);
         let mut parser_off = ParserEngine::new(&schema_facet, &mut r_off, &mut b_off);
         parser_off.set_validation_mode(ValidationMode::Off);
         let doc_off = parser_off.parse_document();
-        assert!(doc_off.is_ok(), "ValidationMode::Off must not fail on facet violation");
+        assert!(
+            doc_off.is_ok(),
+            "ValidationMode::Off must not fail on facet violation"
+        );
 
         // ValidationMode::Limited must return validation error (§21)
         let src_lim = SliceByteSource::new(b"03");
-        let mut r_lim = BitReader::new(src_lim, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut r_lim = BitReader::new(
+            src_lim,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut b_lim = WorkBudget::new(100);
         let mut parser_lim = ParserEngine::new(&schema_facet, &mut r_lim, &mut b_lim);
         parser_lim.set_validation_mode(ValidationMode::Limited);
         let doc_lim = parser_lim.parse_document();
-        assert!(doc_lim.is_err(), "ValidationMode::Limited must return validation error on facet violation");
+        assert!(
+            doc_lim.is_err(),
+            "ValidationMode::Limited must return validation error on facet violation"
+        );
         assert_eq!(doc_lim.unwrap_err().kind, DFDLErrorKind::Validation);
 
         // 5. UnparserEngine respects ValidationMode::Limited
         let mut bld = InfosetBuilder::new();
         bld.push_event(InfosetEvent::StartDocument).unwrap();
-        bld.push_event(InfosetEvent::StartElement { name: QName::local("Root"), is_nil: false }).unwrap();
-        bld.push_event(InfosetEvent::SimpleValue { name: QName::local("val"), value: DfdlValue::Long(3) }).unwrap();
-        bld.push_event(InfosetEvent::EndElement { name: QName::local("Root") }).unwrap();
+        bld.push_event(InfosetEvent::StartElement {
+            name: QName::local("Root"),
+            is_nil: false,
+        })
+        .unwrap();
+        bld.push_event(InfosetEvent::SimpleValue {
+            name: QName::local("val"),
+            value: DfdlValue::Long(3),
+        })
+        .unwrap();
+        bld.push_event(InfosetEvent::EndElement {
+            name: QName::local("Root"),
+        })
+        .unwrap();
         bld.push_event(InfosetEvent::EndDocument).unwrap();
         let doc_unparse = bld.build().unwrap();
 
         // Under ValidationMode::Off, unparsing succeeds
         let sink_off = VecByteSink::new();
-        let mut w_off = BitWriter::new(sink_off, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut w_off = BitWriter::new(
+            sink_off,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut b_unp_off = WorkBudget::new(100);
         let mut unp_off = UnparserEngine::new(&schema_facet, &mut w_off, &mut b_unp_off);
         unp_off.set_validation_mode(ValidationMode::Off);
         let unp_off_res = unp_off.unparse_document(&doc_unparse);
-        assert!(unp_off_res.is_ok(), "Unparsing must succeed under Off: {:?}", unp_off_res);
+        assert!(
+            unp_off_res.is_ok(),
+            "Unparsing must succeed under Off: {:?}",
+            unp_off_res
+        );
 
         // Under ValidationMode::Limited, unparsing reports validation error
         let sink_lim = VecByteSink::new();
-        let mut w_lim = BitWriter::new(sink_lim, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut w_lim = BitWriter::new(
+            sink_lim,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         let mut b_unp_lim = WorkBudget::new(100);
         let mut unp_lim = UnparserEngine::new(&schema_facet, &mut w_lim, &mut b_unp_lim);
         unp_lim.set_validation_mode(ValidationMode::Limited);
@@ -6206,10 +6935,3 @@ mod tests {
         assert_eq!(unp_res.unwrap_err().kind, DFDLErrorKind::Validation);
     }
 }
-
-
-
-
-
-
-

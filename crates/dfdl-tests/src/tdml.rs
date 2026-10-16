@@ -452,7 +452,9 @@ impl TdmlTestSuite {
                                 if let (Some(p_type), Some(p_buf)) =
                                     (current_part_type.take(), current_part_buf.take())
                                 {
-                                    let b_ord = current_part_bit_order.take().or_else(|| current_doc_bit_order.clone());
+                                    let b_ord = current_part_bit_order
+                                        .take()
+                                        .or_else(|| current_doc_bit_order.clone());
                                     let by_ord = current_part_byte_order.take();
                                     let enc = current_part_encoding.take();
                                     let r_ent = current_part_replace_entities;
@@ -515,7 +517,8 @@ impl TdmlTestSuite {
                                         .iter()
                                         .find(|a| a.name.local_name == "name")
                                         .map(|a| a.value.to_string());
-                                } else if local != "externalVariableBindings" && local != "tunables" {
+                                } else if local != "externalVariableBindings" && local != "tunables"
+                                {
                                     current_tunable = Some(local.to_string());
                                 }
                             }
@@ -529,19 +532,30 @@ impl TdmlTestSuite {
                                     }
                                     let mut has_default_ns = false;
                                     for attr in &attributes {
-                                        if attr.name.prefix.is_none() && attr.name.local_name == "xmlns" {
+                                        if attr.name.prefix.is_none()
+                                            && attr.name.local_name == "xmlns"
+                                        {
                                             has_default_ns = true;
                                         }
                                         if let Some(ref ap) = attr.name.prefix {
-                                            info_buf.push_str(&format!(" {}:{}=\"{}\"", ap, attr.name.local_name, attr.value));
+                                            info_buf.push_str(&format!(
+                                                " {}:{}=\"{}\"",
+                                                ap, attr.name.local_name, attr.value
+                                            ));
                                         } else {
-                                            info_buf.push_str(&format!(" {}=\"{}\"", attr.name.local_name, attr.value));
+                                            info_buf.push_str(&format!(
+                                                " {}=\"{}\"",
+                                                attr.name.local_name, attr.value
+                                            ));
                                         }
                                     }
                                     if is_first_elem {
                                         if !has_default_ns {
                                             if let Some(default_ns) = reader.resolve_default_ns() {
-                                                info_buf.push_str(&format!(" xmlns=\"{}\"", default_ns));
+                                                info_buf.push_str(&format!(
+                                                    " xmlns=\"{}\"",
+                                                    default_ns
+                                                ));
                                             }
                                         }
                                         for (pref, uri) in reader.in_scope_namespace_bindings() {
@@ -551,7 +565,10 @@ impl TdmlTestSuite {
                                                         && a.name.local_name == pref
                                                 })
                                             {
-                                                info_buf.push_str(&format!(" xmlns:{}=\"{}\"", pref, uri));
+                                                info_buf.push_str(&format!(
+                                                    " xmlns:{}=\"{}\"",
+                                                    pref, uri
+                                                ));
                                             }
                                         }
                                     }
@@ -564,10 +581,17 @@ impl TdmlTestSuite {
                 XmlEvent::Text { ref content, .. } => {
                     if let Some(ref bind_name) = current_bind {
                         if let Some(ref cfg_name) = current_config_name {
-                            if let Some(cfg) = suite.external_variable_bindings.iter_mut().find(|(n, _)| n == cfg_name) {
+                            if let Some(cfg) = suite
+                                .external_variable_bindings
+                                .iter_mut()
+                                .find(|(n, _)| n == cfg_name)
+                            {
                                 cfg.1.push((bind_name.clone(), content.trim().to_string()));
                             } else {
-                                suite.external_variable_bindings.push((cfg_name.clone(), vec![(bind_name.clone(), content.trim().to_string())]));
+                                suite.external_variable_bindings.push((
+                                    cfg_name.clone(),
+                                    vec![(bind_name.clone(), content.trim().to_string())],
+                                ));
                             }
                         }
                     } else if let Some(ref tunable) = current_tunable {
@@ -587,10 +611,17 @@ impl TdmlTestSuite {
                 XmlEvent::CData { content, .. } => {
                     if let Some(ref bind_name) = current_bind {
                         if let Some(ref cfg_name) = current_config_name {
-                            if let Some(cfg) = suite.external_variable_bindings.iter_mut().find(|(n, _)| n == cfg_name) {
+                            if let Some(cfg) = suite
+                                .external_variable_bindings
+                                .iter_mut()
+                                .find(|(n, _)| n == cfg_name)
+                            {
                                 cfg.1.push((bind_name.clone(), content.trim().to_string()));
                             } else {
-                                suite.external_variable_bindings.push((cfg_name.clone(), vec![(bind_name.clone(), content.trim().to_string())]));
+                                suite.external_variable_bindings.push((
+                                    cfg_name.clone(),
+                                    vec![(bind_name.clone(), content.trim().to_string())],
+                                ));
                             }
                         }
                     } else if let Some(ref mut part_buf) = current_part_buf {
@@ -679,7 +710,9 @@ impl TdmlTestSuite {
                             if let (Some(p_type), Some(p_buf)) =
                                 (current_part_type.take(), current_part_buf.take())
                             {
-                                let b_ord = current_part_bit_order.take().or_else(|| current_doc_bit_order.clone());
+                                let b_ord = current_part_bit_order
+                                    .take()
+                                    .or_else(|| current_doc_bit_order.clone());
                                 let by_ord = current_part_byte_order.take();
                                 let enc = current_part_encoding.take();
                                 let r_ent = current_part_replace_entities;
@@ -713,7 +746,8 @@ impl TdmlTestSuite {
                             if let Some(err_text) = current_error_buf.take() {
                                 if let Some(ref mut tc) = current_test_case {
                                     if in_validation_errors {
-                                        tc.expected_validation_errors.push(err_text.trim().to_string());
+                                        tc.expected_validation_errors
+                                            .push(err_text.trim().to_string());
                                     } else {
                                         tc.expected_errors.push(err_text.trim().to_string());
                                     }
@@ -869,10 +903,14 @@ impl TdmlRunner {
                                     for entry in entries.flatten() {
                                         let p = entry.path();
                                         if p.is_dir() {
-                                            if let Some(found) = find_named_file_recursive(&p, target_name) {
+                                            if let Some(found) =
+                                                find_named_file_recursive(&p, target_name)
+                                            {
                                                 return Some(found);
                                             }
-                                        } else if p.file_name().and_then(|n| n.to_str()) == Some(target_name) {
+                                        } else if p.file_name().and_then(|n| n.to_str())
+                                            == Some(target_name)
+                                        {
                                             return Some(p);
                                         }
                                     }
@@ -998,10 +1036,14 @@ impl TdmlRunner {
                             if let Ok(content) = read_xml_file_to_string(&cand) {
                                 tc_infoset_text = Some(content);
                             }
-                        } else if let Ok(content) = read_xml_file_to_string(std::path::Path::new(trimmed)) {
+                        } else if let Ok(content) =
+                            read_xml_file_to_string(std::path::Path::new(trimmed))
+                        {
                             tc_infoset_text = Some(content);
                         }
-                    } else if let Ok(content) = read_xml_file_to_string(std::path::Path::new(trimmed)) {
+                    } else if let Ok(content) =
+                        read_xml_file_to_string(std::path::Path::new(trimmed))
+                    {
                         tc_infoset_text = Some(content);
                     }
                 }
@@ -1023,7 +1065,9 @@ impl TdmlRunner {
             if let Some(cfg_name) = effective_config {
                 if cfg_name.ends_with(".xml") && !suite.configs.iter().any(|(n, _)| n == cfg_name) {
                     let xml_path = base_dir.map(|d| d.join(cfg_name));
-                    let content_opt = xml_path.as_deref().and_then(|p| read_xml_file_to_string(p).ok())
+                    let content_opt = xml_path
+                        .as_deref()
+                        .and_then(|p| read_xml_file_to_string(p).ok())
                         .or_else(|| read_xml_file_to_string(std::path::Path::new(cfg_name)).ok());
                     if let Some(content) = content_opt {
                         let mut r = XmlReader::new(&content);
@@ -1032,7 +1076,9 @@ impl TdmlRunner {
                         let mut curr_bind_name = None;
                         while let Ok(Some(ev)) = r.next_event() {
                             match ev {
-                                XmlEvent::StartElement { name, attributes, .. } => {
+                                XmlEvent::StartElement {
+                                    name, attributes, ..
+                                } => {
                                     if name.local_name == "tunables" {
                                         in_tunables = true;
                                     } else if in_tunables {
@@ -1055,9 +1101,11 @@ impl TdmlRunner {
                                 }
                                 XmlEvent::Text { content, .. } => {
                                     if let Some(ref t_name) = curr_tunable_name {
-                                        file_tunables.push((t_name.clone(), content.trim().to_string()));
+                                        file_tunables
+                                            .push((t_name.clone(), content.trim().to_string()));
                                     } else if let Some(ref b_name) = curr_bind_name {
-                                        file_bindings.push((b_name.clone(), content.trim().to_string()));
+                                        file_bindings
+                                            .push((b_name.clone(), content.trim().to_string()));
                                     }
                                 }
                                 _ => {}
@@ -1079,7 +1127,8 @@ impl TdmlRunner {
                     .map(|(_, v)| v.as_str())
             };
             let allow_signed_len1 = tunable("allowSignedIntegerLength1Bit") != Some("false");
-            let max_occurs_bounds = tunable("maxOccursBounds").and_then(|v| v.parse::<usize>().ok());
+            let max_occurs_bounds =
+                tunable("maxOccursBounds").and_then(|v| v.parse::<usize>().ok());
             let require_encoding_error_policy =
                 tunable("requireEncodingErrorPolicyProperty") == Some("true");
             let require_text_bidi = tunable("requireTextBidiProperty") == Some("true");
@@ -1095,8 +1144,12 @@ impl TdmlRunner {
             };
             let unqualified_path_step_policy = match tunable("unqualifiedPathStepPolicy") {
                 Some("noNamespace") => dfdl_core::types::UnqualifiedPathStepPolicy::NoNamespace,
-                Some("defaultNamespace") => dfdl_core::types::UnqualifiedPathStepPolicy::DefaultNamespace,
-                Some("preferDefaultNamespace") => dfdl_core::types::UnqualifiedPathStepPolicy::PreferDefaultNamespace,
+                Some("defaultNamespace") => {
+                    dfdl_core::types::UnqualifiedPathStepPolicy::DefaultNamespace
+                }
+                Some("preferDefaultNamespace") => {
+                    dfdl_core::types::UnqualifiedPathStepPolicy::PreferDefaultNamespace
+                }
                 _ => dfdl_core::types::UnqualifiedPathStepPolicy::PreferDefaultNamespace,
             };
             let max_hex_binary_length_in_bytes =
@@ -1183,7 +1236,9 @@ impl TdmlRunner {
                     let (doc_bytes, total_bits) = match doc_res {
                         Ok(res) => res,
                         Err(e) => {
-                            if tc.name == "indexLimit" && e.to_string().contains("The file 'csv_1.6m' was not found") {
+                            if tc.name == "indexLimit"
+                                && e.to_string().contains("The file 'csv_1.6m' was not found")
+                            {
                                 // Upstream Test Data Missing: 1.6MB CSV fixture file omitted from test repository.
                                 report.passed = report.passed.saturating_add(1);
                             } else if tc.expected_errors.is_empty() {
@@ -1219,18 +1274,25 @@ impl TdmlRunner {
                         ByteOrder::BigEndian,
                     );
                     reader.set_bit_limit(Some(total_bits));
-                    let mut budget = WorkBudget::new(1000);
+                    let mut budget = WorkBudget::new(100_000);
 
                     let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
                     let ext_bindings: &[(String, String)] = tc
                         .config
                         .as_deref()
-                        .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
-                        .or_else(|| {
+                        .and_then(|c| {
                             suite
-                                .default_config
-                                .as_deref()
-                                .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
+                                .external_variable_bindings
+                                .iter()
+                                .find(|(n, _)| n == c)
+                        })
+                        .or_else(|| {
+                            suite.default_config.as_deref().and_then(|c| {
+                                suite
+                                    .external_variable_bindings
+                                    .iter()
+                                    .find(|(n, _)| n == c)
+                            })
                         })
                         .map(|(_, b)| b.as_slice())
                         .unwrap_or(&file_bindings);
@@ -1286,19 +1348,21 @@ impl TdmlRunner {
                                     && e.kind == DFDLErrorKind::Validation
                                 {
                                     let err_msg = format!("{:?}", e);
-                                    let matches_expected = tc.expected_validation_errors.iter().any(|exp| {
-                                        let no_quotes_err = err_msg.replace('\'', "");
-                                        let no_quotes_msg = e.message.as_str().replace('\'', "");
-                                        let clean_exp = exp.replace("ex:", "");
-                                        let no_prefix_err = no_quotes_err.replace("ex:", "");
-                                        let no_prefix_msg = no_quotes_msg.replace("ex:", "");
-                                        err_msg.contains(exp)
-                                            || e.message.as_str().contains(exp)
-                                            || no_quotes_err.contains(exp.as_str())
-                                            || no_quotes_msg.contains(exp.as_str())
-                                            || no_prefix_err.contains(&clean_exp)
-                                            || no_prefix_msg.contains(&clean_exp)
-                                    });
+                                    let matches_expected =
+                                        tc.expected_validation_errors.iter().any(|exp| {
+                                            let no_quotes_err = err_msg.replace('\'', "");
+                                            let no_quotes_msg =
+                                                e.message.as_str().replace('\'', "");
+                                            let clean_exp = exp.replace("ex:", "");
+                                            let no_prefix_err = no_quotes_err.replace("ex:", "");
+                                            let no_prefix_msg = no_quotes_msg.replace("ex:", "");
+                                            err_msg.contains(exp)
+                                                || e.message.as_str().contains(exp)
+                                                || no_quotes_err.contains(exp.as_str())
+                                                || no_quotes_msg.contains(exp.as_str())
+                                                || no_prefix_err.contains(&clean_exp)
+                                                || no_prefix_msg.contains(&clean_exp)
+                                        });
                                     if matches_expected {
                                         report.passed = report.passed.saturating_add(1);
                                     } else {
@@ -1393,19 +1457,26 @@ impl TdmlRunner {
                                     BitOrder::MostSignificantBitFirst,
                                     ByteOrder::BigEndian,
                                 );
-                                let mut budget = WorkBudget::new(1000);
+                                let mut budget = WorkBudget::new(100_000);
 
                                 let mut unparser =
                                     UnparserEngine::new(&schema, &mut writer, &mut budget);
                                 let ext_bindings: &[(String, String)] = tc
                                     .config
                                     .as_deref()
-                                    .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
-                                    .or_else(|| {
+                                    .and_then(|c| {
                                         suite
-                                            .default_config
-                                            .as_deref()
-                                            .and_then(|c| suite.external_variable_bindings.iter().find(|(n, _)| n == c))
+                                            .external_variable_bindings
+                                            .iter()
+                                            .find(|(n, _)| n == c)
+                                    })
+                                    .or_else(|| {
+                                        suite.default_config.as_deref().and_then(|c| {
+                                            suite
+                                                .external_variable_bindings
+                                                .iter()
+                                                .find(|(n, _)| n == c)
+                                        })
                                     })
                                     .map(|(_, b)| b.as_slice())
                                     .unwrap_or(&file_bindings);
@@ -1429,16 +1500,24 @@ impl TdmlRunner {
                                                     BitOrder::MostSignificantBitFirst,
                                                     ByteOrder::BigEndian,
                                                 );
-                                                let mut rt_budget = WorkBudget::new(1000);
-                                                let mut rt_parser =
-                                                    ParserEngine::new(&schema, &mut rt_reader, &mut rt_budget);
+                                                let mut rt_budget = WorkBudget::new(100_000);
+                                                let mut rt_parser = ParserEngine::new(
+                                                    &schema,
+                                                    &mut rt_reader,
+                                                    &mut rt_budget,
+                                                );
                                                 for (var_name, var_val) in ext_bindings {
-                                                    let _ = rt_parser.set_external_variable(var_name, var_val);
+                                                    let _ = rt_parser
+                                                        .set_external_variable(var_name, var_val);
                                                 }
                                                 if let Ok(rt_doc) = rt_parser.parse_document() {
                                                     let public_rt_doc = rt_doc.strip_hidden();
-                                                    if let Some(ref expected_xml) = tc_infoset_text {
-                                                        if Self::verify_infoset(&public_rt_doc, expected_xml) {
+                                                    if let Some(ref expected_xml) = tc_infoset_text
+                                                    {
+                                                        if Self::verify_infoset(
+                                                            &public_rt_doc,
+                                                            expected_xml,
+                                                        ) {
                                                             round_trip_ok = true;
                                                         }
                                                     }
@@ -1480,7 +1559,10 @@ impl TdmlRunner {
                                                 String::from_utf8_lossy(&output_bytes)
                                             )
                                         };
-                                        let matches_expected = tc.expected_errors.iter().all(|exp| diff_msg.contains(exp));
+                                        let matches_expected = tc
+                                            .expected_errors
+                                            .iter()
+                                            .all(|exp| diff_msg.contains(exp));
                                         if matches_expected {
                                             report.passed = report.passed.saturating_add(1);
                                         } else {
@@ -1697,7 +1779,9 @@ impl TdmlRunner {
             match part.part_type.as_str() {
                 "file" => {
                     let trimmed = part.content.trim();
-                    let stripped = trimmed.strip_prefix("org/apache/daffodil/").unwrap_or(trimmed);
+                    let stripped = trimmed
+                        .strip_prefix("org/apache/daffodil/")
+                        .unwrap_or(trimmed);
                     let data = if let Some(dir) = base_dir {
                         let path = dir.join(trimmed);
                         std::fs::read(&path)
@@ -1742,7 +1826,11 @@ impl TdmlRunner {
                             let (code, _) = dfdl_core::encoding::encode_sub_byte_char(ch, enc)
                                 .unwrap_or((0, cb));
                             for k in 0..cb {
-                                let shift = if is_lsbf { k } else { cb.saturating_sub(1).saturating_sub(k) };
+                                let shift = if is_lsbf {
+                                    k
+                                } else {
+                                    cb.saturating_sub(1).saturating_sub(k)
+                                };
                                 let bit = ((code >> shift) & 1) as u8;
                                 total_bits = total_bits.saturating_add(1);
                                 if is_lsbf {
@@ -1886,16 +1974,23 @@ impl TdmlRunner {
         let debug = std::env::var("TDML_DEBUG_COMPARE").is_ok();
         if actual.name.local_name != expected.name.local_name {
             if debug {
-                eprintln!("NAME MISMATCH: actual '{}' vs expected '{}'", actual.name.local_name, expected.name.local_name);
+                eprintln!(
+                    "NAME MISMATCH: actual '{}' vs expected '{}'",
+                    actual.name.local_name, expected.name.local_name
+                );
             }
             return false;
         }
 
         let actual_is_nil = actual.state == ElementState::Nil || actual.nil_attribute == Some(true);
-        let expected_is_nil = expected.state == ElementState::Nil || expected.nil_attribute == Some(true);
+        let expected_is_nil =
+            expected.state == ElementState::Nil || expected.nil_attribute == Some(true);
         if actual_is_nil != expected_is_nil {
             if debug {
-                eprintln!("NIL MISMATCH: elem '{}' actual nil={} vs expected nil={}", actual.name.local_name, actual_is_nil, expected_is_nil);
+                eprintln!(
+                    "NIL MISMATCH: elem '{}' actual nil={} vs expected nil={}",
+                    actual.name.local_name, actual_is_nil, expected_is_nil
+                );
             }
             return false;
         }
@@ -1908,13 +2003,19 @@ impl TdmlRunner {
                     if let (Ok(a_f), Ok(e_f)) = (a_str.parse::<f64>(), e_str.parse::<f64>()) {
                         if (a_f - e_f).abs() > 1e-6 {
                             if debug {
-                                eprintln!("FLOAT VALUE MISMATCH on '{}': actual '{}' vs expected '{}'", actual.name.local_name, a_str, e_str);
+                                eprintln!(
+                                    "FLOAT VALUE MISMATCH on '{}': actual '{}' vs expected '{}'",
+                                    actual.name.local_name, a_str, e_str
+                                );
                             }
                             return false;
                         }
                     } else {
                         if debug {
-                            eprintln!("VALUE MISMATCH on '{}': actual '{}' vs expected '{}'", actual.name.local_name, a_str, e_str);
+                            eprintln!(
+                                "VALUE MISMATCH on '{}': actual '{}' vs expected '{}'",
+                                actual.name.local_name, a_str, e_str
+                            );
                         }
                         return false;
                     }
@@ -1922,13 +2023,23 @@ impl TdmlRunner {
             }
             (ElementState::Value(v), ElementState::NoValue) if !expected.children.is_empty() => {
                 if debug {
-                    eprintln!("STATE MISMATCH on '{}': actual has value {:?}, expected has {} children", actual.name.local_name, v, expected.children.len());
+                    eprintln!(
+                        "STATE MISMATCH on '{}': actual has value {:?}, expected has {} children",
+                        actual.name.local_name,
+                        v,
+                        expected.children.len()
+                    );
                 }
                 return false;
             }
             (ElementState::NoValue, ElementState::Value(v)) if !actual.children.is_empty() => {
                 if debug {
-                    eprintln!("STATE MISMATCH on '{}': actual has {} children, expected has value {:?}", actual.name.local_name, actual.children.len(), v);
+                    eprintln!(
+                        "STATE MISMATCH on '{}': actual has {} children, expected has value {:?}",
+                        actual.name.local_name,
+                        actual.children.len(),
+                        v
+                    );
                 }
                 return false;
             }
@@ -1955,7 +2066,12 @@ impl TdmlRunner {
 
         if actual_children.len() != expected_children.len() {
             if debug {
-                eprintln!("CHILD LEN MISMATCH on '{}': actual {} vs expected {}", actual.name.local_name, actual_children.len(), expected_children.len());
+                eprintln!(
+                    "CHILD LEN MISMATCH on '{}': actual {} vs expected {}",
+                    actual.name.local_name,
+                    actual_children.len(),
+                    expected_children.len()
+                );
             }
             return false;
         }
@@ -2018,7 +2134,8 @@ impl TdmlRunner {
                     elem_stack.push(elem);
                 }
                 XmlEvent::Text { ref content, .. } => {
-                    let trimmed = content.trim_matches(|c: char| c == ' ' || c == '\t' || c == '\r' || c == '\n');
+                    let trimmed = content
+                        .trim_matches(|c: char| c == ' ' || c == '\t' || c == '\r' || c == '\n');
                     if !trimmed.is_empty() {
                         if let Some(top) = elem_stack.last_mut() {
                             if top.state == ElementState::Nil {
@@ -2029,8 +2146,8 @@ impl TdmlRunner {
                             }
                             let is_uri = is_uri_stack.last().copied().unwrap_or(false);
                             let val = if is_uri || trimmed.ends_with(".bin") {
-                                let manifest_dir =
-                                    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/daffodil");
+                                let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                                    .join("tests/daffodil");
                                 let stripped = trimmed
                                     .strip_prefix("org/apache/daffodil/")
                                     .unwrap_or(trimmed);
@@ -2168,8 +2285,13 @@ mod tests {
         };
         let strict = SchemaCompiler::new().with_require_encoding_error_policy(true);
         let err = strict.compile_str(&schema("")).unwrap_err();
-        assert!(err.message.to_string().contains("encodingErrorPolicy is not defined"));
-        assert!(strict.compile_str(&schema("encodingErrorPolicy=\"replace\"")).is_ok());
+        assert!(err
+            .message
+            .to_string()
+            .contains("encodingErrorPolicy is not defined"));
+        assert!(strict
+            .compile_str(&schema("encodingErrorPolicy=\"replace\""))
+            .is_ok());
         assert!(SchemaCompiler::new().compile_str(&schema("")).is_ok());
     }
 
@@ -2219,7 +2341,10 @@ mod tests {
     #[test]
     fn test_longest_delimiter_alternative_wins() {
         let body = r#"<xs:element name="r" type="xs:int" dfdl:initiator="{{ {{ ["/>"#;
-        assert!(parse_text(body, "{{12").is_ok(), "the two-char alternative is longer");
+        assert!(
+            parse_text(body, "{{12").is_ok(),
+            "the two-char alternative is longer"
+        );
         assert!(parse_text(body, "{12").is_ok());
         assert!(parse_text(body, "[12").is_ok());
     }
@@ -2249,7 +2374,11 @@ mod tests {
                 </xs:sequence></xs:complexType></xs:element></xs:schema>"#;
         let schema = SchemaCompiler::new().compile_str(xml).unwrap();
         let bytes = b"1.2.3";
-        let mut reader = BitReader::new(SliceByteSource::new(bytes), BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
+        let mut reader = BitReader::new(
+            SliceByteSource::new(bytes),
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
         reader.set_bit_limit(Some(40));
         let mut budget = WorkBudget::new(10_000);
         let r = ParserEngine::new(&schema, &mut reader, &mut budget).parse_document();
@@ -2270,7 +2399,8 @@ mod tests {
     /// xs:integer accepts an all-zero fraction beyond i64 range and rejects a non-zero one.
     #[test]
     fn test_integer_text_pattern_zero_fraction() {
-        let body = r####"<xs:element name="n" type="xs:integer" dfdl:textNumberPattern="###0.0##"/>"####;
+        let body =
+            r####"<xs:element name="n" type="xs:integer" dfdl:textNumberPattern="###0.0##"/>"####;
         let doc = parse_text(body, "9223372036854775808.000").unwrap();
         assert_eq!(first_child_text(&doc), "9223372036854775808");
         assert!(parse_text(body, "12.5").is_err());
@@ -2295,7 +2425,8 @@ mod tests {
             encoding: Some(String::from("x-dfdl-bits-lsbf")),
             replace_dfdl_entities: false,
         };
-        let (bytes, bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[part], None).unwrap();
+        let (bytes, bits) =
+            TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[part], None).unwrap();
         assert_eq!((bytes, bits), (alloc::vec![0x6D], 8));
     }
 
@@ -2310,7 +2441,8 @@ mod tests {
             encoding: None,
             replace_dfdl_entities: false,
         };
-        let (bytes, bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[part], None).unwrap();
+        let (bytes, bits) =
+            TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[part], None).unwrap();
         assert_eq!((bytes, bits), (alloc::vec![189, 71, 251], 24));
     }
 
@@ -2369,7 +2501,8 @@ mod tests {
             encoding: None,
             replace_dfdl_entities: false,
         };
-        let (bits_bytes, total_bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[bits_part], None).unwrap();
+        let (bits_bytes, total_bits) =
+            TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[bits_part], None).unwrap();
         assert_eq!((bits_bytes, total_bits), (alloc::vec![0xAA, 0x55], 16));
 
         // Missing file part -> Error
@@ -2381,7 +2514,8 @@ mod tests {
             encoding: None,
             replace_dfdl_entities: false,
         };
-        let err = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[file_part], None).unwrap_err();
+        let err = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[file_part], None)
+            .unwrap_err();
         assert!(err.to_string().contains("not found"));
 
         // Fallback default part type
@@ -2393,7 +2527,9 @@ mod tests {
             encoding: None,
             replace_dfdl_entities: false,
         };
-        let (raw_b, raw_bits) = TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[other_part], None).unwrap();
+        let (raw_b, raw_bits) =
+            TdmlRunner::assemble_document_bytes_and_bits_with_base_dir(&[other_part], None)
+                .unwrap();
         assert_eq!((raw_b, raw_bits), (alloc::vec![b'A', b'B', b'C'], 24));
     }
 
@@ -2406,7 +2542,8 @@ mod tests {
         assert!(TdmlRunner::verify_infoset(&doc, nil_xml));
 
         // Invalid xsi:nil boolean -> error
-        let bad_nil = r#"<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="maybe"/>"#;
+        let bad_nil =
+            r#"<root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="maybe"/>"#;
         assert!(TdmlRunner::parse_infoset_xml(bad_nil).is_err());
 
         // Simple nilled element with text content -> error
@@ -2432,15 +2569,24 @@ mod tests {
         // Compare float with near epsilon
         let f_doc1 = TdmlRunner::parse_infoset_xml("<root><f>1.00000001</f></root>").unwrap();
         let f_doc2 = TdmlRunner::parse_infoset_xml("<root><f>1.0</f></root>").unwrap();
-        assert!(TdmlRunner::compare_infoset_elements(f_doc1.root.as_ref().unwrap(), f_doc2.root.as_ref().unwrap()));
+        assert!(TdmlRunner::compare_infoset_elements(
+            f_doc1.root.as_ref().unwrap(),
+            f_doc2.root.as_ref().unwrap()
+        ));
 
         // Compare float mismatch
         let f_doc3 = TdmlRunner::parse_infoset_xml("<root><f>2.5</f></root>").unwrap();
-        assert!(!TdmlRunner::compare_infoset_elements(f_doc1.root.as_ref().unwrap(), f_doc3.root.as_ref().unwrap()));
+        assert!(!TdmlRunner::compare_infoset_elements(
+            f_doc1.root.as_ref().unwrap(),
+            f_doc3.root.as_ref().unwrap()
+        ));
 
         // Compare name mismatch
         let name_doc = TdmlRunner::parse_infoset_xml("<different/>").unwrap();
-        assert!(!TdmlRunner::compare_infoset_elements(f_doc1.root.as_ref().unwrap(), name_doc.root.as_ref().unwrap()));
+        assert!(!TdmlRunner::compare_infoset_elements(
+            f_doc1.root.as_ref().unwrap(),
+            name_doc.root.as_ref().unwrap()
+        ));
 
         // Empty expected XML always verifies true
         assert!(TdmlRunner::verify_infoset(&doc_types, "   "));
@@ -2723,7 +2869,8 @@ mod tests {
         </tdml:testSuite>"#;
 
         let suite = TdmlTestSuite::parse_xml(tdml_xml).unwrap();
-        let report = TdmlRunner::run_suite_with_base_dir(&suite, "", Some(std::path::Path::new(".")));
+        let report =
+            TdmlRunner::run_suite_with_base_dir(&suite, "", Some(std::path::Path::new(".")));
         assert_eq!(report.passed, 7);
         assert_eq!(report.failed, 7);
 
