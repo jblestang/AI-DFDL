@@ -68,9 +68,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("--------------------------------------------------------------------------------------");
 
-    // 5. Export to PCAP file
-    println!("\n[5/5] Exporting payloads into standard PCAP capture...");
-    let pcap_filename = "stanag5602_test_suite.pcap";
+    // 5. Export exclusively VALID PCAP capture
+    println!("\n[5/6] Exporting exclusively VALID PCAP capture (10 valid packets)...");
+    let valid_pcap_filename = "stanag5602_valid.pcap";
     let net_cfg = NetworkConfig {
         src_mac: [0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E],
         dst_mac: [0x00, 0x50, 0x56, 0xC0, 0x00, 0x01],
@@ -82,11 +82,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dst_port: 5602,
     };
 
+    let mut valid_pcap_file = fs::File::create(valid_pcap_filename)?;
+    generator.write_valid_pcap(&mut valid_pcap_file, 10, &net_cfg, &transport)
+        .map_err(|e| format!("{:?}", e))?;
+    let valid_pcap_data = fs::read(valid_pcap_filename)?;
+    println!(
+        "      Valid PCAP written successfully to '{}' ({} bytes total)",
+        valid_pcap_filename,
+        valid_pcap_data.len()
+    );
+
+    let parsed_valid_pcap = PcapFile::parse(&valid_pcap_data)?;
+    println!(
+        "      Verified Valid PCAP integrity: parsed {} valid packets",
+        parsed_valid_pcap.packets.len()
+    );
+
+    // 6. Export full test suite PCAP file (valid + syntactic + semantic anomalies)
+    println!("\n[6/6] Exporting full anomaly test suite PCAP capture...");
+    let pcap_filename = "stanag5602_test_suite.pcap";
     let mut pcap_file = fs::File::create(pcap_filename)?;
     generator.write_pcap(&mut pcap_file, &suite, &net_cfg, &transport)?;
     let pcap_data = fs::read(pcap_filename)?;
     println!(
-        "      PCAP written successfully to '{}' ({} bytes total)",
+        "      Anomaly PCAP written successfully to '{}' ({} bytes total)",
         pcap_filename,
         pcap_data.len()
     );
@@ -94,11 +113,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify PCAP with parser
     let parsed_pcap = PcapFile::parse(&pcap_data)?;
     println!(
-        "      Verified PCAP integrity: parsed {} packets with magic {:#010x}",
+        "      Verified Anomaly PCAP integrity: parsed {} packets with magic {:#010x}",
         parsed_pcap.packets.len(),
         parsed_pcap.magic
     );
 
-    println!("\nDone! The PCAP can now be analyzed with Wireshark and DFDL dissector plugins.");
+    println!("\nDone! Valid and anomaly PCAPs are ready for Wireshark and DFDL dissector verification.");
     Ok(())
 }

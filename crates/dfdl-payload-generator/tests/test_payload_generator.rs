@@ -314,3 +314,76 @@ fn test_export_exhaustive_suite_to_pcap() {
         assert_eq!(extracted, suite[i].bytes);
     }
 }
+
+#[test]
+fn test_generate_valid_suite() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+    let mut generator = PayloadGenerator::new(&schema, 808);
+
+    let valid_suite = generator
+        .generate_valid_suite()
+        .expect("generate valid suite");
+
+    assert!(!valid_suite.is_empty(), "Valid suite must not be empty");
+    assert!(
+        valid_suite.iter().all(|p| matches!(p.mode, PayloadMode::Valid)),
+        "All payloads in valid suite must be strictly Valid"
+    );
+
+    // Verify every payload in the valid suite parses without errors
+    for (i, p) in valid_suite.iter().enumerate() {
+        let source = SliceByteSource::new(p.bytes.as_slice());
+        let mut reader = BitReader::new(
+            source,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        let mut budget = dfdl_core::WorkBudget::new(100_000);
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        let parse_res = parser.parse_document();
+        assert!(
+            parse_res.is_ok(),
+            "Payload #{} ({}) must parse cleanly: {:?}",
+            i,
+            p.name,
+            parse_res.err()
+        );
+    }
+}
+
+#[test]
+fn test_export_valid_pcap_bytes() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+    let mut generator = PayloadGenerator::new(&schema, 909);
+
+    let net_cfg = NetworkConfig::default();
+    let transport = TransportProtocol::default();
+
+    // Export 5 purely valid packets to PCAP
+    let pcap_bytes = generator
+        .export_valid_pcap_bytes(5, &net_cfg, &transport)
+        .expect("export valid PCAP bytes");
+
+    let parsed = PcapFile::parse(&pcap_bytes).expect("parse valid PCAP");
+    assert_eq!(parsed.packets.len(), 5);
+
+    // Verify all 5 packets extract UDP payloads that parse cleanly
+    for (i, pkt) in parsed.packets.iter().enumerate() {
+        let udp_data = pkt.extract_udp_payload().expect("extract UDP payload");
+        let source = SliceByteSource::new(udp_data);
+        let mut reader = BitReader::new(
+            source,
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        let mut budget = dfdl_core::WorkBudget::new(100_000);
+        let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+        assert!(
+            parser.parse_document().is_ok(),
+            "Packet #{} extracted from valid PCAP must parse cleanly",
+            i
+        );
+    }
+}

@@ -293,6 +293,65 @@ fn main() -> Result<(), String> {
     }
     println!("ok");
 
-    println!("\nAll 12 tests passed successfully!");
+    // Test 13: Generate valid suite
+    print!("test test_generate_valid_suite ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let mut generator = PayloadGenerator::new(&schema, 808);
+        let valid_suite = generator
+            .generate_valid_suite()
+            .map_err(|e| format!("{:?}", e))?;
+
+        assert!(!valid_suite.is_empty());
+        assert!(valid_suite.iter().all(|p| matches!(p.mode, PayloadMode::Valid)));
+
+        for (i, p) in valid_suite.iter().enumerate() {
+            let source = SliceByteSource::new(p.bytes.as_slice());
+            let mut reader = BitReader::new(
+                source,
+                BitOrder::MostSignificantBitFirst,
+                ByteOrder::BigEndian,
+            );
+            let mut budget = dfdl_core::WorkBudget::new(100_000);
+            let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+            let parse_res = parser.parse_document();
+            assert!(parse_res.is_ok(), "Payload #{} ({}) parse error: {:?}", i, p.name, parse_res.err());
+        }
+    }
+    println!("ok");
+
+    // Test 14: Export valid PCAP bytes directly
+    print!("test test_export_valid_pcap_bytes ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let mut generator = PayloadGenerator::new(&schema, 909);
+        let net_cfg = NetworkConfig::default();
+        let transport = TransportProtocol::default();
+
+        let pcap_bytes = generator
+            .export_valid_pcap_bytes(5, &net_cfg, &transport)
+            .map_err(|e| format!("{:?}", e))?;
+        let parsed = PcapFile::parse(&pcap_bytes).map_err(|e| e.to_string())?;
+        assert_eq!(parsed.packets.len(), 5);
+
+        for (i, pkt) in parsed.packets.iter().enumerate() {
+            let udp_data = pkt.extract_udp_payload().expect("extract UDP payload");
+            let source = SliceByteSource::new(udp_data);
+            let mut reader = BitReader::new(
+                source,
+                BitOrder::MostSignificantBitFirst,
+                ByteOrder::BigEndian,
+            );
+            let mut budget = dfdl_core::WorkBudget::new(100_000);
+            let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
+            assert!(parser.parse_document().is_ok(), "Packet #{} parse error", i);
+        }
+    }
+    println!("ok");
+
+    println!("\nAll 14 tests passed successfully!");
     Ok(())
 }
+

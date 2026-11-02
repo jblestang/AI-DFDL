@@ -326,4 +326,102 @@ impl<'a> PayloadGenerator<'a> {
         self.write_pcap(&mut bytes, payloads, config, transport)?;
         Ok(bytes)
     }
+
+    /// Generates a suite of exclusively valid payloads covering the schema exhaustively:
+    /// - Every choice branch discovered in the schema
+    /// - Nominal payloads
+    /// - Range boundaries (min/max facet values)
+    /// - Array occurrence variations (min_occurs, nominal, max_occurs)
+    pub fn generate_valid_suite(&mut self) -> DFDLResult<Vec<GeneratedPayload>> {
+        let mut suite = Vec::new();
+        let choice_branches = self.analysis.choice_branches.clone();
+
+        // 1. Valid Payloads covering EVERY Choice Branch
+        for branch in &choice_branches {
+            let mut cfg = GenerationConfig::default();
+            cfg.preferred_branch_index = Some(branch.branch_index);
+            let name = format!("VALID_CHOICE_BRANCH_{}", branch.branch_index);
+            let desc = format!(
+                "Valid payload exercising choice branch {} (name: '{}', key: {:?})",
+                branch.branch_index, branch.branch_name, branch.branch_key
+            );
+            if let Ok(payload) = self.generate_valid_with_config(cfg, &name, &desc) {
+                suite.push(payload);
+            }
+        }
+
+        // 2. Valid Nominal Payload
+        suite.push(self.generate_valid()?);
+
+        // 3. Valid Boundary Values (min/max facets)
+        let mut boundary_cfg = GenerationConfig::default();
+        boundary_cfg.use_boundary_values = true;
+        if let Ok(payload) = self.generate_valid_with_config(
+            boundary_cfg,
+            "VALID_FACET_BOUNDARIES",
+            "Valid payload testing facet boundary extremes",
+        ) {
+            suite.push(payload);
+        }
+
+        // 4. Valid Array Occurrences Variations
+        for count in [1, 2, 3] {
+            let mut arr_cfg = GenerationConfig::default();
+            arr_cfg.array_occurrences = count;
+            let name = format!("VALID_ARRAY_OCCURRENCES_{}", count);
+            let desc = format!("Valid payload with {} array occurrences", count);
+            if let Ok(payload) = self.generate_valid_with_config(arr_cfg, &name, &desc) {
+                suite.push(payload);
+            }
+        }
+
+        Ok(suite)
+    }
+
+    /// Generates a sequence of `count` valid payloads.
+    pub fn generate_valid_sequence(&mut self, count: usize) -> DFDLResult<Vec<GeneratedPayload>> {
+        let mut suite = Vec::with_capacity(count);
+        for i in 0..count {
+            let name = format!("VALID_PACKET_{}", i);
+            let desc = format!("Valid payload sequence packet #{}", i);
+            let payload = self.generate_valid_with_config(GenerationConfig::default(), &name, &desc)?;
+            suite.push(payload);
+        }
+        Ok(suite)
+    }
+
+    /// Generates a valid PCAP capture containing exclusively valid, schema-compliant packets.
+    ///
+    /// If `count == 0`, generates the exhaustive valid suite (all choice branches, boundaries, and occurrences).
+    /// If `count > 0`, generates `count` valid sequence packets.
+    pub fn write_valid_pcap<W: Write>(
+        &mut self,
+        w: &mut W,
+        count: usize,
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> DFDLResult<()> {
+        let payloads = if count == 0 {
+            self.generate_valid_suite()?
+        } else {
+            self.generate_valid_sequence(count)?
+        };
+        self.write_pcap(w, &payloads, config, transport)
+            .map_err(|e| dfdl_core::error::DFDLError::new(
+                dfdl_core::error::DFDLErrorKind::Unparse,
+                &e.to_string(),
+            ))
+    }
+
+    /// Exports an exclusively valid PCAP capture directly as a byte vector.
+    pub fn export_valid_pcap_bytes(
+        &mut self,
+        count: usize,
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> DFDLResult<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.write_valid_pcap(&mut buf, count, config, transport)?;
+        Ok(buf)
+    }
 }

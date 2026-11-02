@@ -52,8 +52,11 @@
 - **Crate:** `dfdl-payload-generator`
 - **Unit & Integration Tests:**
   - Valid SimpleControl and SimplePacket generation
+  - Exclusively valid suite (`generate_valid_suite`) covering all discovered choice branches, facet extremes, and occurrence counts
+  - Exclusively valid PCAP export (`write_valid_pcap`, `export_valid_pcap_bytes`)
   - Syntactic truncation, trailing garbage, dynamic length mismatch, bit misalignment
   - Semantic enum mutation, facet out-of-bounds, dynamic choice dispatch key corruption
   - PCAP serialization, RFC checksum verification, and `PcapFile` roundtrip
   - Exhaustive test suite generation
 - **Result:** Compliant with Karpathy behavioral guidelines and all requirements.
+
