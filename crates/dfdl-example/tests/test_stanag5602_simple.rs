@@ -39,7 +39,7 @@ fn create_sample_packet_full(
 }
 
 fn create_sample_packet(seq: u16, packet_type: u8, payload: &[u8]) -> Vec<u8> {
-    let subnode = if packet_type == 1 || packet_type == 3 { 206 } else { 6 };
+    let subnode = if packet_type == 1 { 206 } else { 6 };
     create_sample_packet_full(seq, 1, subnode, 129, 0, packet_type, 10, payload)
 }
 
@@ -260,12 +260,20 @@ fn test_stanag5602_simple_reject_unsupported_tdl() {
         "STANAG 5602 packet with packetType = 99 must be rejected"
     );
 
-    // Test rejection with packetType = 4 (unsupported in this profile)
-    let packet_tdl_4 = create_sample_packet(103, 4, &payload);
-    let result_4 = parse_simple_packet(&schema, &packet_tdl_4);
+    // Test rejection with legacy SISO packetType = 3 (unsupported in strict Wireshark profile)
+    let packet_tdl_3 = create_sample_packet(104, 3, &payload);
+    let result_3 = parse_simple_packet(&schema, &packet_tdl_3);
     assert!(
-        result_4.is_err(),
-        "STANAG 5602 packet with packetType = 4 must be rejected"
+        result_3.is_err(),
+        "STANAG 5602 packet with legacy packetType = 3 must be rejected"
+    );
+
+    // Test rejection with legacy SISO packetType = 0 (unsupported in strict Wireshark profile)
+    let packet_tdl_0 = create_sample_packet(105, 0, &payload);
+    let result_0 = parse_simple_packet(&schema, &packet_tdl_0);
+    assert!(
+        result_0.is_err(),
+        "STANAG 5602 packet with legacy packetType = 0 must be rejected"
     );
 }
 

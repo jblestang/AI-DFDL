@@ -202,12 +202,12 @@
       <xs:element name="packetType" type="PacketTypeType"/>
       <xs:element name="transitTime" type="TransitTimeType" dfdl:byteOrder="littleEndian"/>
 
-      <!-- Layer 2 Payload: Polymorphic Dispatch on packetType (1 = Link 16, 61 = SIMPLE Control) -->
+      <!-- Layer 2 Payload: Polymorphic Dispatch on packetType (1 = Link 16, 61 = SIMPLE Status/Control) -->
       <xs:choice dfdl:choiceDispatchKey="{ xs:string(packetType) }">
-        <!-- Link 16 J-Series Tactical Data Link Payload (Wireshark packetType = 1, legacy = 3) -->
-        <xs:element name="link16" type="Link16PayloadType" dfdl:choiceBranchKey="1" dfdlx:choiceBranchKeyRanges="3 3"/>
-        <!-- Native STANAG 5602 Management & Control Payload (Wireshark packetType = 61, legacy = 0) -->
-        <xs:element name="control" type="SimpleControlPayloadType" dfdl:choiceBranchKey="61" dfdlx:choiceBranchKeyRanges="0 0"/>
+        <!-- Link 16 J-Series Tactical Data Link Payload (Wireshark packetType = 1) -->
+        <xs:element name="link16" type="Link16PayloadType" dfdl:choiceBranchKey="1"/>
+        <!-- Native STANAG 5602 Status / Configuration Payload (Wireshark packetType = 61) -->
+        <xs:element name="control" type="SimpleControlPayloadType" dfdl:choiceBranchKey="61"/>
       </xs:choice>
 
       <!-- Frame Checksum (2 octets, Little-Endian additive sum of octets 0..length-2) -->
