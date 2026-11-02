@@ -321,24 +321,17 @@ impl<'a> PayloadGenerator<'a> {
     /// - Semantic corruptions (invalid enums, out-of-range facets, unmatched dispatch keys)
     pub fn generate_exhaustive_suite(&mut self) -> DFDLResult<Vec<GeneratedPayload>> {
         let mut suite = Vec::new();
-        let mut cumulative_bytes = 0usize;
         let choice_branches = self.analysis.choice_branches.clone();
         let enum_fields = self.analysis.enum_fields.clone();
         let bounded_fields = self.analysis.bounded_fields.clone();
         let limits = self.limits;
 
-        let try_push = |suite: &mut Vec<GeneratedPayload>, payload: GeneratedPayload, cumulative: &mut usize| -> bool {
+        let try_push = |suite: &mut Vec<GeneratedPayload>, payload: GeneratedPayload| -> bool {
             if let Some(max_m) = limits.max_messages {
                 if suite.len() >= max_m {
                     return false;
                 }
             }
-            if let Some(max_s) = limits.max_total_size {
-                if cumulative.saturating_add(payload.bytes.len()) > max_s {
-                    return false;
-                }
-            }
-            *cumulative = cumulative.saturating_add(payload.bytes.len());
             suite.push(payload);
             true
         };
@@ -353,7 +346,7 @@ impl<'a> PayloadGenerator<'a> {
                 branch.branch_index, branch.branch_key
             );
             if let Ok(payload) = self.generate_valid_with_config(cfg, &name, &desc) {
-                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                if !try_push(&mut suite, payload) {
                     return Ok(suite);
                 }
             }
@@ -362,7 +355,7 @@ impl<'a> PayloadGenerator<'a> {
         // 2. Valid Nominal Payload if no choice branches exist
         if suite.is_empty() {
             let nominal = self.generate_valid()?;
-            if !try_push(&mut suite, nominal, &mut cumulative_bytes) {
+            if !try_push(&mut suite, nominal) {
                 return Ok(suite);
             }
         }
@@ -375,24 +368,24 @@ impl<'a> PayloadGenerator<'a> {
             "VALID_FACET_BOUNDARIES",
             "Valid payload testing facet boundary extremes",
         ) {
-            if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+            if !try_push(&mut suite, payload) {
                 return Ok(suite);
             }
         }
 
         // 4. Syntactic Anomalies: Truncations
         let p_trunc4 = self.generate_syntax_anomaly(SyntaxAnomaly::Truncated { cut_bytes: 4 })?;
-        if !try_push(&mut suite, p_trunc4, &mut cumulative_bytes) {
+        if !try_push(&mut suite, p_trunc4) {
             return Ok(suite);
         }
         let p_trunc1 = self.generate_syntax_anomaly(SyntaxAnomaly::Truncated { cut_bytes: 1 })?;
-        if !try_push(&mut suite, p_trunc1, &mut cumulative_bytes) {
+        if !try_push(&mut suite, p_trunc1) {
             return Ok(suite);
         }
 
         // 5. Syntactic Anomalies: Trailing Garbage / Overflow
         let p_garbage = self.generate_syntax_anomaly(SyntaxAnomaly::TrailingGarbage { garbage_bytes: 8 })?;
-        if !try_push(&mut suite, p_garbage, &mut cumulative_bytes) {
+        if !try_push(&mut suite, p_garbage) {
             return Ok(suite);
         }
 
@@ -407,7 +400,7 @@ impl<'a> PayloadGenerator<'a> {
             field_width: len_width,
             delta: 16,
         })?;
-        if !try_push(&mut suite, p_len1, &mut cumulative_bytes) {
+        if !try_push(&mut suite, p_len1) {
             return Ok(suite);
         }
         let p_len2 = self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
@@ -415,13 +408,13 @@ impl<'a> PayloadGenerator<'a> {
             field_width: len_width,
             delta: -10,
         })?;
-        if !try_push(&mut suite, p_len2, &mut cumulative_bytes) {
+        if !try_push(&mut suite, p_len2) {
             return Ok(suite);
         }
 
         // 7. Syntactic Anomalies: Bitstream Misalignment
         let p_bit = self.generate_syntax_anomaly(SyntaxAnomaly::BitMisaligned { extra_bits: 3 })?;
-        if !try_push(&mut suite, p_bit, &mut cumulative_bytes) {
+        if !try_push(&mut suite, p_bit) {
             return Ok(suite);
         }
 
@@ -443,7 +436,7 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_value: invalid_enum,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                if !try_push(&mut suite, payload) {
                     return Ok(suite);
                 }
             }
@@ -472,7 +465,7 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_value: invalid_val,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                if !try_push(&mut suite, payload) {
                     return Ok(suite);
                 }
             }
@@ -496,7 +489,7 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_key,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                if !try_push(&mut suite, payload) {
                     return Ok(suite);
                 }
             }
@@ -515,19 +508,21 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_value: DfdlValue::UnsignedByte(255),
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                let _ = try_push(&mut suite, payload, &mut cumulative_bytes);
+                let _ = try_push(&mut suite, payload);
             }
         }
 
         Ok(suite)
     }
 
-    /// Writes all payloads to a PCAP stream with network encapsulation, strictly respecting
+    /// Writes payloads to a PCAP stream with network encapsulation, cycling through `payloads`
+    /// up to `count` packets (or one complete pass if `count == 0`), strictly respecting
     /// configured message count and total size limits.
-    pub fn write_pcap<W: Write>(
+    pub fn write_cycled_pcap<W: Write>(
         &self,
         w: &mut W,
         payloads: &[GeneratedPayload],
+        count: usize,
         config: &NetworkConfig,
         transport: &TransportProtocol,
     ) -> std::io::Result<GenerationReport> {
@@ -544,10 +539,27 @@ impl<'a> PayloadGenerator<'a> {
         self.pcap_writer.write_header(w)?;
         report.total_bytes = PCAP_GLOBAL_HEADER_LEN;
 
+        if payloads.is_empty() {
+            return Ok(report);
+        }
+
+        let target_count = if count > 0 {
+            match self.limits.max_messages {
+                Some(m) => count.min(m),
+                None => count,
+            }
+        } else {
+            match self.limits.max_messages {
+                Some(m) => payloads.len().min(m),
+                None => payloads.len(),
+            }
+        };
+
         let mut sec = 1_700_000_000u32;
         let mut usec = 0u32;
 
-        for payload in payloads {
+        for i in 0..target_count {
+            let payload = &payloads[i % payloads.len()];
             if let Some(max_msg) = self.limits.max_messages {
                 if report.message_count >= max_msg {
                     report.reached_message_limit = true;
@@ -594,13 +606,25 @@ impl<'a> PayloadGenerator<'a> {
             }
         }
 
-        if let Some(max_msg) = self.limits.max_messages {
-            if report.message_count >= max_msg {
-                report.reached_message_limit = true;
-            }
+        if (count > 0 && report.message_count >= count)
+            || self.limits.max_messages.map_or(false, |m| report.message_count >= m)
+        {
+            report.reached_message_limit = true;
         }
 
         Ok(report)
+    }
+
+    /// Writes all payloads to a PCAP stream with network encapsulation, strictly respecting
+    /// configured message count and total size limits.
+    pub fn write_pcap<W: Write>(
+        &self,
+        w: &mut W,
+        payloads: &[GeneratedPayload],
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> std::io::Result<GenerationReport> {
+        self.write_cycled_pcap(w, payloads, payloads.len(), config, transport)
     }
 
     /// Converts generated payloads into a standalone PCAP file byte vector.
@@ -633,10 +657,9 @@ impl<'a> PayloadGenerator<'a> {
     /// - Range boundaries (min/max facet values)
     /// - Array occurrence variations (min_occurs, nominal, max_occurs)
     ///
-    /// Respects `max_messages` and `max_total_size` limits if configured.
+    /// Respects `max_messages` limits if configured.
     pub fn generate_valid_suite(&mut self) -> DFDLResult<Vec<GeneratedPayload>> {
         let mut suite = Vec::new();
-        let mut cumulative_bytes = 0usize;
         let choice_branches = self.analysis.choice_branches.clone();
 
         // 1. Valid Payloads covering EVERY Choice Branch
@@ -654,12 +677,6 @@ impl<'a> PayloadGenerator<'a> {
                 branch.branch_index, branch.branch_name, branch.branch_key
             );
             if let Ok(payload) = self.generate_valid_with_config(cfg, &name, &desc) {
-                if let Some(max_s) = self.limits.max_total_size {
-                    if cumulative_bytes.saturating_add(payload.bytes.len()) > max_s {
-                        return Ok(suite);
-                    }
-                }
-                cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
                 suite.push(payload);
             }
         }
@@ -667,10 +684,7 @@ impl<'a> PayloadGenerator<'a> {
         // 2. Valid Nominal Payload
         if self.limits.max_messages.map_or(true, |m| suite.len() < m) {
             if let Ok(nominal) = self.generate_valid() {
-                if self.limits.max_total_size.map_or(true, |s| cumulative_bytes.saturating_add(nominal.bytes.len()) <= s) {
-                    cumulative_bytes = cumulative_bytes.saturating_add(nominal.bytes.len());
-                    suite.push(nominal);
-                }
+                suite.push(nominal);
             }
         }
 
@@ -683,10 +697,7 @@ impl<'a> PayloadGenerator<'a> {
                 "VALID_FACET_BOUNDARIES",
                 "Valid payload testing facet boundary extremes",
             ) {
-                if self.limits.max_total_size.map_or(true, |s| cumulative_bytes.saturating_add(payload.bytes.len()) <= s) {
-                    cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
-                    suite.push(payload);
-                }
+                suite.push(payload);
             }
         }
 
@@ -702,12 +713,6 @@ impl<'a> PayloadGenerator<'a> {
             let name = format!("VALID_ARRAY_OCCURRENCES_{}", count);
             let desc = format!("Valid payload with {} array occurrences", count);
             if let Ok(payload) = self.generate_valid_with_config(arr_cfg, &name, &desc) {
-                if let Some(max_s) = self.limits.max_total_size {
-                    if cumulative_bytes.saturating_add(payload.bytes.len()) > max_s {
-                        return Ok(suite);
-                    }
-                }
-                cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
                 suite.push(payload);
             }
         }
@@ -807,6 +812,48 @@ impl<'a> PayloadGenerator<'a> {
     ) -> DFDLResult<(Vec<u8>, GenerationReport)> {
         let mut buf = Vec::new();
         let report = self.write_valid_pcap(&mut buf, count, config, transport)?;
+        Ok((buf, report))
+    }
+
+    /// Generates an exhaustive PCAP capture exercising valid, syntactic, and semantic cases,
+    /// cycling through the test suite up to `count` packets (or one complete pass if `count == 0`),
+    /// strictly respecting configured message count and total size limits.
+    pub fn write_exhaustive_pcap<W: Write>(
+        &mut self,
+        w: &mut W,
+        count: usize,
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> DFDLResult<GenerationReport> {
+        let suite = self.generate_exhaustive_suite()?;
+        self.write_cycled_pcap(w, &suite, count, config, transport)
+            .map_err(|e| dfdl_core::error::DFDLError::new(
+                dfdl_core::error::DFDLErrorKind::Unparse,
+                &e.to_string(),
+            ))
+    }
+
+    /// Exports an exhaustive PCAP capture directly as a byte vector.
+    pub fn export_exhaustive_pcap_bytes(
+        &mut self,
+        count: usize,
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> DFDLResult<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.write_exhaustive_pcap(&mut buf, count, config, transport)?;
+        Ok(buf)
+    }
+
+    /// Exports an exhaustive PCAP capture directly as a byte vector along with its generation report.
+    pub fn export_exhaustive_pcap_with_report(
+        &mut self,
+        count: usize,
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> DFDLResult<(Vec<u8>, GenerationReport)> {
+        let mut buf = Vec::new();
+        let report = self.write_exhaustive_pcap(&mut buf, count, config, transport)?;
         Ok((buf, report))
     }
 }

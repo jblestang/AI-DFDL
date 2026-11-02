@@ -32,8 +32,9 @@ OPTIONS:
                                  exhaustive  - Comprehensive suite (valid + syntax + semantic)
                                  syntax      - Syntactic anomalies only (truncation, length, bits)
                                  semantic    - Semantic anomalies only (facets, enums, keys)
-    --count, -n <COUNT>        Number of packets to generate (default: 10).
-                               If 0 in 'valid' mode, generates the exhaustive valid branch suite.
+    --count, -n <COUNT>        Number of packets to generate (default: 10 for 'valid',
+                               full suite for 'exhaustive'/'syntax'/'semantic').
+                               In 'exhaustive' mode, cycles the test matrix up to COUNT.
     --max-size <BYTES>         Strict maximum total generated PCAP file size in bytes.
     --max-payload-size <BYTES> Maximum allowed size in bytes for an individual payload.
     --seed <SEED>              PRNG seed for deterministic reproducibility (default: 42).
@@ -55,7 +56,13 @@ EXAMPLES:
     # 3. Enforce a strict max capture size of 100 KB
     dfdl-pcap-gen -o budgeted.pcap -n 50 --max-size 102400
 
-    # 4. Generate from a custom DFDL schema
+    # 4. Generate 5000 exhaustive packets cycling under a budget
+    dfdl-pcap-gen --mode exhaustive -o budgeted.pcap -n 5000 --max-size 500000
+
+    # 5. Restrict individual payload size and total capture size
+    dfdl-pcap-gen -o budgeted.pcap -n 5000 --max-payload-size 500 --max-size 50000
+
+    # 6. Generate from a custom DFDL schema
     dfdl-pcap-gen --schema my_protocol.dfdl.xsd --root MyMessage -o custom.pcap
 "#
     );
@@ -86,6 +93,7 @@ fn main() -> ExitCode {
     let mut output_path = String::from("capture.pcap");
     let mut mode = String::from("valid");
     let mut count: usize = 10;
+    let mut count_explicitly_set = false;
     let mut max_total_size: Option<usize> = None;
     let mut max_payload_size: Option<usize> = None;
     let mut seed: u64 = 42;
@@ -132,6 +140,7 @@ fn main() -> ExitCode {
                 if i < args.len() {
                     if let Ok(c) = args[i].parse::<usize>() {
                         count = c;
+                        count_explicitly_set = true;
                     }
                 }
             }
@@ -245,7 +254,6 @@ fn main() -> ExitCode {
 
     // 2. Initialize generator with limits
     let mut limits = GenerationLimits::new()
-        .max_messages(count)
         .max_total_size(max_total_size.unwrap_or(usize::MAX))
         .max_payload_size(max_payload_size.unwrap_or(usize::MAX));
     if max_total_size.is_none() {
@@ -253,6 +261,9 @@ fn main() -> ExitCode {
     }
     if max_payload_size.is_none() {
         limits.max_payload_size = None;
+    }
+    if count_explicitly_set || mode == "valid" {
+        limits.max_messages = Some(count);
     }
 
     let mut generator = PayloadGenerator::new(&compiled_schema, seed)
@@ -294,16 +305,8 @@ fn main() -> ExitCode {
     let report_res = match mode.as_str() {
         "valid" => generator.write_valid_pcap(&mut file, count, &net_cfg, &transport),
         "exhaustive" => {
-            let suite = match generator.generate_exhaustive_suite() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Failed to generate exhaustive suite: {:?}", e);
-                    return ExitCode::FAILURE;
-                }
-            };
-            generator
-                .write_pcap(&mut file, &suite, &net_cfg, &transport)
-                .map_err(|e| dfdl_core::error::DFDLError::new(dfdl_core::error::DFDLErrorKind::Unparse, &e.to_string()))
+            let target_count = if count_explicitly_set { count } else { 0 };
+            generator.write_exhaustive_pcap(&mut file, target_count, &net_cfg, &transport)
         }
         "syntax" => {
             let mut syntax_payloads = Vec::new();
@@ -328,8 +331,9 @@ fn main() -> ExitCode {
             if let Ok(p) = generator.generate_syntax_anomaly(SyntaxAnomaly::BitMisaligned { extra_bits: 3 }) {
                 syntax_payloads.push(p);
             }
+            let target_count = if count_explicitly_set { count } else { 0 };
             generator
-                .write_pcap(&mut file, &syntax_payloads, &net_cfg, &transport)
+                .write_cycled_pcap(&mut file, &syntax_payloads, target_count, &net_cfg, &transport)
                 .map_err(|e| dfdl_core::error::DFDLError::new(dfdl_core::error::DFDLErrorKind::Unparse, &e.to_string()))
         }
         "semantic" => {
@@ -344,8 +348,9 @@ fn main() -> ExitCode {
                 .into_iter()
                 .filter(|p| matches!(p.mode, dfdl_payload_generator::PayloadMode::SemanticAnomaly(_)))
                 .collect();
+            let target_count = if count_explicitly_set { count } else { 0 };
             generator
-                .write_pcap(&mut file, &semantic_payloads, &net_cfg, &transport)
+                .write_cycled_pcap(&mut file, &semantic_payloads, target_count, &net_cfg, &transport)
                 .map_err(|e| dfdl_core::error::DFDLError::new(dfdl_core::error::DFDLErrorKind::Unparse, &e.to_string()))
         }
         unknown => {
@@ -370,6 +375,20 @@ fn main() -> ExitCode {
     println!("   - Reached message limit:   {}", report.reached_message_limit);
     println!("   - Reached size limit:      {}", report.reached_size_limit);
     println!("------------------------------------------------------------------");
+
+    if report.message_count == 0 && report.reached_size_limit {
+        let budget = max_total_size.unwrap_or(0);
+        eprintln!("[!] NOTE: 0 packets were written because the requested --max-size ({} bytes)", budget);
+        eprintln!("    is smaller than the minimum packet size for this schema.");
+        eprintln!("    To generate packets within this budget, either:");
+        eprintln!("      1) Increase total capture size: --max-size <BYTES> (e.g. --max-size 100000)");
+        eprintln!("      2) Or limit individual payload size: --max-payload-size 500 --max-size {}", budget);
+    } else if report.reached_size_limit {
+        println!("[i] Info: Stopped generation upon reaching --max-size budget ({} bytes).", report.total_bytes);
+    } else if report.reached_message_limit {
+        println!("[i] Info: Successfully reached requested message count ({} packets).", report.message_count);
+    }
+
     println!("Capture is ready for inspection with Wireshark and DFDL dissectors.");
 
     ExitCode::SUCCESS

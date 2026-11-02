@@ -422,7 +422,53 @@ fn main() -> Result<(), String> {
     }
     println!("ok");
 
-    println!("\nAll 17 tests passed successfully!");
+    // Test 18: Generation limits when budget is smaller than single packet
+    print!("test test_generation_limits_budget_smaller_than_single_packet ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let mut generator = PayloadGenerator::new(&schema, 1004)
+            .with_max_total_size(50);
+
+        let net_cfg = NetworkConfig::default();
+        let transport = TransportProtocol::default();
+        let mut pcap_buf = Vec::new();
+        let report = generator
+            .write_exhaustive_pcap(&mut pcap_buf, 50, &net_cfg, &transport)
+            .map_err(|e| format!("{:?}", e))?;
+
+        assert_eq!(report.message_count, 0);
+        assert!(report.reached_size_limit);
+        assert!(!report.reached_message_limit);
+        assert_eq!(report.total_bytes, 24);
+        assert_eq!(pcap_buf.len(), 24);
+    }
+    println!("ok");
+
+    // Test 19: Write exhaustive PCAP with packet count cycling
+    print!("test test_write_exhaustive_pcap_cycling ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let mut generator = PayloadGenerator::new(&schema, 1005);
+        let net_cfg = NetworkConfig::default();
+        let transport = TransportProtocol::default();
+        let mut pcap_buf = Vec::new();
+        let report = generator
+            .write_exhaustive_pcap(&mut pcap_buf, 50, &net_cfg, &transport)
+            .map_err(|e| format!("{:?}", e))?;
+
+        assert_eq!(report.message_count, 50);
+        assert!(report.reached_message_limit);
+        assert!(!report.reached_size_limit);
+
+        let parsed = PcapFile::parse(&pcap_buf).map_err(|e| e.to_string())?;
+        assert_eq!(parsed.packets.len(), 50);
+    }
+    println!("ok");
+
+    println!("\nAll 19 tests passed successfully!");
     Ok(())
 }
+
 

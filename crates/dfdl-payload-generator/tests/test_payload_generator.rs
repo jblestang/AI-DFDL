@@ -458,3 +458,50 @@ fn test_generation_limits_max_payload_size() {
         max_len
     );
 }
+
+#[test]
+fn test_generation_limits_budget_smaller_than_single_packet() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+
+    // Budget of 50 bytes: PCAP global header is 24 bytes, UDP packet is ~86 bytes.
+    // 0 packets can fit, so report.reached_size_limit must be true, message_count == 0.
+    let mut generator = PayloadGenerator::new(&schema, 1004)
+        .with_max_total_size(50);
+
+    let net_cfg = NetworkConfig::default();
+    let transport = TransportProtocol::default();
+    let mut pcap_buf = Vec::new();
+    let report = generator
+        .write_exhaustive_pcap(&mut pcap_buf, 50, &net_cfg, &transport)
+        .expect("write budget-constrained PCAP");
+
+    assert_eq!(report.message_count, 0);
+    assert!(report.reached_size_limit);
+    assert!(!report.reached_message_limit);
+    assert_eq!(report.total_bytes, 24);
+    assert_eq!(pcap_buf.len(), 24);
+}
+
+#[test]
+fn test_write_exhaustive_pcap_cycling() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+
+    // Request 50 packets cycling through the exhaustive suite
+    let mut generator = PayloadGenerator::new(&schema, 1005);
+    let net_cfg = NetworkConfig::default();
+    let transport = TransportProtocol::default();
+    let mut pcap_buf = Vec::new();
+    let report = generator
+        .write_exhaustive_pcap(&mut pcap_buf, 50, &net_cfg, &transport)
+        .expect("write cycled exhaustive PCAP");
+
+    assert_eq!(report.message_count, 50);
+    assert!(report.reached_message_limit);
+    assert!(!report.reached_size_limit);
+
+    let parsed = PcapFile::parse(&pcap_buf).expect("parse cycled PCAP");
+    assert_eq!(parsed.packets.len(), 50);
+}
+

@@ -234,7 +234,7 @@ cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- [OPTIONS]
 | `--root` | | `<NAME>` | Root in schema | Target root element name to compile (e.g. `SimplePacket`, `SimpleControlPayload`). |
 | `--output` | `-o` | `<PATH>` | `capture.pcap` | Output destination path for the generated Libpcap file. |
 | `--mode` | | `<MODE>` | `valid` | Generation mode: `valid`, `exhaustive`, `syntax`, or `semantic`. |
-| `--count` | `-n` | `<COUNT>` | `10` | Number of messages/packets to generate. If `0` in `valid` mode, generates the exhaustive valid branch suite. |
+| `--count` | `-n` | `<COUNT>` | `10` (`0` for full suite) | Number of messages/packets to generate. In `exhaustive`/`syntax`/`semantic` modes with `-n`, cycles through the test suite up to COUNT. If omitted, generates the complete suite once. |
 | `--max-size` | | `<BYTES>` | Unlimited | Strict maximum total generated PCAP file size in bytes. Generation stops before exceeding this budget. |
 | `--max-payload-size` | | `<BYTES>` | Unlimited | Maximum allowed size in bytes for an individual payload (payloads exceeding this are capped). |
 | `--transport` | | `<PROTO>` | `udp` | Transport layer framing: `udp` (Ethernet II + IPv4 + UDP) or `raw` (raw link layer). |
@@ -276,15 +276,36 @@ cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
     --max-size 51200
 ```
 
-#### 4. Generate an Exhaustive Anomaly Test Suite (Wireshark / Fuzzing)
-Generate a capture containing valid nominals, syntactic corruptions (truncations, length mismatches, bit slips), and semantic corruptions (invalid enums, out-of-range facets, unmatched choice keys):
+#### 4. Stream 5000 Exhaustive Test Packets under a Size Budget
+Cycle through the exhaustive test suite to produce up to 5,000 packets capped at 100 KB total capture size:
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    --mode exhaustive \
+    -o budgeted.pcap \
+    -n 5000 \
+    --max-size 100000
+```
+
+#### 5. Restrict Individual Payload Size and Total Capture Size
+Cap each payload to 200 bytes and the total capture file to 1,200 bytes:
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    --mode exhaustive \
+    -o budgeted.pcap \
+    -n 5000 \
+    --max-payload-size 200 \
+    --max-size 1200
+```
+
+#### 6. Generate an Exhaustive Anomaly Test Suite (Wireshark / Fuzzing)
+Generate a capture containing the complete test matrix (valid nominals, choice branches, syntax corruptions, and semantic anomalies):
 ```bash
 cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
     --mode exhaustive \
     -o test_matrix.pcap
 ```
 
-#### 5. Generate from a Custom External DFDL Schema
+#### 7. Generate from a Custom External DFDL Schema
 Compile a user DFDL schema and generate PCAP packets for root element `RadarTrackMessage`:
 ```bash
 cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
@@ -294,7 +315,7 @@ cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
     -n 15
 ```
 
-#### 6. Customize Network Addressing and Ports
+#### 8. Customize Network Addressing and Ports
 Configure specific MAC addresses, IP addresses, and UDP port 50000:
 ```bash
 cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
@@ -328,5 +349,5 @@ To run the complete test suite:
 cargo run -p dfdl-payload-generator --example run_generator_tests
 ```
 
-All 17 integration and unit tests will execute and verify payload parsing, checksums, and PCAP format integrity.
+All 19 integration and unit tests will execute and verify payload parsing, checksums, and PCAP format integrity.
 
