@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testSuite xmlns="http://www.ibm.com/xmlns/dfdl/testData"
+           xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+           xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+           xmlns:eth="urn:owlcyberdefense.com:schema:dfdl:ethernet:eth"
+           xmlns:ex="http://example.com"
+           defaultRoundTrip="true">
+
+
+  <tdml:defineSchema name="s1" elementFormDefault="unqualified" useDefaultNamespace="false"
+                     xmlns="http://www.w3.org/2001/XMLSchema">
+
+    <import namespace="urn:owlcyberdefense.com:schema:dfdl:ethernet:eth"
+            schemaLocation="/com/owlcyberdefense/dfdl/xsd/ethernetIP.dfdl.xsd"/>
+
+    <dfdl:format ref="eth:basicByteBinary"/>
+
+    <element name="root">
+      <complexType>
+        <sequence>
+          <element name="IP" type="eth:IPAddress"/>
+        </sequence>
+      </complexType>
+    </element>
+
+  </tdml:defineSchema>
+
+  <parserTestCase name="ipAddress1" root="root"
+                       model="s1">
+    <document>
+      <documentPart type="byte">01020304</documentPart>
+    </document>
+    <infoset>
+      <dfdlInfoset>
+        <ex:root xmlns="">
+          <IP>
+            <value>1.2.3.4</value>
+          </IP>
+        </ex:root>
+      </dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+</testSuite>

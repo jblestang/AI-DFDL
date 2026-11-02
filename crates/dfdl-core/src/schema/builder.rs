@@ -23,6 +23,8 @@ pub struct SchemaBuilder {
     pub unqualified_path_step_policy: crate::types::UnqualifiedPathStepPolicy,
     /// Tunable maxHexBinaryLengthInBytes limit.
     pub max_hex_binary_length_in_bytes: Option<usize>,
+    /// Tunable maxSkipLengthInBytes limit.
+    pub max_skip_length_in_bytes: usize,
 }
 
 impl SchemaBuilder {
@@ -37,6 +39,7 @@ impl SchemaBuilder {
             variable_map: crate::expr::variables::VariableMap::new(),
             unqualified_path_step_policy: Default::default(),
             max_hex_binary_length_in_bytes: None,
+            max_skip_length_in_bytes: crate::limits::DEFAULT_MAX_SKIP_LENGTH_IN_BYTES,
         }
     }
 
@@ -95,11 +98,13 @@ impl SchemaBuilder {
         kind: TermKind,
         mut properties: crate::schema::ir::ResolvedProperties,
     ) -> DFDLResult<NodeId> {
-        if properties.encoding_prop.is_constant() && properties.encoding.starts_with('{') {
-            if let Ok(p) = crate::schema::ir::DfdlProp::parse_str(&properties.encoding) {
+        if properties.encoding_prop.is_constant() && properties.encoding.as_str().starts_with('{') {
+            if let Ok(p) = crate::schema::ir::DfdlProp::parse_with(properties.encoding.as_str(), |s| Ok(crate::encoding::EncodingKind::parse_name(s))) {
                 properties.encoding_prop = p;
             }
         }
+        properties.encoding_char_bits = properties.encoding.char_bits();
+        properties.encoding_unit_bits = properties.encoding.unit_bits();
         if properties.byte_order_prop.is_constant() {
             if let Some(ref bo_expr) = properties.byte_order_expr {
                 if let Ok(p) = crate::schema::ir::DfdlProp::parse_with(bo_expr, crate::expr::properties::parse_byte_order) {
@@ -224,6 +229,92 @@ impl SchemaBuilder {
                 }
             }
         }
+        if properties.input_value_calc_prop.is_none() {
+            if let Some(ref ivc) = properties.input_value_calc {
+                if !ivc.is_empty() {
+                    let trimmed = ivc.trim();
+                    let inner = if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+                        trimmed[1..trimmed.len().saturating_sub(1)].trim()
+                    } else {
+                        trimmed
+                    };
+                    let ast = crate::expr::parse_expr(inner).map_err(|e| {
+                        if e.kind == crate::error::DFDLErrorKind::SchemaDefinition {
+                            e
+                        } else {
+                            crate::error::DFDLError::new(
+                                crate::error::DFDLErrorKind::SchemaDefinition,
+                                &alloc::format!("Schema Definition Error: Invalid expression '{}': Unable to parse expression: {}", inner, e),
+                            )
+                        }
+                    })?;
+                    properties.input_value_calc_prop = Some(crate::schema::ir::DfdlProp::expression(ivc.clone(), ast));
+                }
+            }
+        }
+        if properties.output_value_calc_prop.is_none() {
+            if let Some(ref ovc) = properties.output_value_calc {
+                if !ovc.is_empty() {
+                    let trimmed = ovc.trim();
+                    let inner = if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+                        trimmed[1..trimmed.len().saturating_sub(1)].trim()
+                    } else {
+                        trimmed
+                    };
+                    let ast = crate::expr::parse_expr(inner).map_err(|e| {
+                        if e.kind == crate::error::DFDLErrorKind::SchemaDefinition {
+                            e
+                        } else {
+                            crate::error::DFDLError::new(
+                                crate::error::DFDLErrorKind::SchemaDefinition,
+                                &alloc::format!("Schema Definition Error: Invalid expression '{}': Unable to parse expression: {}", inner, e),
+                            )
+                        }
+                    })?;
+                    properties.output_value_calc_prop = Some(crate::schema::ir::DfdlProp::expression(ovc.clone(), ast));
+                }
+            }
+        }
+        if properties.set_variables_compiled.is_empty() && !properties.set_variables.is_empty() {
+            properties.set_variables_compiled = properties
+                .set_variables
+                .iter()
+                .map(|(q, val_expr)| {
+                    let trimmed = val_expr.trim();
+                    let ast = if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+                        let expr_body = trimmed
+                            .get(1..trimmed.len().saturating_sub(1))
+                            .unwrap_or("")
+                            .trim();
+                        crate::expr::parse_expr(expr_body).ok()
+                    } else {
+                        None
+                    };
+                    (q.clone(), ast, val_expr.clone())
+                })
+                .collect();
+        }
+        if properties.new_variable_instances_compiled.is_empty() && !properties.new_variable_instances.is_empty() {
+            properties.new_variable_instances_compiled = properties
+                .new_variable_instances
+                .iter()
+                .map(|(q, opt_expr)| {
+                    let ast = opt_expr.as_ref().and_then(|val_expr| {
+                        let trimmed = val_expr.trim();
+                        if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+                            let expr_body = trimmed
+                                .get(1..trimmed.len().saturating_sub(1))
+                                .unwrap_or("")
+                                .trim();
+                            crate::expr::parse_expr(expr_body).ok()
+                        } else {
+                            None
+                        }
+                    });
+                    (q.clone(), ast, opt_expr.clone())
+                })
+                .collect();
+        }
         let id = self.alloc_id();
         let term = CompiledTerm {
             id,
@@ -270,7 +361,7 @@ impl SchemaBuilder {
             )
         })?;
 
-        let schema = CompiledSchema {
+        let mut schema = CompiledSchema {
             root_element_id,
             terms: self.terms,
             variable_map: self.variable_map,
@@ -278,7 +369,10 @@ impl SchemaBuilder {
             max_occurs_bounds: None,
             unqualified_path_step_policy: self.unqualified_path_step_policy,
             max_hex_binary_length_in_bytes: self.max_hex_binary_length_in_bytes,
+            max_skip_length_in_bytes: self.max_skip_length_in_bytes,
+            term_representation: Vec::new(),
         };
+        schema.precompute_term_representations();
 
         validate_schema_ir(&schema)?;
         Ok(schema)

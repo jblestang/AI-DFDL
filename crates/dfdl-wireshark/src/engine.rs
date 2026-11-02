@@ -37,11 +37,7 @@ impl DfdlDissectorEngine {
     /// Returns [`dfdl_core::error::DFDLError`] if the schema cannot be compiled.
     pub fn from_schema_str(schema_xml: &str, target_root: Option<&str>) -> DFDLResult<Self> {
         let compiler = SchemaCompiler::new();
-        let compiled_schema = compiler.compile_str_with_resolver_and_root(
-            schema_xml,
-            |_| None,
-            target_root,
-        )?;
+        let compiled_schema = compiler.compile_str_with_root(schema_xml, target_root)?;
         let registry = SchemaMetadataRegistry::from_schema_xml(schema_xml);
 
         Ok(Self {

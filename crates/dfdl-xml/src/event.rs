@@ -6,17 +6,133 @@ extern crate alloc;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
+use core::fmt;
+
 use dfdl_core::types::{QName, SourceLocation};
 
-/// XML Attribute representation with resolved QName and string value.
+/// Borrowed Qualified Name referencing slices of an input XML document without heap allocation.
+///
+/// Designed per RUST-XML-01 to eliminate micro-allocations when tokenizing XML attributes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QNameRef<'a> {
+    /// Optional namespace URI.
+    pub namespace: Option<&'a str>,
+    /// Local part of the qualified name.
+    pub local_name: &'a str,
+    /// Optional prefix used in XML declarations.
+    pub prefix: Option<&'a str>,
+}
+
+impl<'a> QNameRef<'a> {
+    /// Creates a borrowed QName with local name only and no namespace.
+    #[inline]
+    #[must_use]
+    pub const fn local(local_name: &'a str) -> Self {
+        Self {
+            namespace: None,
+            local_name,
+            prefix: None,
+        }
+    }
+
+    /// Creates a borrowed QName with explicit namespace, local name, and optional prefix.
+    #[inline]
+    #[must_use]
+    pub const fn with_namespace(
+        namespace: &'a str,
+        local_name: &'a str,
+        prefix: Option<&'a str>,
+    ) -> Self {
+        Self {
+            namespace: Some(namespace),
+            local_name,
+            prefix,
+        }
+    }
+
+    /// Converts this borrowed qualified name into an owned [`QName`].
+    #[must_use]
+    pub fn to_qname(&self) -> QName {
+        match self.namespace {
+            Some(ns) => QName::with_namespace(ns, self.local_name, self.prefix),
+            None => {
+                if let Some(pref) = self.prefix {
+                    QName {
+                        namespace: None,
+                        local_name: alloc::string::String::from(self.local_name),
+                        prefix: Some(alloc::string::String::from(pref)),
+                    }
+                } else {
+                    QName::local(self.local_name)
+                }
+            }
+        }
+    }
+
+    /// Returns whether this borrowed QName matches an owned [`QName`].
+    #[must_use]
+    pub fn matches_qname(&self, other: &QName) -> bool {
+        if self.local_name != other.local_name.as_str() {
+            return false;
+        }
+        match (self.namespace, &other.namespace) {
+            (Some(ns1), Some(ns2)) => ns1 == ns2.as_str(),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<'a> PartialEq<QName> for QNameRef<'a> {
+    #[inline]
+    fn eq(&self, other: &QName) -> bool {
+        self.local_name == other.local_name.as_str()
+            && self.prefix == other.prefix.as_deref()
+            && self.namespace == other.namespace.as_ref().map(|ns| ns.as_str())
+    }
+}
+
+impl<'a> PartialEq<QNameRef<'a>> for QName {
+    #[inline]
+    fn eq(&self, other: &QNameRef<'a>) -> bool {
+        other == self
+    }
+}
+
+impl<'a> From<QNameRef<'a>> for QName {
+    #[inline]
+    fn from(r: QNameRef<'a>) -> Self {
+        r.to_qname()
+    }
+}
+
+impl<'a> fmt::Display for QNameRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.namespace {
+            Some(ns) => write!(f, "{{{}}}:{}", ns, self.local_name),
+            None => write!(f, "{}", self.local_name),
+        }
+    }
+}
+
+/// XML Attribute representation with resolved borrowed QName and string value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute<'a> {
-    /// Resolved Qualified Name of the attribute.
-    pub name: QName,
+    /// Resolved Qualified Name reference of the attribute.
+    pub name: QNameRef<'a>,
     /// Raw or unescaped attribute value string.
     pub value: Cow<'a, str>,
     /// Source location where the attribute occurred.
     pub location: SourceLocation,
+}
+
+impl<'a> Attribute<'a> {
+    /// Returns the resolved qualified name as an owned [`QName`].
+    #[inline]
+    #[must_use]
+    pub fn qname(&self) -> QName {
+        self.name.to_qname()
+    }
 }
 
 /// Streaming XML event enumeration.
@@ -86,13 +202,23 @@ mod tests {
     fn test_xml_event_construction() {
         let name = QName::local("root");
         let loc = SourceLocation::at_offset(0);
+        let qref = QNameRef::local("attr");
         let attr = Attribute {
-            name: QName::local("attr"),
+            name: qref,
             value: Cow::Borrowed("val"),
             location: loc,
         };
         assert_eq!(attr.name.local_name, "attr");
         assert_eq!(attr.value, "val");
+        assert_eq!(attr.qname(), QName::local("attr"));
+        assert_eq!(attr.name, QName::local("attr"));
+        assert_eq!(QName::local("attr"), attr.name);
+
+        let qref_ns = QNameRef::with_namespace("http://example.com", "elem", Some("p"));
+        assert_eq!(qref_ns.to_qname(), QName::with_namespace("http://example.com", "elem", Some("p")));
+        assert_eq!(alloc::format!("{}", qref), "attr");
+        assert_eq!(alloc::format!("{}", qref_ns), "{http://example.com}:elem");
+        assert!(qref_ns.matches_qname(&QName::with_namespace("http://example.com", "elem", None)));
 
         let events = [
             XmlEvent::StartDocument {

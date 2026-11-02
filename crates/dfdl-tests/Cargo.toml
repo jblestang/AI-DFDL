@@ -11,6 +11,7 @@ dfdl-core = { path = "../dfdl-core", features = ["std"] }
 dfdl-schema = { path = "../dfdl-schema" }
 dfdl-xml = { path = "../dfdl-xml" }
 dfdl-fuzz = { path = "../dfdl-fuzz" }
+dfdl-layers = { path = "../dfdl-layers" }
 
 [lints]
 workspace = true

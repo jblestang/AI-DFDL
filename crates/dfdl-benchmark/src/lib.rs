@@ -128,7 +128,7 @@ pub fn parse_faketdl(schema: &CompiledSchema, data: &[u8]) -> DFDLResult<Infoset
 /// # Errors
 /// Returns [`DFDLError`] if unparsing fails.
 pub fn unparse_faketdl(schema: &CompiledSchema, doc: &InfosetDocument) -> DFDLResult<Vec<u8>> {
-    let sink = VecByteSink::new();
+    let sink = VecByteSink::with_capacity(64);
     let mut writer = BitWriter::new(
         sink,
         BitOrder::MostSignificantBitFirst,

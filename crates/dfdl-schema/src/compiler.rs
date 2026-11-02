@@ -3,7 +3,6 @@
 //! Conforms strictly to DFDL 1.0 Specification §4, §5, §6, §7. Panic-free  + .
 
 extern crate alloc;
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use dfdl_core::error::{DFDLError, DFDLErrorKind, DFDLResult};
@@ -66,6 +65,8 @@ pub struct SchemaCompiler {
     pub disallow_expression_result_coercion: bool,
     /// Inverse of the `check_delimiter_encoding` flag (default `false` = checked).
     pub disallow_delimiter_encoding_check: bool,
+    /// `maxSkipLengthInBytes` tunable (Daffodil standard tunable, default 1024).
+    pub max_skip_length_in_bytes: usize,
 }
 
 impl SchemaCompiler {
@@ -86,6 +87,7 @@ impl SchemaCompiler {
             invalid_restriction_policy: InvalidRestrictionPolicy::Validate,
             disallow_expression_result_coercion: false,
             disallow_delimiter_encoding_check: false,
+            max_skip_length_in_bytes: dfdl_core::limits::DEFAULT_MAX_SKIP_LENGTH_IN_BYTES,
         }
     }
 
@@ -106,6 +108,25 @@ impl SchemaCompiler {
             invalid_restriction_policy: InvalidRestrictionPolicy::Validate,
             disallow_expression_result_coercion: false,
             disallow_delimiter_encoding_check: false,
+            max_skip_length_in_bytes: dfdl_core::limits::DEFAULT_MAX_SKIP_LENGTH_IN_BYTES,
+        }
+    }
+
+    /// Sets the maximum allowed skip length in bytes (`maxSkipLengthInBytes`).
+    #[inline]
+    #[must_use]
+    pub const fn with_max_skip_length_in_bytes(mut self, limit: usize) -> Self {
+        self.max_skip_length_in_bytes = limit;
+        self
+    }
+
+    /// Returns the configured [`dfdl_core::limits::ResourceLimits`] for this compiler instance.
+    #[inline]
+    #[must_use]
+    pub fn resource_limits(&self) -> dfdl_core::limits::ResourceLimits {
+        dfdl_core::limits::ResourceLimits {
+            max_skip_length_in_bytes: self.max_skip_length_in_bytes,
+            ..Default::default()
         }
     }
 
@@ -216,35 +237,48 @@ impl SchemaCompiler {
 
     /// Compiles an XSD schema document XML string into a [`CompiledSchema`].
     pub fn compile_str(&self, schema_xml: &str) -> DFDLResult<CompiledSchema> {
-        self.compile_str_with_resolver(schema_xml, |_| None)
+        self.compile_str_with_resolver(schema_xml, crate::resolver::NullResolver)
     }
 
-    /// Compiles an XSD schema document with a custom import/include schema resolver callback.
-    pub fn compile_str_with_resolver<F>(
+    /// Compiles an XSD schema document XML string with a specific target root element name.
+    pub fn compile_str_with_root(
         &self,
         schema_xml: &str,
-        resolver: F,
+        target_root: Option<&str>,
+    ) -> DFDLResult<CompiledSchema> {
+        self.compile_str_with_resolver_and_root(
+            schema_xml,
+            crate::resolver::NullResolver,
+            target_root,
+        )
+    }
+
+    /// Compiles an XSD schema document with a custom import/include schema resolver.
+    pub fn compile_str_with_resolver<R>(
+        &self,
+        schema_xml: &str,
+        resolver: R,
     ) -> DFDLResult<CompiledSchema>
     where
-        F: FnMut(&str) -> Option<String>,
+        R: crate::resolver::SchemaResolver,
     {
         self.compile_str_with_resolver_and_root(schema_xml, resolver, None)
     }
 
     /// Compiles an XSD schema document with a custom resolver and specific target root element name.
-    pub fn compile_str_with_resolver_and_root<F>(
+    pub fn compile_str_with_resolver_and_root<R>(
         &self,
         schema_xml: &str,
-        mut resolver: F,
+        mut resolver: R,
         target_root: Option<&str>,
     ) -> DFDLResult<CompiledSchema>
     where
-        F: FnMut(&str) -> Option<String>,
+        R: crate::resolver::SchemaResolver,
     {
         let mut reader = XmlReader::with_limits(schema_xml, self.limits);
         reader.set_permissive_namespaces(true);
         let mut visited = Vec::new();
-        let xsd_schema = self.parse_schema_document_internal(
+        let mut xsd_schema = self.parse_schema_document_internal(
             &mut reader,
             &mut resolver,
             &mut visited,
@@ -257,6 +291,9 @@ impl SchemaCompiler {
                 DFDLErrorKind::SchemaDefinition,
                 "No top-level element found in XSD schema (parse)",
             ));
+        }
+        for (_, doc_fmt) in &mut xsd_schema.doc_formats {
+            let _ = self.resolve_ref_formats(doc_fmt, &xsd_schema.defined_formats);
         }
         self.lower_schema_to_ir_with_root(&xsd_schema, target_root)
     }

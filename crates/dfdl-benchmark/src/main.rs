@@ -140,7 +140,10 @@ fn main() {
     println!("  [PASS] Native Rust Codec: byte-identical verification on all test assets\n");
 
     let warmup = 1_000;
-    let iterations = 10_000;
+    let iterations = std::env::var("BENCH_ITERS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10_000);
 
     println!("[3/6] Running Raw DFDL (Interpreted AST) benchmarks (1,000 warmup, 10,000 iters)...");
     let b_raw_msg_parse = benchmark_op("Raw DFDL parse (64B Track)", 64, warmup, iterations, || {

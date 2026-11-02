@@ -349,7 +349,19 @@ pub fn parse_path_from_pair(pair: pest::iterators::Pair<Rule>) -> DFDLResult<Inf
                     Rule::axis_specifier => match sub.as_str() {
                         "parent::" => axis = PathAxis::Parent,
                         "self::" => axis = PathAxis::SelfAxis,
-                        _ => axis = PathAxis::Child,
+                        "child::" => axis = PathAxis::Child,
+                        "@" | "attribute::" => {
+                            let msg = "Schema Definition Error: Unsupported axis 'attribute' in path expression.";
+                            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, msg));
+                        }
+                        other => {
+                            let axis_name = other.strip_suffix("::").unwrap_or(other);
+                            let msg = alloc::format!(
+                                "Schema Definition Error: Unsupported axis '{}' in path expression.",
+                                axis_name
+                            );
+                            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                        }
                     },
                     Rule::step_node => {
                         step_node_empty = false;
@@ -359,6 +371,10 @@ pub fn parse_path_from_pair(pair: pest::iterators::Pair<Rule>) -> DFDLResult<Inf
                                 Rule::self_step => target = StepTarget::SelfNode,
                                 Rule::wildcard_step => {
                                     let msg = "Schema Definition Error: Wildcard '*' is unsupported in DFDL Expression Syntax.";
+                                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, msg));
+                                }
+                                Rule::var_step => {
+                                    let msg = "Schema Definition Error: Variables cannot be used in path expressions.";
                                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, msg));
                                 }
                                 Rule::qname_step => {
@@ -540,36 +556,40 @@ mod tests {
         // Absolute path
         let p_abs = parse_path("/root/header/length").unwrap();
         assert!(p_abs.is_absolute());
-        assert_eq!(p_abs.segments(), &["root", "header", "length"]);
+        assert_eq!(&p_abs.segments()[..], &["root", "header", "length"]);
 
         // Relative path
         let p_rel = parse_path("items/item[1]").unwrap();
         assert!(!p_rel.is_absolute());
-        assert_eq!(p_rel.segments(), &["items", "item[1]"]);
+        assert_eq!(&p_rel.segments()[..], &["items", "item[1]"]);
 
         // Self axis steps
         let p_self_dot = parse_path("self::.").unwrap();
-        assert_eq!(p_self_dot.segments(), &["."]);
+        assert_eq!(&p_self_dot.segments()[..], &["."]);
 
         let p_self_elem = parse_path("self::child").unwrap();
-        assert_eq!(p_self_elem.segments(), &[".(child)"]);
+        assert_eq!(&p_self_elem.segments()[..], &[".(child)"]);
 
         let p_self_pred = parse_path("self::child[2]").unwrap();
-        assert_eq!(p_self_pred.segments(), &[".(child)[2]"]);
+        assert_eq!(&p_self_pred.segments()[..], &[".(child)[2]"]);
 
         // Parent axis steps
         let p_parent_dot = parse_path("..").unwrap();
-        assert_eq!(p_parent_dot.segments(), &[".."]);
+        assert_eq!(&p_parent_dot.segments()[..], &[".."]);
 
         let p_parent_axis = parse_path("parent::node()").unwrap();
-        assert_eq!(p_parent_axis.segments(), &["..(node)"]);
+        assert_eq!(&p_parent_axis.segments()[..], &["..(node)"]);
 
         let p_parent_pred = parse_path("parent::item[1]").unwrap();
-        assert_eq!(p_parent_pred.segments(), &["..(item)[1]"]);
+        assert_eq!(&p_parent_pred.segments()[..], &["..(item)[1]"]);
 
         // Path syntax error rejection (invalid leading character)
-        let err_path = parse_path("@invalid").unwrap_err();
+        let err_path = parse_path("!invalid").unwrap_err();
         assert_eq!(err_path.kind, DFDLErrorKind::ExpressionError);
+
+        // Unsupported axis rejection
+        let err_attr = parse_path("@invalid").unwrap_err();
+        assert_eq!(err_attr.kind, DFDLErrorKind::SchemaDefinition);
 
         // Wildcard step rejection
         let err_wild = parse_path("items/*").unwrap_err();
@@ -649,7 +669,7 @@ mod tests {
 
         // Paths with backslashes normalized to slashes
         let p_bs = parse_path(r"root\child\subchild").unwrap();
-        assert_eq!(p_bs.segments(), &["root", "child", "subchild"]);
+        assert_eq!(&p_bs.segments()[..], &["root", "child", "subchild"]);
 
         // Function call with multiple arguments
         let ast_fn = parse_expr("concat('a', 'b', 'c')").unwrap();
@@ -674,27 +694,27 @@ mod tests {
 
         // Axis steps variations: parent::., parent::.., self::., parent::name, self::name
         let p_par_dot = parse_path("parent::.").unwrap();
-        assert_eq!(p_par_dot.segments(), &[".."]);
+        assert_eq!(&p_par_dot.segments()[..], &[".."]);
 
         let p_par_dotdot = parse_path("parent::..").unwrap();
-        assert_eq!(p_par_dotdot.segments(), &[".."]);
+        assert_eq!(&p_par_dotdot.segments()[..], &[".."]);
 
         let p_par_name = parse_path("parent::item").unwrap();
-        assert_eq!(p_par_name.segments(), &["..(item)"]);
+        assert_eq!(&p_par_name.segments()[..], &["..(item)"]);
 
         let p_self_name = parse_path("self::item").unwrap();
-        assert_eq!(p_self_name.segments(), &[".(item)"]);
+        assert_eq!(&p_self_name.segments()[..], &[".(item)"]);
 
         // Axis steps with predicates
         let p_par_pred = parse_path("parent::item[1]").unwrap();
-        assert_eq!(p_par_pred.segments(), &["..(item)[1]"]);
+        assert_eq!(&p_par_pred.segments()[..], &["..(item)[1]"]);
 
         let p_self_pred = parse_path("self::item[1]").unwrap();
-        assert_eq!(p_self_pred.segments(), &[".(item)[1]"]);
+        assert_eq!(&p_self_pred.segments()[..], &[".(item)[1]"]);
 
         // Self::.
         let p_self_dot = parse_path("self::.").unwrap();
-        assert_eq!(p_self_dot.segments(), &["."]);
+        assert_eq!(&p_self_dot.segments()[..], &["."]);
 
         // Wildcard path step rejected per DFDL expression syntax
         assert!(parse_path("/root/*").is_err());
@@ -721,9 +741,9 @@ mod tests {
 
         // Parent axis with .. and .
         let p_par_dot = parse_path("parent::..").unwrap();
-        assert_eq!(p_par_dot.segments(), &[".."]);
+        assert_eq!(&p_par_dot.segments()[..], &[".."]);
         let p_par_dot2 = parse_path("parent::.").unwrap();
-        assert_eq!(p_par_dot2.segments(), &[".."]);
+        assert_eq!(&p_par_dot2.segments()[..], &[".."]);
 
         // Function call with multiple arguments and 0 arguments
         let ast_fn = parse_expr("fn:concat('a', 'b', 'c')").unwrap();
@@ -808,13 +828,13 @@ mod tests {
 
         // 4. Path axis qualifiers (lines 444, 456, 458)
         let p_parent_pred = parse_path("parent::item[1]").unwrap();
-        assert_eq!(p_parent_pred.segments(), &["..(item)[1]"]);
+        assert_eq!(&p_parent_pred.segments()[..], &["..(item)[1]"]);
 
         let p_self_pred = parse_path("self::item[1]").unwrap();
-        assert_eq!(p_self_pred.segments(), &[".(item)[1]"]);
+        assert_eq!(&p_self_pred.segments()[..], &[".(item)[1]"]);
 
         let p_self_bare = parse_path("self::item").unwrap();
-        assert_eq!(p_self_bare.segments(), &[".(item)"]);
+        assert_eq!(&p_self_bare.segments()[..], &[".(item)"]);
 
         // 5. Wildcard rejection in path (line 415)
         let err_wildcard = parse_path("/root/*").unwrap_err();
@@ -829,13 +849,13 @@ mod tests {
 
         // 7. Path axis step node forms: parent::.., parent::., self::. (lines 440, 452)
         let p_parent_dotdot = parse_path("parent::..").unwrap();
-        assert_eq!(p_parent_dotdot.segments(), &[".."]);
+        assert_eq!(&p_parent_dotdot.segments()[..], &[".."]);
 
         let p_parent_dot = parse_path("parent::.").unwrap();
-        assert_eq!(p_parent_dot.segments(), &[".."]);
+        assert_eq!(&p_parent_dot.segments()[..], &[".."]);
 
         let p_self_dot = parse_path("self::.").unwrap();
-        assert_eq!(p_self_dot.segments(), &["."]);
+        assert_eq!(&p_self_dot.segments()[..], &["."]);
 
         // 8. Variable reference AST building (lines 348-352)
         let pair_var = DfdlPestParser::parse(Rule::var_ref, "$myVar").unwrap().next().unwrap();
@@ -849,16 +869,16 @@ mod tests {
 
         // 10. Axis with and without predicate (lines 438-442, 450-454)
         let p_parent_pred = parse_path("parent::item[1]").unwrap();
-        assert_eq!(p_parent_pred.segments(), &["..(item)[1]"]);
+        assert_eq!(&p_parent_pred.segments()[..], &["..(item)[1]"]);
 
         let p_parent_no_pred = parse_path("parent::item").unwrap();
-        assert_eq!(p_parent_no_pred.segments(), &["..(item)"]);
+        assert_eq!(&p_parent_no_pred.segments()[..], &["..(item)"]);
 
         let p_self_pred = parse_path("self::item[1]").unwrap();
-        assert_eq!(p_self_pred.segments(), &[".(item)[1]"]);
+        assert_eq!(&p_self_pred.segments()[..], &[".(item)[1]"]);
 
         let p_self_no_pred = parse_path("self::item").unwrap();
-        assert_eq!(p_self_no_pred.segments(), &[".(item)"]);
+        assert_eq!(&p_self_no_pred.segments()[..], &[".(item)"]);
 
         // 11. Defensive error checks on inner-less AST builders (lines 140, 166, 225, 236, 300)
         let pair_axis = DfdlPestParser::parse(Rule::axis_specifier, "self::").unwrap().next().unwrap();

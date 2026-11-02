@@ -2546,6 +2546,7 @@
     /// 4. Layer `checkDigit` accepts various integer types (`xs:short`, `xs:long`, `xs:unsignedShort`) for length.
     #[test]
     fn test_parser_engine_mod_extended_coverage() {
+        crate::kernel::layer::init_test_layers();
         let schema = dummy_schema();
         let bytes = [0xFF, 0x00, 0xAA, 0x55];
         let src = SliceByteSource::new(&bytes);
@@ -2668,7 +2669,7 @@
         let mut r_swap = BitReader::new(src_swap, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut b_swap_work = WorkBudget::new(100);
         let mut eng_swap = ParserEngine::new(&schema_swap, &mut r_swap, &mut b_swap_work);
-        eng_swap.variable_map.define_variable(
+        eng_swap.variable_map_mut().define_variable(
             QName::local("requireLengthInWholeWords"),
             crate::infoset::value::DfdlSimpleType::String,
             Some(crate::infoset::value::DfdlValue::String("yes".into())),
@@ -2721,12 +2722,12 @@
         let mut r_cd_ok = BitReader::new(src_cd_ok, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut b_cd_ok_work = WorkBudget::new(100);
         let mut eng_cd_ok = ParserEngine::new(&schema_cd, &mut r_cd_ok, &mut b_cd_ok_work);
-        eng_cd_ok.variable_map.define_variable(
+        eng_cd_ok.variable_map_mut().define_variable(
             QName::local("length"),
             crate::infoset::value::DfdlSimpleType::Int,
             Some(crate::infoset::value::DfdlValue::Int(4)),
         );
-        eng_cd_ok.variable_map.define_variable(
+        eng_cd_ok.variable_map_mut().define_variable(
             QName::with_namespace(
                 "urn:org.apache.daffodil.layers.checkDigit",
                 "checkDigit",
@@ -2778,12 +2779,12 @@
         let mut r_bomb1 = BitReader::new(src_bomb1, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut b_bomb1_work = WorkBudget::new(100);
         let mut eng_bomb1 = ParserEngine::new(&schema_bomb, &mut r_bomb1, &mut b_bomb1_work);
-        eng_bomb1.variable_map.define_variable(
+        eng_bomb1.variable_map_mut().define_variable(
             QName::local("bombWhere"),
             crate::infoset::value::DfdlSimpleType::String,
             Some(crate::infoset::value::DfdlValue::String("read".into())),
         );
-        eng_bomb1.variable_map.define_variable(
+        eng_bomb1.variable_map_mut().define_variable(
             QName::local("bombHow"),
             crate::infoset::value::DfdlSimpleType::String,
             Some(crate::infoset::value::DfdlValue::String("PE".into())),
@@ -2796,12 +2797,12 @@
         let mut r_bomb2 = BitReader::new(src_bomb2, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut b_bomb2_work = WorkBudget::new(100);
         let mut eng_bomb2 = ParserEngine::new(&schema_bomb, &mut r_bomb2, &mut b_bomb2_work);
-        eng_bomb2.variable_map.define_variable(
+        eng_bomb2.variable_map_mut().define_variable(
             QName::local("bombWhere"),
             crate::infoset::value::DfdlSimpleType::String,
             Some(crate::infoset::value::DfdlValue::String("read".into())),
         );
-        eng_bomb2.variable_map.define_variable(
+        eng_bomb2.variable_map_mut().define_variable(
             QName::local("bombHow"),
             crate::infoset::value::DfdlSimpleType::String,
             Some(crate::infoset::value::DfdlValue::String("RSDE".into())),
@@ -2856,7 +2857,7 @@
         let src_ipv4_ok = SliceByteSource::new(&[0x45, 0x00, 0x00, 0x3c, 0x1c, 0x46, 0x40, 0x00, 0x40, 0x06, 0xb1, 0xe6, 0xac, 0x10, 0x0a, 0x63, 0xac, 0x10, 0x0a, 0x0c]);
         let mut r_ipv4_ok = BitReader::new(src_ipv4_ok, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut eng_ipv4_ok = ParserEngine::new(&schema_ipv4, &mut r_ipv4_ok, &mut b_ipv4_work);
-        eng_ipv4_ok.variable_map.define_variable(
+        eng_ipv4_ok.variable_map_mut().define_variable(
             QName::with_namespace("urn:org.apache.daffodil.layers.IPv4Checksum", "IPv4Checksum", None),
             DfdlSimpleType::UnsignedShort,
             None,
@@ -2881,7 +2882,7 @@
         let src_cd_err = SliceByteSource::new(b"123");
         let mut r_cd_err = BitReader::new(src_cd_err, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut eng_cd_err = ParserEngine::new(&schema_cd, &mut r_cd_err, &mut b_ipv4_work);
-        eng_cd_err.variable_map.define_variable(
+        eng_cd_err.variable_map_mut().define_variable(
             QName::local("length"),
             DfdlSimpleType::Int,
             Some(DfdlValue::Int(10)),
@@ -2894,12 +2895,12 @@
         let src_cd_ok = SliceByteSource::new(b"0123456789");
         let mut r_cd_ok = BitReader::new(src_cd_ok, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut eng_cd_ok = ParserEngine::new(&schema_cd, &mut r_cd_ok, &mut b_ipv4_work);
-        eng_cd_ok.variable_map.define_variable(
+        eng_cd_ok.variable_map_mut().define_variable(
             QName::local("length"),
             DfdlSimpleType::Int,
             Some(DfdlValue::Int(10)),
         );
-        eng_cd_ok.variable_map.define_variable(
+        eng_cd_ok.variable_map_mut().define_variable(
             QName::with_namespace("urn:org.apache.daffodil.layers.checkDigit", "checkDigit", None),
             DfdlSimpleType::UnsignedShort,
             None,
@@ -2923,7 +2924,7 @@
         let src_tbs = SliceByteSource::new(b"odd");
         let mut r_tbs = BitReader::new(src_tbs, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut eng_tbs = ParserEngine::new(&schema_tbs, &mut r_tbs, &mut b_ipv4_work);
-        eng_tbs.variable_map.define_variable(
+        eng_tbs.variable_map_mut().define_variable(
             QName::local("requireLengthInWholeWords"),
             DfdlSimpleType::String,
             Some(DfdlValue::String("yes".into())),
@@ -2948,7 +2949,7 @@
         let src_bm = SliceByteSource::new(b"hello//world");
         let mut r_bm = BitReader::new(src_bm, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut eng_bm = ParserEngine::new(&schema_bm, &mut r_bm, &mut b_ipv4_work);
-        eng_bm.variable_map.define_variable(
+        eng_bm.variable_map_mut().define_variable(
             QName::local("boundaryMark"),
             DfdlSimpleType::String,
             Some(DfdlValue::String("//".into())),
@@ -2985,14 +2986,14 @@
         let src_bomb3 = SliceByteSource::new(b"data");
         let mut r_bomb3 = BitReader::new(src_bomb3, BitOrder::MostSignificantBitFirst, ByteOrder::BigEndian);
         let mut eng_bomb3 = ParserEngine::new(&schema_bomb, &mut r_bomb3, &mut b_ipv4_work);
-        eng_bomb3.variable_map.define_variable(
+        eng_bomb3.variable_map_mut().define_variable(
             QName::with_namespace("urn:STL", "stringVar", None),
             DfdlSimpleType::String,
             Some(DfdlValue::String("val".into())),
         );
         let mut b_out_b3 = InfosetBuilder::new();
         assert!(eng_bomb3.parse_term_inner(bomb_id, &mut b_out_b3).is_ok());
-        let doubled = eng_bomb3.variable_map.get_variable("stringVar").unwrap();
+        let doubled = eng_bomb3.variable_map().get_variable("stringVar").unwrap();
         assert_eq!(doubled, &DfdlValue::String("val val".into()));
 
         // 20. stlOk1 layer (lines 807-809)

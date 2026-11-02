@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+Copyright (c) 2012-2021 Owl Cyber Defense. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimers.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimers in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the names of Owl Cyber Defense, nor the names of its contributors
+    may be used to endorse or promote products derived from this Software
+    without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+ -->
+
+<tdml:testSuite suiteName="Namespaces"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" 
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  defaultRoundTrip="onePass">
+
+	<tdml:parserTestCase name="parseWMM2015COF"
+		model="com/tresys/magvar/xsd/magvar.dfdl.xsd" roundTrip="twoPass">
+		<tdml:document>
+			<tdml:documentPart type="file">WMM2015COF/WMM.COF</tdml:documentPart>
+		</tdml:document>
+		<tdml:infoset>
+			<tdml:dfdlInfoset type="file">
+				WMM2015COF/WMM.COF.xml
+			</tdml:dfdlInfoset>
+		</tdml:infoset>
+	</tdml:parserTestCase>
+
+	<!--
+	TODO: OnePass test is failing
+	The spec (https://www.ngdc.noaa.gov/geomag/WMM/wmmformat.shtml) 
+	says that each line in the file WMM.COF ends with a carriage return
+	and a line feed but the file from WMM2020COF has only LF line endings.
+	Because of this, the onePass test is failing.
+	-->
+
+	<!--
+ 	<tdml:parserTestCase name="parseWMM2020COF_onePass"
+		model="com/tresys/magvar/xsd/magvar.dfdl.xsd" roundTrip="onePass" root="magvar">
+		<tdml:document>
+			<tdml:documentPart type="file">WMM2020COF/WMM.COF</tdml:documentPart>
+		</tdml:document>
+
+		<tdml:infoset>
+			<tdml:dfdlInfoset type="file">
+				WMM2020COF/WMM.COF.xml
+			</tdml:dfdlInfoset>
+		</tdml:infoset>
+	</tdml:parserTestCase>
+	-->
+
+	<tdml:parserTestCase name="parseWMM2020COF_twoPass"
+		model="com/tresys/magvar/xsd/magvar.dfdl.xsd" roundTrip="twoPass">
+		<tdml:document>
+			<tdml:documentPart type="file">WMM2020COF/WMM.COF</tdml:documentPart>
+		</tdml:document>
+		<tdml:infoset>
+			<tdml:dfdlInfoset type="file">
+				WMM2020COF/WMM.COF.xml
+			</tdml:dfdlInfoset>
+		</tdml:infoset>
+	</tdml:parserTestCase>
+
+	<tdml:parserTestCase name="parseWithValidateWMM2020COF_twoPass"
+		model="com/tresys/magvar/xsd/magvar.dfdl.xsd" roundTrip="twoPass" validation="on">
+		<tdml:document>
+			<tdml:documentPart type="file">WMM2020COF/WMM.COF</tdml:documentPart>
+		</tdml:document>
+		<tdml:infoset>
+			<tdml:dfdlInfoset type="file">
+				WMM2020COF/WMM.COF.xml
+			</tdml:dfdlInfoset>
+		</tdml:infoset>
+	</tdml:parserTestCase>
+
+	<tdml:parserTestCase name="parseHeader"
+		model="com/tresys/magvar/xsd/magvar.dfdl.xsd" roundTrip="twoPass"
+		validation="on" >
+		<tdml:document>
+			<tdml:documentPart type="text"><![CDATA[    2015.0            WMM-2015v2      09/18/2018
+  1  1   -1493.5    4796.3        9.0      -30.2
+999999999999999999999999999999999999999999999999
+999999999999999999999999999999999999999999999999
+]]></tdml:documentPart>
+		</tdml:document>
+		<tdml:infoset>
+			<tdml:dfdlInfoset type="infoset">
+				<m:magvar xmlns:m="urn:com.tresys.magvar">
+					<header>
+						<modelEpoch>2015</modelEpoch>
+						<modelName>WMM-2015v2</modelName>
+						<spaces>      </spaces>
+						<dateOfRelease>2018-09-18</dateOfRelease>
+					</header>
+					<coefficients>
+						<n>1</n>
+						<m>1</m>
+						<g_nm>-1493.5</g_nm>
+						<h_nm>4796.3</h_nm>
+						<g_dot_nm>9.0</g_dot_nm>
+						<h_dot_nm>-30.2</h_dot_nm>
+					</coefficients>
+				</m:magvar>
+			</tdml:dfdlInfoset>
+		</tdml:infoset>
+	</tdml:parserTestCase>
+
+</tdml:testSuite>

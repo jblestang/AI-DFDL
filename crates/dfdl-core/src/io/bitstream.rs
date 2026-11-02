@@ -2,7 +2,6 @@
 //!
 //! Implements MSBF/LSBF bit ordering, big/little endian byte ordering, and transactional state rollback.
 
-#![allow(clippy::arithmetic_side_effects)]
 
 use crate::error::{DFDLError, DFDLErrorKind, DFDLResult};
 use crate::io::traits::{BitOrder, ByteOrder, ByteSink, ByteSource, Checkpoint};
@@ -13,7 +12,7 @@ const fn bit_mask_u8(n: usize) -> u8 {
     if n >= 8 {
         u8::MAX
     } else {
-        ((1u16 << n) - 1) as u8
+        ((1u16 << n).saturating_sub(1)) as u8
     }
 }
 
@@ -22,7 +21,7 @@ const fn bit_mask_u64(n: usize) -> u64 {
     if n >= 64 {
         u64::MAX
     } else {
-        (1u64 << n) - 1
+        (1u64 << n).saturating_sub(1)
     }
 }
 
@@ -109,7 +108,15 @@ impl<S: ByteSource> BitReader<S> {
         self.source.peek_slice(allowed)
     }
 
+    /// Returns whether the reader is currently aligned to a whole byte boundary.
+    #[inline]
+    #[must_use]
+    pub const fn is_byte_aligned(&self) -> bool {
+        self.bits_in_buf == 0
+    }
+
     /// Reads up to 64 bits from the stream as an unsigned integer value.
+    #[inline]
     pub fn read_bits(&mut self, num_bits: usize) -> DFDLResult<u64> {
         if num_bits == 0 {
             return Ok(0);
@@ -130,6 +137,59 @@ impl<S: ByteSource> BitReader<S> {
             }
         }
 
+        // Byte-aligned fast-path: bypass bit-by-bit shifting loop for whole primitive widths (8, 16, 32, 64)
+        if self.bits_in_buf == 0 {
+            if num_bits == 8 {
+                return self.source.read_byte().map(|b| b as u64);
+            }
+            match self.bit_order {
+                BitOrder::MostSignificantBitFirst => match num_bits {
+                    16 => {
+                        let b0 = self.source.read_byte()? as u64;
+                        let b1 = self.source.read_byte()? as u64;
+                        return Ok((b0 << 8) | b1);
+                    }
+                    32 => {
+                        let b0 = self.source.read_byte()? as u64;
+                        let b1 = self.source.read_byte()? as u64;
+                        let b2 = self.source.read_byte()? as u64;
+                        let b3 = self.source.read_byte()? as u64;
+                        return Ok((b0 << 24) | (b1 << 16) | (b2 << 8) | b3);
+                    }
+                    64 => {
+                        let mut arr = [0u8; 8];
+                        for slot in &mut arr {
+                            *slot = self.source.read_byte()?;
+                        }
+                        return Ok(u64::from_be_bytes(arr));
+                    }
+                    _ => {}
+                },
+                BitOrder::LeastSignificantBitFirst => match num_bits {
+                    16 => {
+                        let b0 = self.source.read_byte()? as u64;
+                        let b1 = self.source.read_byte()? as u64;
+                        return Ok(b0 | (b1 << 8));
+                    }
+                    32 => {
+                        let b0 = self.source.read_byte()? as u64;
+                        let b1 = self.source.read_byte()? as u64;
+                        let b2 = self.source.read_byte()? as u64;
+                        let b3 = self.source.read_byte()? as u64;
+                        return Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24));
+                    }
+                    64 => {
+                        let mut arr = [0u8; 8];
+                        for slot in &mut arr {
+                            *slot = self.source.read_byte()?;
+                        }
+                        return Ok(u64::from_le_bytes(arr));
+                    }
+                    _ => {}
+                },
+            }
+        }
+
         let mut result: u64 = 0;
         let mut bits_needed = num_bits;
 
@@ -142,26 +202,26 @@ impl<S: ByteSource> BitReader<S> {
             let take = bits_needed.min(self.bits_in_buf);
             let chunk_bits: u64 = match self.bit_order {
                 BitOrder::MostSignificantBitFirst => {
-                    let shift = self.bits_in_buf - take;
+                    let shift = self.bits_in_buf.saturating_sub(take);
                     let mask = bit_mask_u8(take);
                     ((self.bit_buf >> shift) & mask) as u64
                 }
                 BitOrder::LeastSignificantBitFirst => {
-                    let shift = 8 - self.bits_in_buf;
+                    let shift = 8usize.saturating_sub(self.bits_in_buf);
                     let mask = bit_mask_u8(take);
                     ((self.bit_buf >> shift) & mask) as u64
                 }
             };
 
-            self.bits_in_buf -= take;
-            bits_needed -= take;
+            self.bits_in_buf = self.bits_in_buf.saturating_sub(take);
+            bits_needed = bits_needed.saturating_sub(take);
 
             match self.bit_order {
                 BitOrder::MostSignificantBitFirst => {
                     result = (result << take) | chunk_bits;
                 }
                 BitOrder::LeastSignificantBitFirst => {
-                    let shift = num_bits - bits_needed - take;
+                    let shift = num_bits.saturating_sub(bits_needed).saturating_sub(take);
                     result |= chunk_bits << shift;
                 }
             }
@@ -266,9 +326,9 @@ impl<S: ByteSource> BitReader<S> {
         if let Some(limit) = self.bit_limit {
             let cur = self.position().0;
             let bits = limit.saturating_sub(cur);
-            bits.saturating_add(7) / 8
+            bits.saturating_add(7).checked_div(8).unwrap_or(0)
         } else {
-            self.source.remaining_bytes() + usize::from(self.bits_in_buf > 0)
+            self.source.remaining_bytes().saturating_add(usize::from(self.bits_in_buf > 0))
         }
     }
 
@@ -283,10 +343,10 @@ impl<S: ByteSource> BitReader<S> {
     /// Rolls back the reader state to a checkpoint.
     pub fn rollback(&mut self, cp: Checkpoint) -> DFDLResult<()> {
         let bit_pos = cp.bit_position.0;
-        let byte_pos = bit_pos / 8;
-        let rem_bits = bit_pos % 8;
+        let byte_pos = bit_pos.checked_div(8).unwrap_or(0);
+        let rem_bits = bit_pos.checked_rem(8).unwrap_or(0);
 
-        self.source.set_position(BitOffset(byte_pos * 8))?;
+        self.source.set_position(BitOffset(byte_pos.saturating_mul(8)))?;
         self.align_to_byte();
         if rem_bits > 0 {
             let _ = self.read_bits(rem_bits)?;
@@ -305,7 +365,7 @@ impl<S: ByteSource> BitReader<S> {
             if num_bits <= 64 {
                 self.read_bits(num_bits).map(|v| v as u128)
             } else if num_bits <= 128 {
-                let high_count = num_bits - 64;
+                let high_count = num_bits.saturating_sub(64);
                 let high = self.read_bits(high_count)? as u128;
                 let low = self.read_bits(64)? as u128;
                 Ok((high << 64) | low)
@@ -389,7 +449,15 @@ impl<W: ByteSink> BitWriter<W> {
         BitOffset(self.sink.position().0.saturating_add(self.bits_in_buf))
     }
 
+    /// Returns whether the writer is currently byte-aligned (no buffered unwritten bits).
+    #[inline]
+    #[must_use]
+    pub fn is_byte_aligned(&self) -> bool {
+        self.bits_in_buf == 0
+    }
+
     /// Writes up to 64 bits to the stream.
+    #[inline]
     pub fn write_bits(&mut self, value: u64, num_bits: usize) -> DFDLResult<()> {
         if num_bits == 0 {
             return Ok(());
@@ -401,20 +469,59 @@ impl<W: ByteSink> BitWriter<W> {
             ));
         }
 
+        // Byte-aligned fast-path: bypass bit-by-bit shifting loop for whole primitive widths (8, 16, 32, 64)
+        if self.bits_in_buf == 0 {
+            if num_bits == 8 {
+                return self.sink.write_byte((value & 0xFF) as u8);
+            }
+            match self.bit_order {
+                BitOrder::MostSignificantBitFirst => match num_bits {
+                    16 => {
+                        self.sink.write_byte(((value >> 8) & 0xFF) as u8)?;
+                        return self.sink.write_byte((value & 0xFF) as u8);
+                    }
+                    32 => {
+                        let b = (value as u32).to_be_bytes();
+                        return self.sink.write_bytes(&b);
+                    }
+                    64 => {
+                        let b = value.to_be_bytes();
+                        return self.sink.write_bytes(&b);
+                    }
+                    _ => {}
+                },
+                BitOrder::LeastSignificantBitFirst => match num_bits {
+                    16 => {
+                        self.sink.write_byte((value & 0xFF) as u8)?;
+                        return self.sink.write_byte(((value >> 8) & 0xFF) as u8);
+                    }
+                    32 => {
+                        let b = (value as u32).to_le_bytes();
+                        return self.sink.write_bytes(&b);
+                    }
+                    64 => {
+                        let b = value.to_le_bytes();
+                        return self.sink.write_bytes(&b);
+                    }
+                    _ => {}
+                },
+            }
+        }
+
         let mut bits_remaining = num_bits;
 
         while bits_remaining > 0 {
-            let space_in_buf = 8 - self.bits_in_buf;
+            let space_in_buf = 8usize.saturating_sub(self.bits_in_buf);
             let count = bits_remaining.min(space_in_buf);
 
             let chunk: u8 = match self.bit_order {
                 BitOrder::MostSignificantBitFirst => {
-                    let shift = bits_remaining - count;
+                    let shift = bits_remaining.saturating_sub(count);
                     let mask = bit_mask_u64(count);
                     ((value >> shift) & mask) as u8
                 }
                 BitOrder::LeastSignificantBitFirst => {
-                    let shift = num_bits - bits_remaining;
+                    let shift = num_bits.saturating_sub(bits_remaining);
                     let mask = bit_mask_u64(count);
                     ((value >> shift) & mask) as u8
                 }
@@ -430,8 +537,8 @@ impl<W: ByteSink> BitWriter<W> {
                 }
             }
 
-            self.bits_in_buf += count;
-            bits_remaining -= count;
+            self.bits_in_buf = self.bits_in_buf.saturating_add(count);
+            bits_remaining = bits_remaining.saturating_sub(count);
 
             if self.bits_in_buf == 8 {
                 self.sink.write_byte(self.bit_buf)?;
@@ -443,10 +550,29 @@ impl<W: ByteSink> BitWriter<W> {
         Ok(())
     }
 
+    /// Writes a contiguous slice of bytes into the stream.
+    ///
+    /// When the writer is byte-aligned (`bits_in_buf == 0`), delegates directly to the underlying
+    /// [`ByteSink::write_bytes`] for maximum bulk throughput (e.g. `extend_from_slice` in `VecByteSink`).
+    /// When unaligned, writes each byte bit-by-bit preserving active bit ordering.
+    pub fn write_bytes(&mut self, buf: &[u8]) -> DFDLResult<()> {
+        if buf.is_empty() {
+            return Ok(());
+        }
+        if self.bits_in_buf == 0 {
+            self.sink.write_bytes(buf)
+        } else {
+            for &byte in buf {
+                self.write_bits(byte as u64, 8)?;
+            }
+            Ok(())
+        }
+    }
+
     /// Flushes partial byte buffer with pad bits to align to whole byte.
     pub fn flush_align(&mut self, pad_bit: u8) -> DFDLResult<()> {
         if self.bits_in_buf > 0 {
-            let pad_count = 8 - self.bits_in_buf;
+            let pad_count = 8usize.saturating_sub(self.bits_in_buf);
             let pad_val = if pad_bit == 0 {
                 0u64
             } else {
@@ -615,6 +741,28 @@ mod tests {
         // Write > 64 bits returns ImplementationLimit error
         let err_write_large = writer.write_bits(1, 65);
         assert!(matches!(err_write_large, Err(ref e) if e.kind == DFDLErrorKind::ImplementationLimit));
+
+        // Test write_bytes aligned
+        let mut aligned_writer = BitWriter::new(
+            VecByteSink::new(),
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        aligned_writer.write_bytes(b"hello world").unwrap();
+        assert_eq!(aligned_writer.into_sink().into_vec().as_slice(), b"hello world");
+
+        // Test write_bytes unaligned
+        let mut unaligned_writer = BitWriter::new(
+            VecByteSink::new(),
+            BitOrder::MostSignificantBitFirst,
+            ByteOrder::BigEndian,
+        );
+        unaligned_writer.write_bits(0b101, 3).unwrap();
+        unaligned_writer.write_bytes(&[0xAA, 0x55]).unwrap();
+        unaligned_writer.write_bits(0b11100, 5).unwrap();
+        // 3 bits (101) + 8 bits (10101010) + 8 bits (01010101) + 5 bits (11100) = 24 bits (3 bytes)
+        // 101_10101 010_01010 101_11100 = 0xB5, 0x4A, 0xBC
+        assert_eq!(unaligned_writer.into_sink().into_vec().as_slice(), &[0xB5, 0x4A, 0xBC]);
     }
 }
 

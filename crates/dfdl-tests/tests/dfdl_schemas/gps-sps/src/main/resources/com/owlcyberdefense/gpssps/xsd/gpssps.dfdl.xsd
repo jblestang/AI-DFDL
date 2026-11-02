@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+  xmlns:gpssps="urn:gpssps"
+  targetNamespace="urn:gpssps"
+  elementFormDefault="unqualified">
+
+  <xs:include schemaLocation="org/apache/daffodil/xsd/DFDLGeneralFormat.dfdl.xsd" />
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="gpssps:GeneralFormat" />
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:element name="Gpssps" type="gpssps:gpsspsType"/>
+
+  <xs:complexType name="gpsspsType">
+      <xs:group ref="gpssps:gpsspsGroup"/>
+  </xs:complexType>
+
+  <xs:group name="gpsspsGroup">
+    <xs:sequence>
+      <xs:element name="subframe1" type="gpssps:subframe1" minOccurs="0"/>
+      <!-- subframe 2 -->
+      <!-- subframe 3 -->
+      <!-- subframe 4 page 1 is type subframe4_page1_6_11_16_21 -->
+      <!-- subframe 4 page 2,3,4,5 is type subframe4_page2_3_4_5_7_8_9_10_subframe5_page1_to_24 -->
+      <!-- subframe 4 page 6 is type subframe4_page1_6_11_16_21 -->
+      <!-- subframe 4 page 7,8,9,10 is type subframe4_page2_3_4_5_7_8_9_10_subframe5_page1_to_24 -->
+      <!-- subframe 4 page 11 is type subframe4_page1_6_11_16_21 -->
+      <!-- subframe 4 page 12 is type subframe4_page12_19_20_22_23_24 -->
+      <!-- subframe 4 page 13,14,15 is type subframe4_page13_14_15_17 -->
+      <!-- subframe 4 page 16 is type subframe4_page1_6_11_16_21 -->
+      <!-- subframe 4 page 17 is type subframe4_page13_14_15_17 -->
+      <!-- subframe 4 page 18 is type subframe4_page18 -->
+      <!-- subframe 4 page 19,20 is type subframe4_page12_19_20_22_23_24 -->
+      <!-- subframe 4 page 21 is type subframe4_page1_6_11_16_21 -->
+      <!-- subframe 4 page 22,23,24 is type subframe4_page12_19_20_22_23_24 -->
+      <!-- subframe 4 page 25 is type subframe4_page25 -->
+      <!-- subframe 5 page 1 to 24 is type subframe4_page2_3_4_5_7_8_9_10_subframe5_page1_to_24 -->
+      <!-- subframe 5 page 25 is type subframe5_page25 -->
+      <!-- That's a total of 10 different kinds of subframes, consistent with pages 26 and 27 of the spec. -->
+    </xs:sequence>
+  </xs:group>
+
+  <xs:complexType name="subframe1">
+    <xs:sequence>
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="0"/>
+          <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:group ref="gpssps:subframe1Word1"/>
+      <xs:sequence>
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+            <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+          </xs:appinfo>
+        </xs:annotation>
+        <xs:group ref="gpssps:subframe1Word2"/>
+        <xs:sequence>
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+              <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:group ref="gpssps:subframe1Word3"/>
+          <xs:sequence>
+            <xs:annotation>
+              <xs:appinfo source="http://www.ogf.org/dfdl/">
+                <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+              </xs:appinfo>
+            </xs:annotation>
+            <xs:group ref="gpssps:subframe1Word4"/>
+            <xs:sequence>
+              <xs:annotation>
+                <xs:appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                  <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+                </xs:appinfo>
+              </xs:annotation>
+              <xs:group ref="gpssps:subframe1Word5"/>
+              <xs:sequence>
+                <xs:annotation>
+                  <xs:appinfo source="http://www.ogf.org/dfdl/">
+                    <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                    <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+                  </xs:appinfo>
+                </xs:annotation>
+                <xs:group ref="gpssps:subframe1Word6"/>
+                <xs:sequence>
+                  <xs:annotation>
+                    <xs:appinfo source="http://www.ogf.org/dfdl/">
+                      <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                      <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+                    </xs:appinfo>
+                  </xs:annotation>
+                  <xs:group ref="gpssps:subframe1Word7"/>
+                  <xs:sequence>
+                    <xs:annotation>
+                      <xs:appinfo source="http://www.ogf.org/dfdl/">
+                        <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                        <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+                      </xs:appinfo>
+                    </xs:annotation>
+                    <xs:group ref="gpssps:subframe1Word8"/>
+                    <xs:sequence>
+                      <xs:annotation>
+                        <xs:appinfo source="http://www.ogf.org/dfdl/">
+                          <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                          <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+                        </xs:appinfo>
+                      </xs:annotation>
+                      <xs:group ref="gpssps:subframe1Word9"/>
+                      <xs:sequence>
+                        <xs:annotation>
+                          <xs:appinfo source="http://www.ogf.org/dfdl/">
+                            <dfdl:newVariableInstance ref="gpssps:priorD25ToD30" defaultValue="$gpssps:nextD25ToD30"/>
+                            <dfdl:newVariableInstance ref="gpssps:nextD25ToD30"/>
+                          </xs:appinfo>
+                        </xs:annotation>
+                        <xs:group ref="gpssps:subframe1Word10"/>
+                      </xs:sequence>
+                    </xs:sequence>
+                  </xs:sequence>
+                </xs:sequence>
+              </xs:sequence>
+            </xs:sequence>
+          </xs:sequence>
+        </xs:sequence>
+      </xs:sequence>
+    </xs:sequence>
+  </xs:complexType>
+
+
+  <xs:group name="subframe1Word1">
+    <!--
+    The parity layer works the same for every word.
+    -->
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="TLM_preamble" type="gpssps:bits8"/>
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:assert test='{ TLM_preamble eq 0x8B }'/>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:element name="reservedForWord1" type="gpssps:bits16"/>
+      <xs:element name="parityForWord1" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word2">
+    <xs:sequence dfdl:ref="gpssps:parityLayerHOW">
+      <xs:element name="TOW_MSBS" type="gpssps:bits17"/>
+      <xs:element name="Synch_AntiSpoof_Flag" type="gpssps:bits1"/>
+      <xs:element name="Momentum_Alert_Flag" type="gpssps:bits1"/>
+      <xs:element name="SubFrameID" type="gpssps:bits3"
+          dfdl:outputValueCalc="{ 1 }"/>
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:assert test='{ SubFrameID eq 1 }'/>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:element name="parityHOW" type="gpssps:bits2"
+                  dfdl:outputValueCalc="{ $gpssps:parityHOW }"/>
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:assert test='{ parityHOW eq $gpssps:parityHOW }'/>
+        </xs:appinfo>
+      </xs:annotation>
+      <xs:element name="parityForWord2" type="gpssps:parityHOW" />
+      <xs:element name="zeroParityBitsForWord2" type="gpssps:bits2"
+                  dfdl:outputValueCalc="{ 0 }"/>
+      <xs:annotation>
+        <xs:appinfo source="http://www.ogf.org/dfdl/">
+          <dfdl:assert test='{ zeroParityBitsForWord2 eq 0 }'/>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word3">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="WeekNo" type="gpssps:bits10"/>
+      <xs:element name="reservedWord3" type="gpssps:bits2"/>
+      <xs:element name="URA_INDEX" type="gpssps:bits4"/>
+      <xs:element name="SV_HEALTH" type="gpssps:bits6"/>
+      <xs:sequence dfdl:hiddenGroupRef="gpssps:IODCForWord3"/>
+      <xs:element name="parityForWord3" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="IODCForWord3">
+    <xs:sequence>
+      <xs:element name="IODCForWord3" type="gpssps:bits2"
+        dfdl:outputValueCalc='{ dfdlx:shiftRight(../IODC, 8) }'/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word4">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="reservedWord4_1" type="gpssps:bits1"/>
+      <xs:element name="reservedWord4" type="gpssps:bits23"/>
+      <xs:element name="parityForWord4" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word5">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="reservedWord5" type="gpssps:bits24"/>
+      <xs:element name="parityForWord5" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word6">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="reservedWord6" type="gpssps:bits24"/>
+      <xs:element name="parityForWord6" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word7">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="reservedWord7" type="gpssps:bits16"/>
+      <xs:element name="T_GD" type="gpssps:bits8"/>
+      <xs:element name="parityForWord7" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word8">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:sequence dfdl:hiddenGroupRef="gpssps:IODCForWord8"/>
+      <xs:element name="IODC" type="gpssps:bits10"
+                  dfdl:inputValueCalc='{ (../IODCForWord3 * 256) + IODCForWord8 }'/>
+      <xs:element name="T_OC" type="gpssps:bits16"/>
+      <xs:element name="parityForWord8" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="IODCForWord8">
+    <xs:sequence>
+      <xs:element name="IODCForWord8" type="gpssps:bits8"
+        dfdl:outputValueCalc='{ dfdlx:bitsAND( ../IODCForWord8, xs:unsignedByte(0xFF) }'/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word9">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="a_f2" type="gpssps:bits8"/>
+      <xs:element name="a_f1" type="gpssps:bits16"/>
+      <xs:element name="parityForWord9" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="subframe1Word10">
+    <xs:sequence dfdl:ref="gpssps:parityLayer">
+      <xs:element name="a_f0" type="gpssps:bits22"/>
+      <xs:element name="reservedWord10" type="gpssps:bits2"/>
+      <xs:element name="parityForWord10" type="gpssps:parity6" />
+    </xs:sequence>
+  </xs:group>
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+
+      <dfdl:defineVariable name="priorD25To30" type="gpssps:bits6"/>
+      <dfdl:defineVariable name="nextD25To30" type="gpssps:bits6"/>
+      <!--
+      When parsing, the parityLayer consumes the priorD25ToD30
+      computes the parity from the current word bits d1 to d24
+      and stores it into the nextD25ToD30 variable.
+
+      An assertion can then check that the actual value of the parity
+      bits element matches this nextD25ToD30.
+
+      When unparsing, the parityLayer does the same thing.
+      An outputValueCalc stores the value of nextD25ToD30 into the
+      parity element.
+
+      The entrance to the scope for the next word containing parity
+      must define new variable instances for priorD25ToD30 (bound to the
+      previous value of nextD25ToD30), and for nextD25ToD30 which will be
+      set by the layer transform logic.
+
+      The parity calculation is given on page
+      -->
+      <dfdl:defineFormat name="parityLayer">
+        <dfdl:format layerTransform="gpssps:parityLayer" layerLengthKind="implicit"/>
+      </dfdl:defineFormat>
+      <!--
+      Variant parity calculation for the Word2 HOW word.
+      2 bits at positions 23, 24 are computed to contain parity such that bits 29 and 30
+      can always be zero.
+
+      Fills variable $gpssps:parityLayerHow with the value for these 2 bits. (0, 1, 2, or 3).
+      Fills variable $gpssps:nextD25ToD30 also, where we know D29 and D30 will be zero.
+      -->
+      <dfdl:defineFormat name="parityLayerHOW">
+        <dfdl:format layerTransform="gpssps:parityLayerHOW" layerLengthKind="implicit"/>
+      </dfdl:defineFormat>
+      <dfdl:defineVariable name="parityLayerHOW" type="gpssps:bits2"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:complexType name="parity6">
+    <xs:sequence>
+      <xs:element name="parity" type="gpssps:bits6"
+                  dfdl:outputValueCalc='{ $gpssps:nextD25ToD30 }'/>
+      <xs:sequence>
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:assert failureType="recoverableError"
+                         test="{ parity eq $gpssps:nextD25ToD30 }"
+                         message="Incorrect parity bits"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:sequence>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="parityHOW">
+    <xs:sequence>
+      <xs:element name="parity" type="gpssps:bits4"
+                  dfdl:outputValueCalc='{ $gpssps:nextD25ToD30 }'/>
+      <xs:sequence>
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:assert failureType="recoverableError"
+                         test="{ parity eq $gpssps:nextD25ToD30 }"
+                         message="Incorrect parity bits"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:sequence>
+    </xs:sequence>
+  </xs:complexType>
+
+
+  <xs:simpleType
+    name="bitsBase"
+    dfdl:representation="binary"
+    dfdl:lengthUnits="bits"
+    dfdl:lengthKind="explicit"
+    dfdl:alignment="1"
+    dfdl:alignmentUnits="bits">
+    <xs:restriction base="xs:unsignedInt"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits1" dfdl:length="1">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits2" dfdl:length="2">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits3" dfdl:length="3">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits4" dfdl:length="4">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits6" dfdl:length="6">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits8" dfdl:length="8">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits10" dfdl:length="10">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits16" dfdl:length="16">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits17" dfdl:length="17">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits22" dfdl:length="22">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits23" dfdl:length="23">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="bits24" dfdl:length="24">
+    <xs:restriction base="gpssps:bitsBase"/>
+  </xs:simpleType>
+
+</xs:schema>

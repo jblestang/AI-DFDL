@@ -1,7 +1,5 @@
 //! Delimiter tokenization and matching logic for the DFDL parser engine.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -33,7 +31,48 @@ pub(crate) enum DelimToken {
     CharRef(u32),
 }
 
+/// Returns the first delimiter alternative from a delimiter specification (§12.3).
+///
+/// Fast-paths strings without whitespace/alternatives, returning `s` directly without allocation.
+pub(crate) fn first_delimiter_alternative(s: &str) -> &str {
+    let s = s.trim_start();
+    if s.is_empty() {
+        return "";
+    }
+    if !s.bytes().any(|b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n') {
+        return s;
+    }
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let rest = s.get(i..).unwrap_or("");
+        if rest.starts_with('%') {
+            if let Some(semi) = rest.find(';') {
+                let end = i.saturating_add(semi).saturating_add(1);
+                i = end;
+                continue;
+            }
+        }
+        if rest.starts_with('\\') && i.saturating_add(1) < bytes.len() {
+            i = i.saturating_add(2);
+            continue;
+        }
+        let ch = rest.chars().next().unwrap_or(' ');
+        if ch.is_whitespace() {
+            return s.get(..i).unwrap_or(s);
+        }
+        i = i.saturating_add(ch.len_utf8());
+    }
+    s
+}
+
 pub(crate) fn split_delimiter_alternatives(s: &str) -> Vec<String> {
+    if s.is_empty() {
+        return Vec::new();
+    }
+    if !s.bytes().any(|b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n') {
+        return alloc::vec![String::from(s)];
+    }
     let mut alts = Vec::new();
     let mut current = String::new();
     let bytes = s.as_bytes();
@@ -42,15 +81,16 @@ pub(crate) fn split_delimiter_alternatives(s: &str) -> Vec<String> {
         let rest = &s[i..];
         if rest.starts_with('%') {
             if let Some(semi) = rest.find(';') {
-                let end = i + semi + 1;
+                let end = i.saturating_add(semi).saturating_add(1);
                 current.push_str(&s[i..end]);
                 i = end;
                 continue;
             }
         }
-        if rest.starts_with('\\') && i + 1 < bytes.len() {
-            current.push_str(&s[i..i + 2]);
-            i += 2;
+        if rest.starts_with('\\') && i.saturating_add(1) < bytes.len() {
+            let next_i = i.saturating_add(2);
+            current.push_str(&s[i..next_i]);
+            i = next_i;
             continue;
         }
         let ch = s[i..].chars().next().unwrap_or(' ');
@@ -62,7 +102,7 @@ pub(crate) fn split_delimiter_alternatives(s: &str) -> Vec<String> {
         } else {
             current.push(ch);
         }
-        i += ch_len;
+        i = i.saturating_add(ch_len);
     }
     if !current.is_empty() {
         alts.push(current);
@@ -83,91 +123,91 @@ pub(crate) fn parse_single_delim_tokens(s: &str) -> DFDLResult<Vec<DelimToken>> 
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::NL);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%CR;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::CR);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%LF;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::LF);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%NEL;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::NEL);
-            i += 5;
+            i = i.saturating_add(5);
         } else if rest.starts_with("%LS;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::LS);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%FF;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::FF);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%VT;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::VT);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%SP;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::SP);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%HT;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::HT);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%NUL;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::NUL);
-            i += 5;
+            i = i.saturating_add(5);
         } else if rest.starts_with("%ES;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::ES);
-            i += 4;
+            i = i.saturating_add(4);
         } else if rest.starts_with("%WSP*;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::WSPStar);
-            i += 6;
+            i = i.saturating_add(6);
         } else if rest.starts_with("%WSP+;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::WSPPlus);
-            i += 6;
+            i = i.saturating_add(6);
         } else if rest.starts_with("%WSP;") {
             if !current_lit.is_empty() {
                 tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
             }
             tokens.push(DelimToken::WSP);
-            i += 5;
+            i = i.saturating_add(5);
         } else if rest.starts_with("%%") {
             current_lit.push(b'%');
-            i += 2;
+            i = i.saturating_add(2);
         } else if rest.starts_with("%,") {
             current_lit.push(b',');
-            i += 2;
+            i = i.saturating_add(2);
         } else if rest.starts_with("%#") {
             if let Some(semi_pos) = rest.find(';') {
                 let entity = &rest[2..semi_pos];
@@ -188,7 +228,7 @@ pub(crate) fn parse_single_delim_tokens(s: &str) -> DFDLResult<Vec<DelimToken>> 
                         tokens.push(DelimToken::Literal(core::mem::take(&mut current_lit)));
                     }
                     tokens.push(DelimToken::CharRef(val));
-                    i += semi_pos + 1;
+                    i = i.saturating_add(semi_pos).saturating_add(1);
                     continue;
                 }
             }
@@ -205,7 +245,7 @@ pub(crate) fn parse_single_delim_tokens(s: &str) -> DFDLResult<Vec<DelimToken>> 
                 let decoded = crate::expr::properties::decode_dfdl_character_entities(ent_span);
                 if decoded != ent_span {
                     current_lit.extend_from_slice(decoded.as_bytes());
-                    i += semi_pos + 1;
+                    i = i.saturating_add(semi_pos).saturating_add(1);
                     continue;
                 }
             }
@@ -215,7 +255,7 @@ pub(crate) fn parse_single_delim_tokens(s: &str) -> DFDLResult<Vec<DelimToken>> 
             ));
         } else if let Some(&b) = bytes.get(i) {
             current_lit.push(b);
-            i += 1;
+            i = i.saturating_add(1);
         } else {
             break;
         }
@@ -280,6 +320,24 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         }
     }
 
+    /// Evaluates a pre-compiled [`DfdlProp<String>`] returning a zero-copy [`alloc::borrow::Cow<str>`].
+    ///
+    /// If the property is a constant string, it borrows directly from schema metadata without allocation.
+    pub(crate) fn evaluate_prop_cow<'p>(
+        &mut self,
+        prop: &'p crate::schema::ir::DfdlProp<String>,
+        builder: &InfosetBuilder,
+        elem_name: Option<&str>,
+        namespaces: Option<&[(alloc::string::String, alloc::string::String)]>,
+    ) -> DFDLResult<alloc::borrow::Cow<'p, str>> {
+        match prop {
+            crate::schema::ir::DfdlProp::Constant(s) => Ok(alloc::borrow::Cow::Borrowed(s.as_str())),
+            crate::schema::ir::DfdlProp::Expression { ast, .. } => {
+                self.evaluate_ast_at(ast, builder, elem_name, namespaces).map(alloc::borrow::Cow::Owned)
+            }
+        }
+    }
+
     /// Directly evaluates a pre-compiled [`ExprAst`] in the current parser execution context.
     pub(crate) fn evaluate_ast_at(
         &mut self,
@@ -288,20 +346,28 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         elem_name: Option<&str>,
         namespaces: Option<&[(alloc::string::String, alloc::string::String)]>,
     ) -> DFDLResult<String> {
-        let mut current_path = builder.current_path();
-        if let Some(name) = elem_name {
-            let clean_name = name.split(':').next_back().unwrap_or(name);
-            let last_seg = current_path.segments().last().map(|s| s.as_str());
-            if last_seg != Some(clean_name) {
-                let _ = current_path.try_push(clean_name);
+        let (active_doc, current_path);
+        let (doc_ref, path_ref) = if ast.needs_infoset_doc() {
+            let mut path = builder.current_path();
+            if let Some(name) = elem_name {
+                let clean_name = name.split(':').next_back().unwrap_or(name);
+                let last_seg = path.last_step().map(|s| s.local_name());
+                if last_seg != Some(clean_name) {
+                    let _ = path.try_push(clean_name);
+                }
             }
-        }
-        let active_doc = builder.active_doc();
+            active_doc = Some(builder.active_doc());
+            current_path = path;
+            (active_doc.as_ref(), &current_path)
+        } else {
+            current_path = crate::types::InfosetPath::root();
+            (None, &current_path)
+        };
         let mut ctx = crate::expr::ExprContext::with_variable_map(
-            Some(&active_doc),
-            &current_path,
+            doc_ref,
+            path_ref,
             &[],
-            Some(&self.variable_map),
+            Some(self.active_variable_map.as_ref().unwrap_or(&self.schema.variable_map)),
             self.budget,
         )
         .with_occurs_index(self.current_occurs_index)
@@ -327,6 +393,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         elem_name: Option<&str>,
         namespaces: Option<&[(alloc::string::String, alloc::string::String)]>,
     ) -> DFDLResult<String> {
+        if delim_str.is_empty() {
+            return Ok(alloc::string::String::new());
+        }
         let trimmed = delim_str.trim();
         if !trimmed.starts_with('{') || trimmed.starts_with("{{") {
             let val = if let Some(stripped) = trimmed.strip_prefix("{{") {
@@ -375,18 +444,21 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         continue;
                     }
-                    let encoded_bytes = if !self.delim_encoding.is_empty()
-                        && !self.delim_encoding.eq_ignore_ascii_case("UTF-8")
-                        && !self.delim_encoding.eq_ignore_ascii_case("US-ASCII")
-                        && !self.delim_encoding.eq_ignore_ascii_case("ASCII")
-                    {
-                        core::str::from_utf8(expected_bytes)
-                            .map(|s| crate::encoding::encode_text_string(s, &self.delim_encoding))
-                            .unwrap_or_else(|_| expected_bytes.clone())
+                    let dyn_bytes;
+                    let slice: &[u8] = if !matches!(
+                        self.delim_encoding,
+                        crate::encoding::EncodingKind::Utf8 | crate::encoding::EncodingKind::Ascii
+                    ) {
+                        if let Ok(s) = core::str::from_utf8(expected_bytes) {
+                            dyn_bytes = crate::encoding::encode_text_string(s, &self.delim_encoding);
+                            &dyn_bytes
+                        } else {
+                            expected_bytes.as_slice()
+                        }
                     } else {
-                        expected_bytes.clone()
+                        expected_bytes.as_slice()
                     };
-                    for &b in &encoded_bytes {
+                    for &b in slice {
                         let actual = self.reader.read_bits(8).map_err(|_| {
                             DFDLError::new_static(
                                 DFDLErrorKind::Parse,
@@ -407,11 +479,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     }
                 }
                 DelimToken::NL => {
-                    let is_standard_single_byte = self.delim_encoding.is_empty()
-                        || self.delim_encoding.eq_ignore_ascii_case("UTF-8")
-                        || self.delim_encoding.eq_ignore_ascii_case("US-ASCII")
-                        || self.delim_encoding.eq_ignore_ascii_case("ASCII")
-                        || self.delim_encoding.eq_ignore_ascii_case("ISO-8859-1");
+                    let is_standard_single_byte = matches!(
+                        self.delim_encoding,
+                        crate::encoding::EncodingKind::Utf8
+                            | crate::encoding::EncodingKind::Ascii
+                            | crate::encoding::EncodingKind::Iso8859_1
+                    );
 
                     if is_standard_single_byte {
                         let cp = self.reader.checkpoint();
@@ -793,10 +866,55 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         if delimiter.is_empty() {
             return Ok(());
         }
+        // Byte-aligned fast-path for literal delimiter without % entities or whitespace alternatives
+        if self.reader.is_byte_aligned()
+            && matches!(
+                self.delim_encoding,
+                crate::encoding::EncodingKind::Utf8 | crate::encoding::EncodingKind::Ascii
+            )
+            && !delimiter.bytes().any(|b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' || b == b'%' || b == b'\\')
+        {
+            if let Some(slice) = self.reader.peek_bytes(delimiter.len()) {
+                if slice.len() >= delimiter.len() {
+                    let cand = &slice[..delimiter.len()];
+                    let matched = if self.delim_ignore_case {
+                        cand.eq_ignore_ascii_case(delimiter.as_bytes())
+                    } else {
+                        cand == delimiter.as_bytes()
+                    };
+                    if matched {
+                        self.reader.skip_bits(delimiter.len().saturating_mul(8))?;
+                        return Ok(());
+                    }
+                }
+            }
+            let err_msg = alloc::format!("Delimiter mismatch in bitstream: delimiter='{}'", delimiter);
+            return Err(DFDLError::new(DFDLErrorKind::Parse, &err_msg));
+        }
+
         let alternatives = split_delimiter_alternatives(delimiter);
         if alternatives.is_empty() {
             return Ok(());
         }
+
+        // Single-alternative fast-path: match once directly without redundant token re-parsing
+        if alternatives.len() == 1 {
+            let alt = match alternatives.first() {
+                Some(a) => a,
+                None => return Ok(()),
+            };
+            let cp = self.reader.checkpoint();
+            let tokens = parse_single_delim_tokens(alt)?;
+            match self.match_single_delim_tokens_with_case(&tokens, self.delim_ignore_case) {
+                Ok(()) => return Ok(()),
+                Err(_) => {
+                    let _ = self.reader.rollback(cp);
+                    let err_msg = alloc::format!("Delimiter mismatch in bitstream: delimiter='{}'", delimiter);
+                    return Err(DFDLError::new(DFDLErrorKind::Parse, &err_msg));
+                }
+            }
+        }
+
         let start = self.reader.checkpoint();
         let mut best: Option<(usize, &String)> = None; // (consumed bits, alternative)
         for alt in &alternatives {
@@ -827,6 +945,25 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         if delimiter.is_empty() {
             return false;
         }
+        // Byte-aligned fast-path for literal delimiter without % entities or whitespace alternatives
+        if self.reader.is_byte_aligned()
+            && matches!(
+                self.delim_encoding,
+                crate::encoding::EncodingKind::Utf8 | crate::encoding::EncodingKind::Ascii
+            )
+            && !delimiter.bytes().any(|b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' || b == b'%' || b == b'\\')
+        {
+            if let Some(slice) = self.reader.peek_bytes(delimiter.len()) {
+                if slice.len() >= delimiter.len() {
+                    let cand = &slice[..delimiter.len()];
+                    if self.delim_ignore_case {
+                        return cand.eq_ignore_ascii_case(delimiter.as_bytes());
+                    } else {
+                        return cand == delimiter.as_bytes();
+                    }
+                }
+            }
+        }
         let cp = self.reader.checkpoint();
         let res = self.match_literal_delimiter(delimiter);
         let _ = self.reader.rollback(cp);
@@ -836,6 +973,28 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
     pub(crate) fn peek_delimiter_match_length(&mut self, delimiter: &str) -> Option<usize> {
         if delimiter.is_empty() {
             return None;
+        }
+        // Byte-aligned fast-path for literal delimiter without % entities or whitespace alternatives
+        if self.reader.is_byte_aligned()
+            && matches!(
+                self.delim_encoding,
+                crate::encoding::EncodingKind::Utf8 | crate::encoding::EncodingKind::Ascii
+            )
+            && !delimiter.bytes().any(|b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' || b == b'%' || b == b'\\')
+        {
+            if let Some(slice) = self.reader.peek_bytes(delimiter.len()) {
+                if slice.len() >= delimiter.len() {
+                    let cand = &slice[..delimiter.len()];
+                    let matched = if self.delim_ignore_case {
+                        cand.eq_ignore_ascii_case(delimiter.as_bytes())
+                    } else {
+                        cand == delimiter.as_bytes()
+                    };
+                    if matched {
+                        return Some(delimiter.len().saturating_mul(8));
+                    }
+                }
+            }
         }
         let alternatives = split_delimiter_alternatives(delimiter);
         if alternatives.is_empty() {
@@ -864,51 +1023,113 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
     }
 
     pub(crate) fn is_in_scope_terminator_longer(&mut self, sep_match_len: usize) -> bool {
-        let delims = self.in_scope_delimiters.clone();
+        if self.in_scope_delimiters.is_empty() && self.in_scope_terminators.is_empty() {
+            return false;
+        }
+        let delims = core::mem::take(&mut self.in_scope_delimiters);
+        let terms = core::mem::take(&mut self.in_scope_terminators);
+        let mut found = false;
+
         for delim in delims.iter().rev() {
             let saved_case = self.delim_ignore_case;
-            let saved_enc = core::mem::replace(&mut self.delim_encoding, delim.encoding.clone());
+            let need_swap = self.delim_encoding != delim.encoding;
+            let saved_enc = if need_swap {
+                Some(core::mem::replace(&mut self.delim_encoding, delim.encoding.clone()))
+            } else {
+                None
+            };
             self.delim_ignore_case = delim.ignore_case;
             let d_len = self.peek_delimiter_match_length(&delim.text);
             self.delim_ignore_case = saved_case;
-            self.delim_encoding = saved_enc;
+            if let Some(enc) = saved_enc {
+                self.delim_encoding = enc;
+            }
             if let Some(d_len) = d_len {
                 if d_len > sep_match_len {
-                    return true;
+                    found = true;
+                    break;
                 }
             }
         }
-        let terms = self.in_scope_terminators.clone();
-        for term in terms.iter().rev() {
-            let saved_case = self.delim_ignore_case;
-            let saved_enc = core::mem::replace(&mut self.delim_encoding, term.encoding.clone());
-            self.delim_ignore_case = term.ignore_case;
-            let t_len = self.peek_delimiter_match_length(&term.text);
-            self.delim_ignore_case = saved_case;
-            self.delim_encoding = saved_enc;
-            if let Some(t_len) = t_len {
-                if t_len > sep_match_len {
-                    return true;
+        if !found {
+            for term in terms.iter().rev() {
+                let saved_case = self.delim_ignore_case;
+                let need_swap = self.delim_encoding != term.encoding;
+                let saved_enc = if need_swap {
+                    Some(core::mem::replace(&mut self.delim_encoding, term.encoding.clone()))
+                } else {
+                    None
+                };
+                self.delim_ignore_case = term.ignore_case;
+                let t_len = self.peek_delimiter_match_length(&term.text);
+                self.delim_ignore_case = saved_case;
+                if let Some(enc) = saved_enc {
+                    self.delim_encoding = enc;
+                }
+                if let Some(t_len) = t_len {
+                    if t_len > sep_match_len {
+                        found = true;
+                        break;
+                    }
                 }
             }
         }
-        false
+        self.in_scope_delimiters = delims;
+        self.in_scope_terminators = terms;
+        found
     }
 
     pub(crate) fn peek_any_in_scope_delimiter(&mut self) -> bool {
-        let delims = self.in_scope_delimiters.clone();
+        if self.in_scope_delimiters.is_empty() && self.in_scope_terminators.is_empty() {
+            return false;
+        }
+        let delims = core::mem::take(&mut self.in_scope_delimiters);
+        let terms = core::mem::take(&mut self.in_scope_terminators);
+        let mut found = false;
+
         for delim in delims.iter().rev() {
-            if self.peek_in_scope_delimiter(delim) {
-                return true;
+            let saved_case = self.delim_ignore_case;
+            let need_swap = self.delim_encoding != delim.encoding;
+            let saved_enc = if need_swap {
+                Some(core::mem::replace(&mut self.delim_encoding, delim.encoding.clone()))
+            } else {
+                None
+            };
+            self.delim_ignore_case = delim.ignore_case;
+            let res = self.peek_literal_delimiter(&delim.text);
+            self.delim_ignore_case = saved_case;
+            if let Some(enc) = saved_enc {
+                self.delim_encoding = enc;
+            }
+            if res {
+                found = true;
+                break;
             }
         }
-        let terms = self.in_scope_terminators.clone();
-        for term in terms.iter().rev() {
-            if self.peek_in_scope_delimiter(term) {
-                return true;
+        if !found {
+            for term in terms.iter().rev() {
+                let saved_case = self.delim_ignore_case;
+                let need_swap = self.delim_encoding != term.encoding;
+                let saved_enc = if need_swap {
+                    Some(core::mem::replace(&mut self.delim_encoding, term.encoding.clone()))
+                } else {
+                    None
+                };
+                self.delim_ignore_case = term.ignore_case;
+                let res = self.peek_literal_delimiter(&term.text);
+                self.delim_ignore_case = saved_case;
+                if let Some(enc) = saved_enc {
+                    self.delim_encoding = enc;
+                }
+                if res {
+                    found = true;
+                    break;
+                }
             }
         }
-        false
+        self.in_scope_delimiters = delims;
+        self.in_scope_terminators = terms;
+        found
     }
 
     pub(crate) fn peek_only_separators_to_end(&mut self, delimiter: &str) -> bool {
@@ -935,6 +1156,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 /// (%SP;, %HT;, %LF;, %CR;, %NL;, %NEL;, %LS;, etc.) and character class entities
 /// (%WSP;, %WSP+;, %WSP*;).
 pub(crate) fn match_dfdl_string_literal(pattern: &str, s: &str, ignore_case: bool) -> bool {
+    // Fast-path: if pattern has no '%' or whitespace character class entities, direct string comparison
+    if !pattern.contains('%') {
+        return if ignore_case {
+            s.eq_ignore_ascii_case(pattern)
+        } else {
+            s == pattern
+        };
+    }
     let tokens = match parse_single_delim_tokens(pattern) {
         Ok(t) => t,
         Err(_) => {
@@ -954,6 +1183,14 @@ pub(crate) fn match_dfdl_string_literal(pattern: &str, s: &str, ignore_case: boo
 /// Per DFDL §14.2.1 and §13.7.1, properties such as `dfdl:textStandardZeroRep` and
 /// `dfdl:nilValue` are lists of string literals that can each contain character class entities.
 pub(crate) fn match_dfdl_string_literal_list(pattern_list: &str, s: &str, ignore_case: bool) -> bool {
+    // Fast-path: single literal without whitespace or '%' entities
+    if !pattern_list.bytes().any(|b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' || b == b'%') {
+        return if ignore_case {
+            s.eq_ignore_ascii_case(pattern_list)
+        } else {
+            s == pattern_list
+        };
+    }
     let alts = split_delimiter_alternatives(pattern_list);
     for alt in &alts {
         if match_dfdl_string_literal(alt, s, ignore_case) {

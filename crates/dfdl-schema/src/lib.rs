@@ -10,10 +10,12 @@ extern crate alloc;
 
 pub mod annotation;
 pub mod compiler;
+pub mod resolver;
 pub mod xsd_ast;
 
 pub use compiler::{InvalidRestrictionPolicy, SchemaCompiler};
-pub use xsd_ast::{XsdElement, XsdSchema, XsdSequence, XsdTerm, XsdType};
+pub use resolver::{CachingResolver, MapResolver, NullResolver, SchemaResolver};
+pub use xsd_ast::{TermId, XsdArena, XsdElement, XsdSchema, XsdSequence, XsdTerm, XsdType};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -128,7 +130,7 @@ mod tests {
 </xs:schema>"#;
 
         let schema = compiler
-            .compile_str_with_resolver(main_xml, |location| {
+            .compile_str_with_resolver(main_xml, |location: &str| {
                 if location == "common.xsd" {
                     Some(alloc::string::String::from(common_xml))
                 } else {
@@ -163,7 +165,7 @@ mod tests {
 
         // Verify compilation terminates without infinite stack recursion
         let schema = compiler
-            .compile_str_with_resolver(main_xml, |location| match location {
+            .compile_str_with_resolver(main_xml, |location: &str| match location {
                 "b.xsd" => Some(alloc::string::String::from(b_xml)),
                 "main.xsd" => Some(alloc::string::String::from(main_xml)),
                 _ => None,
@@ -270,7 +272,7 @@ mod tests {
 </xs:schema>"#;
 
         let schema = compiler
-            .compile_str_with_resolver(main_xml, |location| {
+            .compile_str_with_resolver(main_xml, |location: &str| {
                 if location == "sub.xsd" {
                     Some(alloc::string::String::from(sub_xml))
                 } else {

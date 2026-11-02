@@ -315,7 +315,7 @@ impl SchemaCompiler {
                     if local == "element" || local == "sequence" || local == "choice" || local == "format" || local == "simpleType" {
                         enclosing_annotation = Some(String::from(local));
                         for a in &attributes {
-                            if a.name.prefix.as_deref() == Some("dfdl") {
+                            if a.name.prefix == Some("dfdl") {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: Attribute 'dfdl:{}' is not allowed on annotation element '<dfdl:{}>'",
                                     a.name.local_name, local
@@ -331,9 +331,9 @@ impl SchemaCompiler {
                                     | Some("xs:simpleType")
                             );
                             if is_component_with_short_form {
-                                let attr_local = a.name.local_name.as_str();
+                                let attr_local = a.name.local_name;
                                 if attr_local != "ref"
-                                    && a.name.prefix.as_deref() != Some("xmlns")
+                                    && a.name.prefix != Some("xmlns")
                                     && attr_local != "xmlns"
                                     && store.get_property(attr_local).is_some()
                                 {
@@ -349,7 +349,7 @@ impl SchemaCompiler {
                     let is_element_or_group = local == "element" || local == "sequence" || local == "choice" || local == "group";
                     if is_element_or_group {
                         let has_long_ref = attributes.iter().any(|a| {
-                            (a.name.prefix.as_deref() == Some("dfdl") || a.name.prefix.as_deref().unwrap_or("").is_empty())
+                            (a.name.prefix == Some("dfdl") || a.name.prefix.unwrap_or("").is_empty())
                                 && a.name.local_name == "ref"
                         });
                         if has_long_ref && store.get_property("ref").is_some() {
@@ -411,8 +411,8 @@ impl SchemaCompiler {
                             ));
                         }
                         for a in &attributes {
-                            let p = a.name.prefix.as_deref().unwrap_or("");
-                            let l = a.name.local_name.as_str();
+                            let p = a.name.prefix.unwrap_or("");
+                            let l = a.name.local_name;
                             if p == "xmlns" || l == "xmlns" {
                                 continue;
                             }
@@ -490,8 +490,8 @@ impl SchemaCompiler {
                     } else if local == "discriminator" {
                         store.discriminator_count = store.discriminator_count.saturating_add(1);
                         for a in &attributes {
-                            let p = a.name.prefix.as_deref().unwrap_or("");
-                            let l = a.name.local_name.as_str();
+                            let p = a.name.prefix.unwrap_or("");
+                            let l = a.name.local_name;
                             if p == "xmlns" || l == "xmlns" {
                                 continue;
                             }
@@ -703,15 +703,15 @@ impl SchemaCompiler {
                     } else if local == "defineFormat" {
                         let mut disallowed = alloc::vec::Vec::new();
                         for a in &attributes {
-                            if a.name.prefix.as_deref() == Some("dfdl") {
+                            if a.name.prefix == Some("dfdl") {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: Attribute 'dfdl:{}' is not allowed on DFDL annotation element '<dfdl:defineFormat>'",
                                     a.name.local_name
                                 );
                                 return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                             }
-                            let pfx = a.name.prefix.as_deref().unwrap_or("");
-                            let loc = a.name.local_name.as_str();
+                            let pfx = a.name.prefix.unwrap_or("");
+                            let loc = a.name.local_name;
                             if pfx != "xmlns" && loc != "xmlns" && loc != "name" && loc != "ref" {
                                 disallowed.push(loc);
                             }

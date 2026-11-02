@@ -1,0 +1,13 @@
+.cache
+bin
+lib_managed
+target
+project/target/
+project/metals.sbt
+.cache-tests
+.cache-main
+*.iml
+/.idea/
+.bloop/
+.metals/
+.vscode/

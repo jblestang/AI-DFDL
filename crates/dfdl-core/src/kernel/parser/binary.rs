@@ -1,7 +1,5 @@
 //! Binary decoding and parsing logic for the DFDL parser engine.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -103,12 +101,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let is_neg = val_str.starts_with('-');
         let digits = val_str.strip_prefix('-').unwrap_or(val_str);
         if scale < 0 {
-            let mut out = String::with_capacity(val_str.len().saturating_add((-scale) as usize));
+            let neg_scale = scale.unsigned_abs() as usize;
+            let mut out = String::with_capacity(val_str.len().saturating_add(neg_scale));
             if is_neg {
                 out.push('-');
             }
             out.push_str(digits);
-            for _ in 0..(-scale) {
+            for _ in 0..neg_scale {
                 out.push('0');
             }
             return out;
@@ -116,13 +115,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let scale_usize = scale as usize;
         let formatted = if digits.len() <= scale_usize {
             let mut out = String::from("0.");
-            for _ in 0..(scale_usize - digits.len()) {
+            for _ in 0..(scale_usize.saturating_sub(digits.len())) {
                 out.push('0');
             }
             out.push_str(digits);
             out
         } else {
-            let split_pos = digits.len() - scale_usize;
+            let split_pos = digits.len().saturating_sub(scale_usize);
             alloc::format!("{}.{}", &digits[..split_pos], &digits[split_pos..])
         };
         if is_neg {
@@ -503,7 +502,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     if rep >= 0 {
                         ordered == (rep as u64)
                     } else {
-                        let mask = if bits >= 64 { u64::MAX } else { (1u64 << bits) - 1 };
+                        let mask = if bits >= 64 {
+                            u64::MAX
+                        } else {
+                            (1u64.checked_shl(bits as u32).unwrap_or(0)).saturating_sub(1)
+                        };
                         ordered == ((rep as i128) as u64 & mask)
                     }
                 };
@@ -559,10 +562,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         while bits_left > 0 {
                             let chunk = bits_left.min(8);
                             let val = self.read_binary_bits(chunk)? as u8;
+                            let shift = 8usize.saturating_sub(chunk);
                             let byte_val = if chunk < 8
                                 && props.bit_order == BitOrder::MostSignificantBitFirst
                             {
-                                val << (8 - chunk)
+                                val.checked_shl(shift as u32).unwrap_or(0)
                             } else {
                                 val
                             };
@@ -597,7 +601,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 Ok(DfdlValue::HexBinary(bytes))
             }
             DfdlSimpleType::String => {
-                if let Some(char_bits) = crate::encoding::encoding_char_bits(&props.encoding) {
+                if let Some(char_bits) = props.encoding_char_bits.or_else(|| props.encoding.char_bits()) {
                     let mut s = String::new();
                     if let Some(l) = dynamic_len {
                         let num_chars = match props.length_units {
@@ -625,7 +629,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 } else {
                     let mut bytes = Vec::new();
                     if props.length_units == crate::schema::ir::LengthUnits::Characters
-                        && props.encoding.to_ascii_uppercase().contains("UTF-8")
+                        && props.encoding == crate::encoding::EncodingKind::Utf8
                     {
                         for _ in 0..explicit_len {
                             let lead = self.read_binary_bits(8)? as u8;
@@ -647,10 +651,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         while bits_left > 0 {
                             let chunk = bits_left.min(8);
                             let val = self.read_binary_bits(chunk)? as u8;
+                            let shift = 8usize.saturating_sub(chunk);
                             let byte_val = if chunk < 8
                                 && props.bit_order == BitOrder::MostSignificantBitFirst
                             {
-                                val << (8 - chunk)
+                                val.checked_shl(shift as u32).unwrap_or(0)
                             } else {
                                 val
                             };
@@ -697,8 +702,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     );
                     Ok(DfdlValue::Decimal(formatted))
                 } else {
-                    let total_bytes = (bits.saturating_add(7)) / 8;
-                    let leading_bits = if bits % 8 == 0 { 8 } else { bits % 8 };
+                    let total_bytes = (bits.saturating_add(7)).checked_div(8).unwrap_or(0);
+                    let rem8 = bits.checked_rem(8).unwrap_or(0);
+                    let leading_bits = if rem8 == 0 { 8 } else { rem8 };
                     let mut raw_bytes = Vec::with_capacity(total_bytes);
                     if leading_bits < 8 {
                         let b = self.read_binary_bits(leading_bits)? as u8;
@@ -709,7 +715,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     } else {
                         bits
                     };
-                    let full_bytes = remaining_bits / 8;
+                    let full_bytes = remaining_bits.checked_div(8).unwrap_or(0);
                     for _ in 0..full_bytes {
                         let b = self.read_binary_bits(8)? as u8;
                         try_push(&mut raw_bytes, b)?;
@@ -733,7 +739,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     if is_neg {
                         for (i, b) in raw_bytes.iter_mut().enumerate() {
                             if i == 0 && leading_bits < 8 {
-                                let mask = (1u8 << leading_bits) - 1;
+                                let mask = (1u8.checked_shl(leading_bits as u32).unwrap_or(0)).saturating_sub(1);
                                 *b = (!*b) & mask;
                             } else {
                                 *b = !*b;
@@ -741,7 +747,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         let mut carry = 1u16;
                         for b in raw_bytes.iter_mut().rev() {
-                            let sum = (*b as u16) + carry;
+                            let sum = (*b as u16).saturating_add(carry);
                             *b = sum as u8;
                             carry = sum >> 8;
                         }
@@ -797,7 +803,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         for (i, &b) in bytes.iter().enumerate() {
                             let high = (b >> 4) & 0x0F;
                             let low = b & 0x0F;
-                            if i + 1 == bytes.len() {
+                            if i.saturating_add(1) == bytes.len() {
                                 if low == 0x0D || low == 0x0B {
                                     let type_name = match simple_type {
                                         DfdlSimpleType::DateTime => "xs:dateTime",
@@ -811,14 +817,14 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                                 }
                                 if high <= 9 {
-                                    digits.push((b'0' + high) as char);
+                                    digits.push((b'0'.saturating_add(high)) as char);
                                 }
                             } else {
                                 if high <= 9 {
-                                    digits.push((b'0' + high) as char);
+                                    digits.push((b'0'.saturating_add(high)) as char);
                                 }
                                 if low <= 9 {
-                                    digits.push((b'0' + low) as char);
+                                    digits.push((b'0'.saturating_add(low)) as char);
                                 }
                             }
                         }

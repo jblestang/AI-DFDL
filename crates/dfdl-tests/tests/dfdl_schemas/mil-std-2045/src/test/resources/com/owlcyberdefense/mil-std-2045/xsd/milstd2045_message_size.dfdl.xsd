@@ -1,0 +1,80 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+Copyright (c) 2014-2022 Owl Cyber Defense. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimers.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimers in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the names of Owl Cyber Defense, nor the names of its contributors
+    may be used to endorse or promote products derived from this Software
+  without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+-->
+<schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns="http://www.w3.org/2001/XMLSchema"
+  xmlns:ms2045="urn:milstd2045DFDL"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:msms="urn:milstd2045DFDLMessageSize"
+  targetNamespace="urn:milstd2045DFDLMessageSize">
+
+  <import namespace="urn:milstd2045DFDL"
+          schemaLocation="/com/owlcyberdefense/mil-std-2045/xsd/milstd2045_application_header.dfdl.xsd"/>
+
+  <annotation>
+    <appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="ms2045:msCommon"/>
+    </appinfo>
+  </annotation>
+
+
+  <complexType name="message_size_type">
+    <sequence>
+      <!--
+        This is a stub message size value element to
+        enable isolated testing of this schema.
+      -->
+      <element name="value" type="ms2045:tIntField" dfdl:length="20"/>
+      <!--
+        Real uses of this MIL-STD-2045 will want a definition something like
+        below which computes the `message_size_type` value field based on
+        the value length of the payload.
+
+        This assumes the payload is a sibling of the header field.
+        The header field is 6 levels up from where the message_size
+        field appears within it. If your payload field is not named
+        this way, and is not adjacent as a sibling field to the header
+        then this relative path would need to be adjusted.
+
+        Daffodil's schema compiler will ensure the path is correct or you
+        will get a schema definition error at DFDL schema compilation time.
+      -->
+      <!--
+      <element name="value" type="ms2045:tIntField" dfdl:length="20"
+               dfdl:outputValueCalc="{
+                 dfdl:valueLength(../../../../../../payload, 'bytes')
+               }"
+      />
+      -->
+    </sequence>
+  </complexType>
+
+</schema>

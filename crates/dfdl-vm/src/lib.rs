@@ -473,7 +473,7 @@ mod tests {
         let sym = SymbolId(0);
         sink.on_event(VmEvent::StartElement(sym)).unwrap();
         sink.on_event(VmEvent::ScalarInt { id: sym, val: 42, is_signed: false }).unwrap();
-        sink.on_event(VmEvent::ScalarFloat { id: sym, val: core::f64::consts::PI }).unwrap();
+        sink.on_event(VmEvent::ScalarFloat { id: sym, val: core::f64::consts::PI, is_f64: true }).unwrap();
         sink.on_event(VmEvent::ScalarBool { id: sym, val: true }).unwrap();
         sink.on_event(VmEvent::ScalarString { id: sym, val: "val" }).unwrap();
         sink.on_event(VmEvent::EndElement(sym)).unwrap();
@@ -510,7 +510,7 @@ mod tests {
 
         // Successful build with float, bool, string, int
         dom.on_event(VmEvent::StartElement(sym_root)).unwrap();
-        dom.on_event(VmEvent::ScalarFloat { id: sym_child, val: 1.5 }).unwrap();
+        dom.on_event(VmEvent::ScalarFloat { id: sym_child, val: 1.5, is_f64: true }).unwrap();
         dom.on_event(VmEvent::ScalarBool { id: sym_child, val: false }).unwrap();
         dom.on_event(VmEvent::ScalarString { id: sym_child, val: "text" }).unwrap();
         dom.on_event(VmEvent::ScalarInt { id: sym_child, val: -10, is_signed: true }).unwrap();
@@ -533,7 +533,7 @@ mod tests {
         // Unresolved scalar errors
         let mut dom3 = DomBuilderSink::new(&syms);
         assert!(dom3.on_event(VmEvent::ScalarInt { id: SymbolId(999), val: 1, is_signed: false }).is_err());
-        assert!(dom3.on_event(VmEvent::ScalarFloat { id: SymbolId(999), val: 1.0 }).is_err());
+        assert!(dom3.on_event(VmEvent::ScalarFloat { id: SymbolId(999), val: 1.0, is_f64: true }).is_err());
         assert!(dom3.on_event(VmEvent::ScalarBool { id: SymbolId(999), val: true }).is_err());
         assert!(dom3.on_event(VmEvent::ScalarString { id: SymbolId(999), val: "a" }).is_err());
     }
@@ -799,6 +799,126 @@ mod tests {
         let schema3 = b3.build().unwrap();
         let prog3 = BytecodeCompiler::compile(&schema3).unwrap();
         assert!(!prog3.instructions.is_empty());
+    }
+
+    #[test]
+    fn test_compiler_ast_sibling_bit_expressions() {
+        let mut b = SchemaBuilder::new();
+
+        // 1. Sibling fspec1 (unsignedByte)
+        let mut p_f1 = ResolvedProperties::default();
+        p_f1.representation = Representation::Binary;
+        let elem_f1 = CompiledElement {
+            name: QName::local("fspec1"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::UnsignedByte),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let id_f1 = b.add_term_with_props(QName::local("fspec1"), TermKind::Element(elem_f1), p_f1).unwrap();
+
+        // 2. Field conditioned on bit 7 via `{ (../fspec1 idiv 128) mod 2 }`
+        let mut p_b7 = ResolvedProperties::default();
+        p_b7.representation = Representation::Binary;
+        p_b7.occurs_count_kind = OccursCountKind::Expression;
+        p_b7.occurs_count_expr = Some(alloc::string::String::from("{ (../fspec1 idiv 128) mod 2 }"));
+        let elem_b7 = CompiledElement {
+            name: QName::local("field_bit7"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Byte),
+            min_occurs: 0,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let id_b7 = b.add_term_with_props(QName::local("field_bit7"), TermKind::Element(elem_b7), p_b7).unwrap();
+
+        // 3. Field conditioned on bit 0 via `{ ../fspec1 mod 2 }`
+        let mut p_b0 = ResolvedProperties::default();
+        p_b0.representation = Representation::Binary;
+        p_b0.occurs_count_kind = OccursCountKind::Expression;
+        p_b0.occurs_count_expr = Some(alloc::string::String::from("{ ../fspec1 mod 2 }"));
+        let elem_b0 = CompiledElement {
+            name: QName::local("fspec2"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::UnsignedByte),
+            min_occurs: 0,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let id_b0 = b.add_term_with_props(QName::local("fspec2"), TermKind::Element(elem_b0), p_b0).unwrap();
+
+        // 4. Field conditioned on bit 5 with conditional: `{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 32) mod 2) else 0 }`
+        let mut p_b5 = ResolvedProperties::default();
+        p_b5.representation = Representation::Binary;
+        p_b5.occurs_count_kind = OccursCountKind::Expression;
+        p_b5.occurs_count_expr = Some(alloc::string::String::from("{ if (fn:exists(../fspec2)) then ((../fspec2 idiv 32) mod 2) else 0 }"));
+        let elem_b5 = CompiledElement {
+            name: QName::local("field_bit5"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Byte),
+            min_occurs: 0,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let id_b5 = b.add_term_with_props(QName::local("field_bit5"), TermKind::Element(elem_b5), p_b5).unwrap();
+
+        // 5. 16-bit word bit 15: `{ (../word16 idiv 32768) mod 2 }`
+        let mut p_w16 = ResolvedProperties::default();
+        p_w16.representation = Representation::Binary;
+        let elem_w16 = CompiledElement {
+            name: QName::local("word16"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::UnsignedShort),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let id_w16 = b.add_term_with_props(QName::local("word16"), TermKind::Element(elem_w16), p_w16).unwrap();
+
+        let mut p_b15 = ResolvedProperties::default();
+        p_b15.representation = Representation::Binary;
+        p_b15.occurs_count_kind = OccursCountKind::Expression;
+        p_b15.occurs_count_expr = Some(alloc::string::String::from("{ (../word16 idiv 32768) mod 2 }"));
+        let elem_b15 = CompiledElement {
+            name: QName::local("field_bit15"),
+            type_ir: CompiledType::Simple(DfdlSimpleType::Byte),
+            min_occurs: 0,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let id_b15 = b.add_term_with_props(QName::local("field_bit15"), TermKind::Element(elem_b15), p_b15).unwrap();
+
+        let seq = CompiledSequence {
+            members: alloc::vec![id_f1, id_b7, id_b0, id_b5, id_w16, id_b15],
+        };
+        let seq_id = b.add_term(QName::local("Seq"), TermKind::Sequence(seq)).unwrap();
+
+        let root = CompiledElement {
+            name: QName::local("Root"),
+            type_ir: CompiledType::Complex(seq_id),
+            min_occurs: 1,
+            max_occurs: Some(1),
+            default_value: None,
+            is_nillable: false,
+        };
+        let r_id = b.add_term_with_props(QName::local("Root"), TermKind::Element(root), ResolvedProperties::default()).unwrap();
+        b.set_root(r_id);
+
+        let schema = b.build().unwrap();
+        let prog = BytecodeCompiler::compile(&schema).unwrap();
+
+        // Verify emitted instructions include TestBit with exact bits (7, 0, 5, 15)
+        let test_bits: alloc::vec::Vec<u8> = prog.instructions.iter().filter_map(|instr| {
+            if let Instruction::TestBit { bit, .. } = instr {
+                Some(*bit)
+            } else {
+                None
+            }
+        }).collect();
+
+        assert_eq!(test_bits, alloc::vec![7, 0, 5, 15]);
     }
 
     #[test]
@@ -1121,7 +1241,7 @@ mod tests {
         let mut d1 = DomBuilderSink::new(&syms);
         d1.on_event(VmEvent::StartElement(s_flt)).unwrap();
         assert_eq!(d1.checkpoint(), 1);
-        d1.on_event(VmEvent::ScalarFloat { id: s_flt, val: core::f64::consts::E }).unwrap();
+        d1.on_event(VmEvent::ScalarFloat { id: s_flt, val: core::f64::consts::E, is_f64: true }).unwrap();
         d1.on_event(VmEvent::EndElement(s_flt)).unwrap();
         let doc1 = d1.into_document().unwrap();
         assert_eq!(doc1.root.unwrap().state, ElementState::Value(DfdlValue::Double(core::f64::consts::E)));

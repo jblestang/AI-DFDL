@@ -340,6 +340,13 @@ pub enum Instruction {
         /// Expected total length in bytes.
         total_bytes: u32,
     },
+    /// Advances the bitstream to ensure a total number of bytes (given by `length_reg`) have been consumed since `start_reg`.
+    PadToRegLength {
+        /// Register containing the starting bit position.
+        start_reg: Register,
+        /// Register containing the expected total length in bytes.
+        length_reg: Register,
+    },
     /// Fused: Reads a 16-bit Big-Endian integer and directly emits a scalar int event.
     ReadEmitBeU16 {
         /// Associated symbol identifier.

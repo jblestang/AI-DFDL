@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+Copyright (c) 2012-2021 Owl Cyber Defense. All rights reserved.
+
+Developed by: Owl Cyber Defense
+              http://www.owlcyberdefense.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimers.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimers in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the names of Owl Cyber Defense, nor the names of its contributors
+    may be used to endorse or promote products derived from this Software
+    without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+-->
+
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+        xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+        xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+        xmlns:fn="http://www.w3.org/2005/xpath-functions"
+        xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+        xmlns:ipv4cs="urn:owlcyberdefense.com:schema:dfdl:IPv4Checksum:ipv4cs"
+        xmlns:eth="urn:owlcyberdefense.com:schema:dfdl:ethernet:eth"
+        targetNamespace="urn:owlcyberdefense.com:schema:dfdl:ethernet:eth">
+
+  <include schemaLocation="basicByteBinary.dfdl.xsd"/>
+  <include schemaLocation="ipAddress.dfdl.xsd"/>
+  <import namespace="urn:owlcyberdefense.com:schema:dfdl:IPv4Checksum:ipv4cs"
+             schemaLocation="IPv4ChecksumLayer.dfdl.xsd"/>
+  <annotation>
+    <appinfo source="http://www.ogf.org/dfdl/">
+
+      <dfdl:format ref="eth:basicByteBinary"/>
+
+    </appinfo>
+  </annotation>
+
+  <complexType name="Ethernet">
+    <sequence>
+      <element name="MACDest" type="eth:hexByte" dfdl:length="6"/>
+      <element name="MACSrc" type="eth:hexByte" dfdl:length="6"/>
+      <element name="Ethertype" type="eth:bit" dfdl:length="16"
+                  dfdl:outputValueCalc="{
+          if (fn:exists(../NetworkLayer/IPv4)) then 2048
+          else if (fn:exists(../NetworkLayer/IPv6 )) then 34525
+          else fn:error('ethernet', 'fn:error called.', .) }"/>
+      <element name="NetworkLayer" type="eth:NetworkLayer"/>
+    </sequence>
+  </complexType>
+
+  <!-- NETWORK LAYER -->
+
+  <complexType name="NetworkLayer">
+    <choice dfdl:choiceDispatchKey="{ xs:string(../Ethertype) }">
+      <element dfdl:choiceBranchKey="2048" name="IPv4" type="eth:IPv4"/>
+      <element dfdl:choiceBranchKey="34525" name="IPv6" type="eth:IPv6"/>
+    </choice>
+  </complexType>
+
+  <complexType name="IPv4">
+    <sequence>
+      <element name="IPv4Header">
+        <complexType>
+          <!--
+          Modified with proposed checksum computation via layer transform
+          -->
+          <sequence>
+            <annotation>
+              <appinfo source="http://www.ogf.org/dfdl/">
+                <!--
+                The checksum field in an IPv4 actually lives in the middle of the
+                data that it is a checksum of.
+
+                That is, some of the 16-bit words going into the checksum are before
+                the checksum itself, others are after.
+
+                At parse time we must check that this computed checksum value, and the
+                actual value of the element in the infoset are equal.
+
+                We have an option to place the computed checksum in another element
+                and then have a schematron validation rule or just a DFDL assert (recoverable)
+                check that the checksum element and computed checksum are equal.
+
+                Below, that element is called "ComputedChecksum".
+
+                When unparsing, the infoset contains a checksum, which remains in the infoset, but
+                it is overwritten (in the layer transform) by the recomputed checksum available for comparison purposes in
+                the ComputedChecksum variable.
+                -->
+                <dfdl:newVariableInstance ref="ipv4cs:IPv4Checksum"/>
+              </appinfo>
+            </annotation>
+
+            <sequence dfdl:ref="ipv4cs:IPv4ChecksumLayer">
+              <sequence>
+                <element name="Version" type="eth:bit" dfdl:length="4"/>
+                <element name="IHL" type="eth:bit" dfdl:length="4"/>
+                <element name="DSCP" type="eth:bit" dfdl:length="6"/>
+                <element name="ECN" type="eth:bit" dfdl:length="2"/>
+                <element name="Length" type="eth:bit" dfdl:length="16"
+                            dfdl:outputValueCalc="{
+                if (fn:exists(../../TransportLayer))
+                then
+                  (if (fn:exists(../../TransportLayer/UDP))
+                    then dfdl:valueLength(../../TransportLayer/UDP/Data, 'bytes') + 20 + 8
+                    else dfdl:valueLength(../../TransportLayer/TCP/Data, 'bytes') +
+                         dfdl:valueLength(../../TransportLayer/TCP/TCPHeader/Options, 'bytes') + 20 + 20
+                  )
+                else if (fn:exists(../../ICMPv4/EchoRequest))
+                     then dfdl:valueLength(../../ICMPv4/EchoRequest/Payload, 'bytes') + 20 + 8
+                     else dfdl:valueLength(../../ICMPv4/EchoReply/Payload, 'bytes') + 20 + 8
+                } "/>
+                <element name="Identification" type="eth:bit" dfdl:length="16"/>
+                <element name="Flags" type="eth:bit" dfdl:length="3"/>
+                <element name="FragmentOffset" type="eth:bit" dfdl:length="13"/>
+                <element name="TTL" type="eth:bit" dfdl:length="8"/>
+                <element name="Protocol" type="eth:bit" dfdl:length="8"
+                            dfdl:outputValueCalc="{
+                if (fn:exists(../../ICMPv4)) then 1
+                else if (fn:exists(../../TransportLayer/TCP)) then 6
+                else if (fn:exists(../../TransportLayer/UDP)) then 17
+                else -1 }"/>
+                <element name="Checksum" type="ipv4cs:IPv4Checksum"/>
+                <element name="IPSrc" type="eth:IPAddress"/>
+                <element name="IPDest" type="eth:IPAddress"/>
+              </sequence>
+            </sequence>
+
+            <!--
+            We want the schema author to have all options on what to do if the
+            checksum is incorrect when parsing. Hence, we just put the computed value
+            into this element.
+            -->
+            <element name="ComputedChecksum" type="ipv4cs:IPv4Checksum"
+                        dfdl:inputValueCalc='{ $ipv4cs:IPv4Checksum }'/>
+            <!--
+            One recommendation is to treat incorrect checksum values as a validation
+            error. This preserves the ability to use the schema forensically to examine
+            data with incorrect checksums.
+
+            This uses a DFDL recoverable error assertion to report that the
+            checksum is incorrect. A recoverable error assert is not technically
+            a validation error, but behaves similarly in that it does not prevent the
+            parse from completing. It is essentially a warning about the data.
+
+            A schematron check would accomplish much the same thing, with the
+            advantage that the error would be reported as an "official" validation error.
+            -->
+            <sequence>
+              <annotation>
+                <appinfo source="http://www.ogf.org/dfdl/">
+                  <dfdl:assert
+                    failureType="recoverableError"
+                    message="Incorrect checksum."
+                    test='{ Checksum eq ComputedChecksum }'
+                  />
+                </appinfo>
+              </annotation>
+            </sequence>
+          </sequence>
+        </complexType>
+      </element>
+      <element name="Protocol" type="xs:unsignedInt"
+                  dfdl:inputValueCalc="{ xs:unsignedInt(../IPv4Header/Protocol) }"/>
+      <choice dfdl:choiceDispatchKey="{ xs:string(./Protocol) }">
+        <element dfdl:choiceBranchKey="6 17" name="TransportLayer" type="eth:TransportLayer"
+                    dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes"
+                    dfdl:length="{ xs:unsignedInt(../IPv4Header/Length) - 20 }"/>
+        <element dfdl:choiceBranchKey="1" name="ICMPv4" type="eth:ICMPv4"
+                    dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes"
+                    dfdl:length="{ xs:unsignedInt(../IPv4Header/Length) - 20 }"/>
+      </choice>
+    </sequence>
+  </complexType>
+
+  <complexType name="ICMPv4">
+    <sequence>
+      <element name="Type" type="eth:bit" dfdl:length="8"
+                  dfdl:outputValueCalc="{
+          if (fn:exists(../EchoRequest)) then 8
+          else if (fn:exists(../EchoReply )) then 0
+          else -1 }"/>
+      <element name="Code" type="eth:bit" dfdl:length="8"
+                  dfdl:outputValueCalc="{
+          if (fn:exists(../EchoRequest)) then 0
+          else if (fn:exists(../EchoReply )) then 0
+          else -1 }"/>
+      <element name="Checksum" type="eth:bit" dfdl:length="16"/>
+      <choice dfdl:choiceDispatchKey="{ fn:concat(xs:string(./Type), '_', xs:string(./Code)) }">
+        <element name="EchoRequest" dfdl:choiceBranchKey="8_0">
+          <complexType>
+            <sequence>
+              <element name="Identifier" type="eth:bit" dfdl:length="16"/>
+              <element name="SequenceNumber" type="eth:bit" dfdl:length="16"/>
+              <element name="Payload" type="eth:hexByte" dfdl:length="{ (../../../IPv4Header/Length - 20) - 8 }"/>
+            </sequence>
+          </complexType>
+        </element>
+        <element name="EchoReply" dfdl:choiceBranchKey="0_0">
+          <complexType>
+            <sequence>
+              <element name="Identifier" type="eth:bit" dfdl:length="16"/>
+              <element name="SequenceNumber" type="eth:bit" dfdl:length="16"/>
+              <element name="Payload" type="eth:hexByte" dfdl:length="{ (../../../IPv4Header/Length - 20) - 8 }"/>
+            </sequence>
+          </complexType>
+        </element>
+      </choice>
+    </sequence>
+  </complexType>
+
+  <complexType name="IPv6">
+    <sequence>
+      <element name='IPv6Header'>
+        <complexType>
+          <sequence>
+            <element name="Version" type="eth:bit" dfdl:length="4"/>
+            <element name="TrafficClass" type="eth:bit" dfdl:length="8"/>
+            <element name="FlowLabel" type="eth:bit" dfdl:length="20"/>
+            <element name="PayloadLength" type="eth:bit" dfdl:length="16"
+                        dfdl:outputValueCalc="{
+                  if (fn:exists(../../TransportLayer/UDP))
+                    then dfdl:valueLength(../../TransportLayer/UDP/Data, 'bytes') + 8
+                    else dfdl:valueLength(../../TransportLayer/TCP/Data, 'bytes') +
+                         dfdl:valueLength(../../TransportLayer/TCP/TCPHeader/Options, 'bytes') + 20
+                } "/>
+            <!-- TODO: Add support for extension headers -->
+            <element name="NextHeader" type="eth:bit" dfdl:length="8"
+                        dfdl:outputValueCalc="{
+                  if (fn:exists(../../TransportLayer/TCP )) then 6
+                  else if (fn:exists(../../TransportLayer/UDP )) then 17
+                  else -1 }"/>
+            <element name="HopLimit" type="eth:bit" dfdl:length="8"/>
+            <element name="IPSrc">
+              <complexType>
+                <sequence>
+                  <element name="value" type="eth:hexByte" dfdl:length="16"/>
+                </sequence>
+              </complexType>
+            </element>
+            <element name="IPDest">
+              <complexType>
+                <sequence>
+                  <element name="value" type="eth:hexByte" dfdl:length="16"/>
+                </sequence>
+              </complexType>
+            </element>
+          </sequence>
+        </complexType>
+      </element>
+      <element name="Protocol" type="xs:unsignedInt"
+                  dfdl:inputValueCalc="{ xs:unsignedInt(../IPv6Header/NextHeader) }"/>
+      <element name="TransportLayer" type="eth:TransportLayer" dfdl:lengthKind="explicit" dfdl:lengthUnits="bytes"
+                  dfdl:length="{ xs:unsignedInt(../IPv6Header/PayloadLength) }"/>
+    </sequence>
+  </complexType>
+
+  <!-- TRANSPORT LAYER -->
+
+  <complexType name="TransportLayer">
+    <choice dfdl:choiceDispatchKey="{ xs:string(../Protocol) }">
+      <element name="TCP" type="eth:TCP" dfdl:choiceBranchKey="6"/>
+      <element name="UDP" type="eth:UDP" dfdl:choiceBranchKey="17"/>
+    </choice>
+  </complexType>
+
+  <complexType name="TCP">
+    <sequence>
+      <element name='TCPHeader'>
+        <complexType>
+          <sequence>
+            <element name="PortSRC" type="eth:bit" dfdl:length="16"/>
+            <element name="PortDest" type="eth:bit" dfdl:length="16"/>
+            <element name="Seq" type="eth:bit" dfdl:length="32"/>
+            <element name="Ack" type="eth:bit" dfdl:length="32"/>
+            <element name="DataOffset" type="eth:bit" dfdl:length="4"
+                        dfdl:outputValueCalc="{ xs:unsignedInt((dfdl:valueLength(../Options, 'bytes') div 4) + 5) }"/>
+            <element name="Reserved" type="eth:bit" dfdl:length="3"/>
+            <element name="Flags" type="eth:bit" dfdl:length="9"/>
+            <element name="WindowSize" type="eth:bit" dfdl:length="16"/>
+            <element name="Checksum" type="eth:bit" dfdl:length="16"/>
+            <element name="Urgent" type="eth:bit" dfdl:length="16"/>
+            <element name="Options" type="eth:hexByte" dfdl:length="{ (xs:unsignedInt(../DataOffset) - 5) * 4 }"/>
+          </sequence>
+        </complexType>
+      </element>
+      <element name="Data" type="eth:hexByte" dfdl:length="{
+          if (fn:exists(../../../../IPv4))
+          then ((xs:unsignedInt(../../../../IPv4/IPv4Header/Length) - 20) - (xs:unsignedInt(../TCPHeader/DataOffset) * 4))
+          else (xs:unsignedInt(../../../../IPv6/IPv6Header/PayloadLength) - (xs:unsignedInt(../TCPHeader/DataOffset) * 4)) }"/>
+    </sequence>
+  </complexType>
+
+  <complexType name="UDP">
+    <sequence>
+      <element name='UDPHeader'>
+        <complexType>
+          <sequence>
+            <element name="PortSrc" type="eth:bit" dfdl:length="16"/>
+            <element name="PortDest" type="eth:bit" dfdl:length="16"/>
+            <element name="Length" type="eth:bit" dfdl:length="16"
+                        dfdl:outputValueCalc="{ dfdl:valueLength(../../Data, 'bytes') + 8 }"/>
+            <element name="Checksum" type="eth:bit" dfdl:length="16"/>
+          </sequence>
+        </complexType>
+      </element>
+      <element name="Data" type="eth:hexByte" dfdl:length="{ xs:unsignedInt(../UDPHeader/Length) - 8 }"/>
+    </sequence>
+  </complexType>
+
+</schema>

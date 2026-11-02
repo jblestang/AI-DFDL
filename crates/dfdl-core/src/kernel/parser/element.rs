@@ -1,7 +1,5 @@
 //! Element and occurrence parsing logic for the DFDL parser engine.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -96,7 +94,6 @@ pub(crate) fn coerce_and_validate_ivc_value(
 ) -> DFDLResult<DfdlValue> {
     if let Some(val_num) = raw_val.as_i128() {
         let is_neg = raw_val.is_negative();
-        let display_str = alloc::format!("{}", raw_val);
         return match st {
             DfdlSimpleType::Boolean => match val_num {
                 1 => Ok(DfdlValue::Boolean(true)),
@@ -107,7 +104,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                 let i = i32::try_from(val_num).map_err(|_| {
                     DFDLError::new(
                         DFDLErrorKind::Parse,
-                        &alloc::format!("Parsed value {} out of range for xs:int", display_str),
+                        &alloc::format!("Parsed value {} out of range for xs:int", raw_val),
                     )
                 })?;
                 Ok(DfdlValue::Int(i))
@@ -116,7 +113,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                 let l = i64::try_from(val_num).map_err(|_| {
                     DFDLError::new(
                         DFDLErrorKind::Parse,
-                        &alloc::format!("Parsed value {} out of range for xs:long", display_str),
+                        &alloc::format!("Parsed value {} out of range for xs:long", raw_val),
                     )
                 })?;
                 Ok(DfdlValue::Long(l))
@@ -125,7 +122,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                 let s = i16::try_from(val_num).map_err(|_| {
                     DFDLError::new(
                         DFDLErrorKind::Parse,
-                        &alloc::format!("Parsed value {} out of range for xs:short", display_str),
+                        &alloc::format!("Parsed value {} out of range for xs:short", raw_val),
                     )
                 })?;
                 Ok(DfdlValue::Short(s))
@@ -134,7 +131,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                 let b = i8::try_from(val_num).map_err(|_| {
                     DFDLError::new(
                         DFDLErrorKind::Parse,
-                        &alloc::format!("Parsed value {} out of range for xs:byte", display_str),
+                        &alloc::format!("Parsed value {} out of range for xs:byte", raw_val),
                     )
                 })?;
                 Ok(DfdlValue::Byte(b))
@@ -145,7 +142,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedLong: must match in signedness (xs:unsignedLong or xs:long or a subtype of those)",
-                            display_str
+                            raw_val
                         ),
                     ));
                 }
@@ -154,7 +151,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedLong",
-                            display_str
+                            raw_val
                         ),
                     )
                 })?;
@@ -166,7 +163,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedInt: must match in signedness (xs:unsignedLong or xs:long or a subtype of those)",
-                            display_str
+                            raw_val
                         ),
                     ));
                 }
@@ -175,7 +172,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedInt",
-                            display_str
+                            raw_val
                         ),
                     )
                 })?;
@@ -187,7 +184,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedShort: must match in signedness (xs:unsignedLong or xs:long or a subtype of those)",
-                            display_str
+                            raw_val
                         ),
                     ));
                 }
@@ -196,7 +193,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedShort",
-                            display_str
+                            raw_val
                         ),
                     )
                 })?;
@@ -208,7 +205,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedByte: must match in signedness (xs:unsignedLong or xs:long or a subtype of those)",
-                            display_str
+                            raw_val
                         ),
                     ));
                 }
@@ -217,7 +214,7 @@ pub(crate) fn coerce_and_validate_ivc_value(
                         DFDLErrorKind::Parse,
                         &alloc::format!(
                             "Parsed value {} out of range for xs:unsignedByte",
-                            display_str
+                            raw_val
                         ),
                     )
                 })?;
@@ -649,57 +646,92 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 let eval_ast_fn = |ast: &crate::expr::ast::ExprAst, this: &mut Self| -> DFDLResult<usize> {
                     if let crate::expr::ast::ExprAst::Path(ref path) = ast {
                         let steps = path.steps();
-                        if let (Some(step0), Some(step1)) = (steps.first(), steps.get(1)) {
-                            if steps.len() == 2
-                                && step0.is_parent()
-                                && !step1.is_parent()
-                                && !step1.is_self()
-                                && step1.predicate_expr.is_none()
-                            {
-                                let sibling_name = step1.local_name();
-                                if let Some(elem) = builder.find_sibling_in_parent(sibling_name) {
-                                if let crate::infoset::state::ElementState::Value(ref val) = elem.state {
-                                    match val {
-                                        DfdlValue::Int(v) if *v >= 0 => return Ok(*v as usize),
-                                        DfdlValue::Long(v) if *v >= 0 => return Ok(*v as usize),
-                                        DfdlValue::UnsignedLong(v) => return Ok(*v as usize),
-                                        DfdlValue::UnsignedInt(v) => return Ok(*v as usize),
-                                        DfdlValue::UnsignedShort(v) => return Ok(*v as usize),
-                                        DfdlValue::UnsignedByte(v) => return Ok(*v as usize),
-                                        DfdlValue::Short(v) if *v >= 0 => return Ok(*v as usize),
-                                        DfdlValue::Byte(v) if *v >= 0 => return Ok(*v as usize),
-                                        DfdlValue::String(ref s) => {
-                                            if let Ok(num) = s.trim().parse::<usize>() {
-                                                return Ok(num);
+                        if steps.len() >= 2 && steps.first().is_some_and(|s| s.is_parent()) {
+                            let step1 = steps.get(1);
+                            if let Some(s1) = step1 {
+                                if !s1.is_parent() && !s1.is_self() && s1.predicate_expr.is_none() {
+                                    let mut curr = builder.find_sibling_in_parent(s1.local_name());
+                                    let mut ok = true;
+                                    for step in steps.iter().skip(2) {
+                                        if step.is_parent() || step.is_self() || step.predicate_expr.is_some() {
+                                            ok = false;
+                                            break;
+                                        }
+                                        if let Some(elem) = curr {
+                                            curr = elem.children.iter().rev().find_map(|child| match child {
+                                                crate::infoset::tree::InfosetNode::Element(ref c) => {
+                                                    let clean = c
+                                                        .name
+                                                        .local_name
+                                                        .split(':')
+                                                        .next_back()
+                                                        .unwrap_or(&c.name.local_name);
+                                                    let target = step.local_name();
+                                                    if clean == target || c.name.local_name == target {
+                                                        Some(c)
+                                                    } else {
+                                                        None
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            ok = false;
+                                            break;
+                                        }
+                                    }
+                                    if ok {
+                                        if let Some(target_elem) = curr {
+                                            if let crate::infoset::state::ElementState::Value(ref val) = target_elem.state {
+                                                match val {
+                                                    DfdlValue::Int(v) if *v >= 0 => return Ok(*v as usize),
+                                                    DfdlValue::Long(v) if *v >= 0 => return Ok(*v as usize),
+                                                    DfdlValue::UnsignedLong(v) => return Ok(*v as usize),
+                                                    DfdlValue::UnsignedInt(v) => return Ok(*v as usize),
+                                                    DfdlValue::UnsignedShort(v) => return Ok(*v as usize),
+                                                    DfdlValue::UnsignedByte(v) => return Ok(*v as usize),
+                                                    DfdlValue::Short(v) if *v >= 0 => return Ok(*v as usize),
+                                                    DfdlValue::Byte(v) if *v >= 0 => return Ok(*v as usize),
+                                                    DfdlValue::String(ref s) => {
+                                                        if let Ok(num) = s.trim().parse::<usize>() {
+                                                            return Ok(num);
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
                                             }
                                         }
-                                        _ => {}
                                     }
                                 }
                             }
                         }
                     }
-                }
-                    let mut current_path = builder.current_path();
-                    let clean_name = elem
-                        .name
-                        .local_name
-                        .split(':')
-                        .next_back()
-                        .unwrap_or(&elem.name.local_name);
-                    let last_seg = current_path
-                        .segments()
-                        .last()
-                        .map(|s| s.split(':').next_back().unwrap_or(s));
-                    if last_seg != Some(clean_name) {
-                        let _ = current_path.try_push(clean_name);
-                    }
-                    let active_doc = builder.active_doc();
+                    let (active_doc, current_path);
+                    let (doc_ref, path_ref) = if ast.needs_infoset_doc() {
+                        let mut path = builder.current_path();
+                        let clean_name = elem
+                            .name
+                            .local_name
+                            .split(':')
+                            .next_back()
+                            .unwrap_or(&elem.name.local_name);
+                        let last_seg = path
+                            .last_step()
+                            .map(|s| s.local_name());
+                        if last_seg != Some(clean_name) {
+                            let _ = path.try_push(clean_name);
+                        }
+                        active_doc = Some(builder.active_doc());
+                        current_path = path;
+                        (active_doc.as_ref(), &current_path)
+                    } else {
+                        current_path = crate::types::InfosetPath::root();
+                        (None, &current_path)
+                    };
                     let mut ctx = crate::expr::ExprContext::with_variable_map(
-                        Some(&active_doc),
-                        &current_path,
+                        doc_ref,
+                        path_ref,
                         &[],
-                        Some(&this.variable_map),
+                        Some(this.active_variable_map.as_ref().unwrap_or(&this.schema.variable_map)),
                         this.budget,
                     )
                     .with_occurs_index(this.current_occurs_index)
@@ -776,12 +808,16 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
             };
             let mut count: usize = 0;
+            let initial_occurrences = if elem.max_occurs == Some(1) {
+                0
+            } else {
+                builder.count_child_occurrences(&elem.name.local_name)
+            };
             for _ in 0..target_occurs {
-                let occurrences = builder.count_child_occurrences(&elem.name.local_name);
-                self.current_occurs_index = occurrences.saturating_add(1);
+                self.current_occurs_index = initial_occurrences.saturating_add(count).saturating_add(1);
                 let builder_cp = builder.checkpoint();
                 let reader_cp = self.reader.checkpoint();
-                let vmap_cp = self.variable_map.checkpoint();
+                let vmap_cp = self.checkpoint_variable_map();
                 let val_err_cp = self.validation_errors.len();
                 match self.parse_single_element_occurrence(term, elem, builder, false, false) {
                     Ok(()) => {
@@ -790,7 +826,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     Err(e) => {
                         self.reader.rollback(reader_cp)?;
                         builder.rollback(builder_cp);
-                        self.variable_map.rollback(vmap_cp);
+                        self.rollback_variable_map(vmap_cp);
                         self.validation_errors.truncate(val_err_cp);
                         if count >= elem.min_occurs && !e.is_fatal() {
                             break;
@@ -809,9 +845,24 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         // after parsing when validation is enabled.
         let is_parsed = term.properties.occurs_count_kind == OccursCountKind::Parsed
             && !(elem.min_occurs == 1 && elem.max_occurs == Some(1));
-        let min_occurs = if is_parsed { 0 } else { elem.min_occurs };
+        let min_occurs = match term.properties.occurs_count_kind {
+            OccursCountKind::Parsed => {
+                if elem.min_occurs == 1 && elem.max_occurs == Some(1) {
+                    1
+                } else {
+                    0
+                }
+            }
+            OccursCountKind::Expression | OccursCountKind::Fixed => max_occurs,
+            _ => elem.min_occurs,
+        };
         let mut count = 0;
         let mut slots_processed: usize = 0;
+        let initial_occurrences = if elem.max_occurs == Some(1) {
+            0
+        } else {
+            builder.count_child_occurrences(&elem.name.local_name)
+        };
 
         while count < max_occurs && slots_processed < max_occurs {
             let is_simple_repr = matches!(elem.type_ir, crate::schema::ir::CompiledType::Simple(_))
@@ -836,11 +887,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
             let reader_cp = self.reader.checkpoint();
             let builder_cp = builder.checkpoint();
-            let vmap_cp = self.variable_map.checkpoint();
+            let vmap_cp = self.checkpoint_variable_map();
             let val_err_cp = self.validation_errors.len();
             let bo_cp = self.reader.bit_order();
-            let delims_cp = self.in_scope_delimiters.clone();
-            let terms_cp = self.in_scope_terminators.clone();
+            let delims_cp = self.in_scope_delimiters.len();
+            let terms_cp = self.in_scope_terminators.len();
             let is_occurrence_pou = count >= min_occurs;
             if is_occurrence_pou {
                 self.pou_stack.push(PointOfUncertainty {
@@ -848,7 +899,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     is_discriminated: false,
                 });
             }
-            let occurrences = builder.count_child_occurrences(&elem.name.local_name);
+            let occurrences = initial_occurrences.saturating_add(count);
             self.current_occurs_index = occurrences.saturating_add(1);
 
             let mut elem_consumed_zero = false;
@@ -870,10 +921,20 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 }
                             }
                             self.match_literal_delimiter(sep).map_err(|e| {
-                                DFDLError::new(
-                                    DFDLErrorKind::Parse,
-                                    &alloc::format!("elem prefix/infix sep for '{}' failed: {}", elem.name.local_name, e),
-                                )
+                                if self.peek_any_in_scope_delimiter() {
+                                    DFDLError::new(
+                                        DFDLErrorKind::Parse,
+                                        &alloc::format!(
+                                            "Parse Error: Found delimiter instead of expected separator '{}' for element '{}'",
+                                            sep, elem.name.local_name
+                                        ),
+                                    )
+                                } else {
+                                    DFDLError::new(
+                                        DFDLErrorKind::Parse,
+                                        &alloc::format!("elem prefix/infix sep for '{}' failed: {}", elem.name.local_name, e),
+                                    )
+                                }
                             })?;
                             sep_consumed = true;
                         } else if sep_pos == crate::schema::ir::SeparatorPosition::Infix
@@ -923,9 +984,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     && align_bits > 1
                 {
                     let current_pos = self.reader.position().0;
-                    let rem = current_pos % align_bits;
+                    let rem = current_pos.checked_rem(align_bits).unwrap_or(0);
                     if rem > 0 {
-                        let skip = align_bits - rem;
+                        let skip = align_bits.saturating_sub(rem);
                         let _ = self.reader.read_bits(skip)?;
                     }
                 }
@@ -1012,7 +1073,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             // For arrays (maxOccurs > 1 or unbounded), additional occurrences may follow
                             // separated by delimiters (e.g. under separatorSuppressionPolicy="anyEmpty").
                             builder.rollback(builder_cp);
-                            self.variable_map.rollback(vmap_cp);
+                            self.rollback_variable_map(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             total_element_count = total_element_count.saturating_add(1);
@@ -1088,7 +1149,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         self.reader.set_bit_order(bo_cp);
                         builder.rollback(builder_cp);
-                        self.variable_map.rollback(vmap_cp);
+                        self.rollback_variable_map(vmap_cp);
                         self.validation_errors.truncate(val_err_cp);
                         self.current_occurs_index = 1;
                         break;
@@ -1102,7 +1163,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         if let Some(sep) = sep_opt {
                             if !sep.is_empty() && self.peek_literal_delimiter(sep) {
                                 builder.rollback(builder_cp);
-                                self.variable_map.rollback(vmap_cp);
+                                self.rollback_variable_map(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                                 slots_processed = slots_processed.saturating_add(1);
                                 let _ = self.match_literal_delimiter(sep);
@@ -1111,7 +1172,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                         if (sep_consumed || slots_processed > 0) && self.reader.is_eof() {
                             builder.rollback(builder_cp);
-                            self.variable_map.rollback(vmap_cp);
+                            self.rollback_variable_map(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             self.current_occurs_index = 1;
@@ -1140,7 +1201,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         {
                             self.reader.rollback(pre_elem_cp)?;
                             builder.rollback(builder_cp);
-                            self.variable_map.rollback(vmap_cp);
+                            self.rollback_variable_map(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
                             slots_processed = slots_processed.saturating_add(1);
@@ -1160,22 +1221,22 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 self.reader.rollback(reader_cp)?;
                             }
                             builder.rollback(builder_cp);
-                            self.variable_map.rollback(vmap_cp);
+                            self.rollback_variable_map(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
-                            self.in_scope_delimiters = delims_cp.clone();
-                            self.in_scope_terminators = terms_cp.clone();
+                            self.in_scope_delimiters.truncate(delims_cp);
+                            self.in_scope_terminators.truncate(terms_cp);
                             slots_processed = slots_processed.saturating_add(1);
                             self.current_occurs_index = 1;
                             break;
                         } else {
                             self.reader.rollback(reader_cp)?;
                             builder.rollback(builder_cp);
-                            self.variable_map.rollback(vmap_cp);
+                            self.rollback_variable_map(vmap_cp);
                             self.validation_errors.truncate(val_err_cp);
                             self.reader.set_bit_order(bo_cp);
-                            self.in_scope_delimiters = delims_cp.clone();
-                            self.in_scope_terminators = terms_cp.clone();
+                            self.in_scope_delimiters.truncate(delims_cp);
+                            self.in_scope_terminators.truncate(terms_cp);
                             self.current_occurs_index = 1;
                             break;
                         }
@@ -1183,10 +1244,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                     self.reader.rollback(reader_cp)?;
                     builder.rollback(builder_cp);
-                    self.variable_map.rollback(vmap_cp);
+                    self.rollback_variable_map(vmap_cp);
                     self.validation_errors.truncate(val_err_cp);
-                    self.in_scope_delimiters = delims_cp;
-                    self.in_scope_terminators = terms_cp;
+                    self.in_scope_delimiters.truncate(delims_cp);
+                    self.in_scope_terminators.truncate(terms_cp);
                     self.current_occurs_index = 1;
                     if count >= min_occurs {
                         if count == 0 && elem.min_occurs == 0 && elem.max_occurs == Some(1) {
@@ -1327,9 +1388,9 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             && align_bits > 1
         {
             let current_pos = self.reader.position().0;
-            let rem = current_pos % align_bits;
+            let rem = current_pos.checked_rem(align_bits).unwrap_or(0);
             if rem > 0 {
-                let skip = align_bits - rem;
+                let skip = align_bits.saturating_sub(rem);
                 let _ = self.reader.read_bits(skip)?;
             }
         }
@@ -1350,7 +1411,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             self.reader.set_bit_order(term.properties.bit_order);
         }
 
-        let occurrences = builder.count_child_occurrences(&elem.name.local_name);
+        let occurrences = if elem.max_occurs == Some(1) {
+            0
+        } else {
+            builder.count_child_occurrences(&elem.name.local_name)
+        };
         self.current_occurs_index = occurrences.saturating_add(1);
         let res = self.parse_single_element_occurrence(term, elem, builder, false, false);
         self.current_occurs_index = 1;
@@ -1439,7 +1504,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
-                        let vmap_cp = self.variable_map.checkpoint();
+                        let vmap_cp = self.checkpoint_variable_map();
                         let val_err_cp = self.validation_errors.len();
 
                         match self.parse_single_unordered_element_occurrence(
@@ -1455,7 +1520,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 if new_reader_cp == reader_cp && cur_count >= elem.min_occurs {
                                     let _ = self.reader.rollback(reader_cp);
                                     builder.rollback(builder_cp);
-                                    self.variable_map.rollback(vmap_cp);
+                                    self.rollback_variable_map(vmap_cp);
                                     self.validation_errors.truncate(val_err_cp);
                                     continue;
                                 }
@@ -1469,7 +1534,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             Err(_) => {
                                 let _ = self.reader.rollback(reader_cp);
                                 builder.rollback(builder_cp);
-                                self.variable_map.rollback(vmap_cp);
+                                self.rollback_variable_map(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                             }
                         }
@@ -1477,7 +1542,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     _ => {
                         let reader_cp = self.reader.checkpoint();
                         let builder_cp = builder.checkpoint();
-                        let vmap_cp = self.variable_map.checkpoint();
+                        let vmap_cp = self.checkpoint_variable_map();
                         let val_err_cp = self.validation_errors.len();
                         let group_res = (|| -> DFDLResult<()> {
                             if let Some(sep) = sep_opt {
@@ -1511,7 +1576,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             Err(_) => {
                                 let _ = self.reader.rollback(reader_cp);
                                 builder.rollback(builder_cp);
-                                self.variable_map.rollback(vmap_cp);
+                                self.rollback_variable_map(vmap_cp);
                                 self.validation_errors.truncate(val_err_cp);
                             }
                         }
@@ -1532,7 +1597,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             };
             if let TermKind::Element(elem) = &member_term.kind {
                 if !self.schema.term_has_representation(member_term.id) {
-                    let occurrences = builder.count_child_occurrences(&elem.name.local_name);
+                    let occurrences = if elem.max_occurs == Some(1) {
+                        0
+                    } else {
+                        builder.count_child_occurrences(&elem.name.local_name)
+                    };
                     self.current_occurs_index = occurrences.saturating_add(1);
                     self.parse_single_element_occurrence(member_term, elem, builder, false, false)?;
                     self.current_occurs_index = 1;
@@ -1633,13 +1702,67 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             self.evaluate_discriminator(term, Some(&elem.name.local_name), builder)?;
         }
 
-        if let Some(ref ivc_expr) = term.properties.input_value_calc {
-            let ast = crate::expr::parse_expr(ivc_expr)?;
-            let mut current_path = builder.current_path();
-            let _ = current_path.try_push(&elem.name.local_name);
-            let active_doc = builder.active_doc();
+        let ivc_ast_opt = if let Some(ref ivc_prop) = term.properties.input_value_calc_prop {
+            match ivc_prop {
+                crate::schema::ir::DfdlProp::Constant(c) => {
+                    let trimmed = c.trim();
+                    let inner = if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+                        trimmed[1..trimmed.len().saturating_sub(1)].trim()
+                    } else {
+                        trimmed
+                    };
+                    let ast = crate::expr::parse_expr(inner).map_err(|e| {
+                        if e.kind == DFDLErrorKind::SchemaDefinition {
+                            e
+                        } else {
+                            DFDLError::new(
+                                DFDLErrorKind::SchemaDefinition,
+                                &alloc::format!("Schema Definition Error: Invalid expression '{}': Unable to parse expression: {}", inner, e),
+                            )
+                        }
+                    })?;
+                    Some(alloc::borrow::Cow::Owned(ast))
+                }
+                crate::schema::ir::DfdlProp::Expression { ast, .. } => {
+                    Some(alloc::borrow::Cow::Borrowed(ast.as_ref()))
+                }
+            }
+        } else if let Some(ref ivc_expr) = term.properties.input_value_calc {
+            let trimmed = ivc_expr.trim();
+            let inner = if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+                trimmed[1..trimmed.len().saturating_sub(1)].trim()
+            } else {
+                trimmed
+            };
+            let ast = crate::expr::parse_expr(inner).map_err(|e| {
+                if e.kind == DFDLErrorKind::SchemaDefinition {
+                    e
+                } else {
+                    DFDLError::new(
+                        DFDLErrorKind::SchemaDefinition,
+                        &alloc::format!("Schema Definition Error: Invalid expression '{}': Unable to parse expression: {}", inner, e),
+                    )
+                }
+            })?;
+            Some(alloc::borrow::Cow::Owned(ast))
+        } else {
+            None
+        };
+
+        if let Some(ast) = ivc_ast_opt {
+            let (active_doc, current_path);
+            let (doc_ref, path_ref) = if ast.needs_infoset_doc() {
+                let mut path = builder.current_path();
+                let _ = path.try_push(&elem.name.local_name);
+                active_doc = Some(builder.active_doc());
+                current_path = path;
+                (active_doc.as_ref(), &current_path)
+            } else {
+                current_path = crate::types::InfosetPath::root();
+                (None, &current_path)
+            };
             let (variable_map, schema, budget, reader) = (
-                &self.variable_map,
+                self.active_variable_map.as_ref().unwrap_or(&self.schema.variable_map),
                 self.schema,
                 &mut *self.budget,
                 &mut *self.reader,
@@ -1649,8 +1772,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 reader_cell.borrow_mut().lookahead_bits(offset, num_bits)
             };
             let mut ctx = crate::expr::ExprContext::with_variable_map(
-                Some(&active_doc),
-                &current_path,
+                doc_ref,
+                path_ref,
                 &[],
                 Some(variable_map),
                 budget,
@@ -1725,13 +1848,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 let mut try_nil = || -> DFDLResult<bool> {
                     if expect_initiator {
                         if let Some(ref init_raw) = term.properties.initiator {
-                            let init = self.evaluate_property_str_at(
-                                init_raw,
-                                builder,
-                                Some(&elem.name.local_name),
-                            )?;
-                            if !init.is_empty() {
-                                self.match_literal_delimiter(&init)?;
+                            if !init_raw.is_empty() {
+                                let init = self.evaluate_property_str_at(
+                                    init_raw,
+                                    builder,
+                                    Some(&elem.name.local_name),
+                                )?;
+                                if !init.is_empty() {
+                                    self.match_literal_delimiter(&init)?;
+                                }
                             }
                         }
                     }
@@ -1961,21 +2086,17 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                                 break;
                                             }
                                             let mut is_delim = false;
-                                            for i in (0..self.in_scope_delimiters.len()).rev() {
-                                                if let Ok(delim) = crate::util::get_checked(
-                                                    &self.in_scope_delimiters,
-                                                    i,
-                                                ) {
-                                                    let delim_clone = delim.clone();
-                                                    if !delim_clone.text.is_empty()
-                                                        && delim_clone.text != "%ES;"
-                                                        && self.peek_in_scope_delimiter(&delim_clone)
-                                                    {
-                                                        is_delim = true;
-                                                        break;
-                                                    }
+                                            let delims = core::mem::take(&mut self.in_scope_delimiters);
+                                            for delim in delims.iter().rev() {
+                                                if !delim.text.is_empty()
+                                                    && delim.text != "%ES;"
+                                                    && self.peek_in_scope_delimiter(delim)
+                                                {
+                                                    is_delim = true;
+                                                    break;
                                                 }
                                             }
+                                            self.in_scope_delimiters = delims;
                                             if is_delim {
                                                 nil_matched = true;
                                                 break;
@@ -1992,18 +2113,20 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
 
                     if nil_matched && expect_terminator {
                         if let Some(ref term_raw) = term.properties.terminator {
-                            let term_str = self.evaluate_property_str_at(
-                                term_raw,
-                                builder,
-                                Some(&elem.name.local_name),
-                            )?;
-                            if !term_str.is_empty() {
-                                self.match_literal_delimiter(&term_str).map_err(|e| {
-                                    DFDLError::new(
-                                        DFDLErrorKind::Parse,
-                                        &alloc::format!("Terminator '{}' not found: {}", term_raw, e.message),
-                                    )
-                                })?;
+                            if !term_raw.is_empty() {
+                                let term_str = self.evaluate_property_str_at(
+                                    term_raw,
+                                    builder,
+                                    Some(&elem.name.local_name),
+                                )?;
+                                if !term_str.is_empty() {
+                                    self.match_literal_delimiter(&term_str).map_err(|e| {
+                                        DFDLError::new(
+                                            DFDLErrorKind::Parse,
+                                            &alloc::format!("Terminator '{}' not found: {}", term_raw, e.message),
+                                        )
+                                    })?;
+                                }
                             }
                         }
                     }
@@ -2018,12 +2141,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         },
                         is_hidden,
                     )?;
-                    builder.push_event_with_hidden(
-                        InfosetEvent::EndElement {
-                            name: elem.name.clone(),
-                        },
-                        is_hidden,
-                    )?;
+                    builder.end_element(&elem.name)?;
                     self.evaluate_asserts(term, Some(&elem.name.local_name), builder)?;
                     if term.properties.discriminator.is_some()
                         && term.properties.discriminator_test_kind
@@ -2049,27 +2167,29 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let mut skipped_delimiters_for_empty = false;
 
         if let Some(ref init_raw) = term.properties.initiator {
-            let init = self.evaluate_property_str_at(
-                init_raw,
-                builder,
-                Some(&elem.name.local_name),
-            )?;
-            if !init.is_empty() {
-                let init_matched = self.peek_literal_delimiter(&init);
-                if init_matched {
-                    self.align_mandatory_text(&term.properties.encoding)?;
-                    self.match_literal_delimiter(&init)?;
-                    self.on_initiator_matched(is_occurrence_pou, parent_initiated_content);
-                } else if (evdp == crate::schema::ir::EmptyValueDelimiterPolicy::None
-                    || evdp == crate::schema::ir::EmptyValueDelimiterPolicy::Terminator)
-                    && (self.reader.is_eof() || self.peek_any_in_scope_delimiter())
-                {
-                    skipped_delimiters_for_empty = true;
-                } else {
-                    return Err(DFDLError::new(
-                        DFDLErrorKind::Parse,
-                        &alloc::format!("Initiator '{}' not found for element '{}'", init, elem.name.local_name),
-                    ));
+            if !init_raw.is_empty() {
+                let init = self.evaluate_property_str_at(
+                    init_raw,
+                    builder,
+                    Some(&elem.name.local_name),
+                )?;
+                if !init.is_empty() {
+                    let init_matched = self.peek_literal_delimiter(&init);
+                    if init_matched {
+                        self.align_mandatory_text(&term.properties.encoding)?;
+                        self.match_literal_delimiter(&init)?;
+                        self.on_initiator_matched(is_occurrence_pou, parent_initiated_content);
+                    } else if (evdp == crate::schema::ir::EmptyValueDelimiterPolicy::None
+                        || evdp == crate::schema::ir::EmptyValueDelimiterPolicy::Terminator)
+                        && (self.reader.is_eof() || self.peek_any_in_scope_delimiter())
+                    {
+                        skipped_delimiters_for_empty = true;
+                    } else {
+                        return Err(DFDLError::new(
+                            DFDLErrorKind::Parse,
+                            &alloc::format!("Initiator '{}' not found for element '{}'", init, elem.name.local_name),
+                        ));
+                    }
                 }
             }
         }
@@ -2078,15 +2198,19 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let res = match &elem.type_ir {
             crate::schema::ir::CompiledType::Simple(st) => {
                 let simple_term = if let Some(ref term_raw) = term.properties.terminator {
-                    let evaluated = self.evaluate_property_str_at(
-                        term_raw,
-                        builder,
-                        Some(&elem.name.local_name),
-                    )?;
-                    if evaluated.is_empty() {
+                    if term_raw.is_empty() {
                         None
                     } else {
-                        Some(evaluated)
+                        let evaluated = self.evaluate_property_str_at(
+                            term_raw,
+                            builder,
+                            Some(&elem.name.local_name),
+                        )?;
+                        if evaluated.is_empty() {
+                            None
+                        } else {
+                            Some(evaluated)
+                        }
                     }
                 } else {
                     None
@@ -2095,7 +2219,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     self.push_in_scope_terminator(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                     self.push_in_scope_delimiter(t.clone(), term.properties.ignore_case, term.properties.encoding.clone());
                 }
-                let elem_pname = elem.name.prefixed_name();
+                let elem_pname = elem.name.prefixed_name_cow();
                 let simple_val_res = if (term.properties.rep_type.is_some()
                     || term.properties.rep_simple_type.is_some())
                     && !term.properties.facets.rep_values.is_empty()
@@ -2103,7 +2227,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     let rep_st = term.properties.rep_simple_type.unwrap_or(*st);
                     let wire_res = self.parse_simple_value(
                         rep_st,
-                        Some(&elem_pname),
+                        Some(elem_pname.as_ref()),
                         &term.properties,
                         builder,
                     )?;
@@ -2126,7 +2250,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 } else {
                     self.parse_simple_value(
                         *st,
-                        Some(&elem_pname),
+                        Some(elem_pname.as_ref()),
                         &term.properties,
                         builder,
                     )
@@ -2194,10 +2318,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             // by scanning characters in the specified encoding until the specified
                             // number of characters is reached."
                             crate::schema::ir::LengthUnits::Characters => {
-                                let enc_upper = term.properties.encoding.to_ascii_uppercase();
-                                if enc_upper.contains("UTF-8")
-                                    || enc_upper.replace(['-', '_'], "") == "UTF8"
-                                {
+                                if term.properties.encoding == crate::encoding::EncodingKind::Utf8 {
                                     // Scan `l` UTF-8 characters to compute the exact bit width.
                                     let cp = self.reader.checkpoint();
                                     let mut dummy = Vec::new();
@@ -2296,12 +2417,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             ));
                         }
                     }
-                    builder.push_event_with_hidden(
-                        InfosetEvent::EndElement {
-                            name: elem.name.clone(),
-                        },
-                        is_hidden,
-                    )?;
+                    builder.end_element(&elem.name)?;
                     let end_bit = self.reader.position().0;
                     builder.set_last_element_location(start_bit, end_bit.saturating_sub(start_bit));
                 }
@@ -2315,7 +2431,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     || (evdp == crate::schema::ir::EmptyValueDelimiterPolicy::None
                         && (self.reader.is_eof() || self.peek_any_in_scope_delimiter()))
                     || (self.reader.is_eof() && term.properties.document_final_terminator_can_be_missing);
-                if !skip_term {
+                if !skip_term && !term_raw.is_empty() {
                     let term_str = self.evaluate_property_str_at(
                         term_raw,
                         builder,
@@ -2365,30 +2481,43 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 continue;
             }
 
-            let mut stack_buf = [0u8; 256];
-            let peek_slice: &[u8] = if let Some(slice) = self.reader.peek_bytes(4096) {
-                slice
-            } else {
+            let sub_byte_bits = crate::encoding::encoding_char_bits(&term.properties.encoding);
+            let raw_text_peek = if let Some(cb) = sub_byte_bits {
                 let reader_cp = self.reader.checkpoint();
-                let mut count: usize = 0;
-                for slot in stack_buf.iter_mut() {
-                    if self.reader.is_eof() {
-                        break;
-                    }
-                    if let Ok(b) = self.reader.read_bits(8) {
-                        *slot = b as u8;
-                        count = count.saturating_add(1);
-                    } else {
-                        break;
+                let mut sub_byte_text = String::new();
+                while !self.reader.is_eof() && sub_byte_text.len() < 512 {
+                    match self.reader.read_bits(cb) {
+                        Ok(code) => sub_byte_text
+                            .push(crate::encoding::decode_sub_byte_char(code, &term.properties.encoding)),
+                        Err(_) => break,
                     }
                 }
                 let _ = self.reader.rollback(reader_cp);
-                stack_buf.get(..count).unwrap_or(&[])
-            };
-
-            let raw_text_peek =
+                sub_byte_text
+            } else {
+                let mut stack_buf = [0u8; 256];
+                let peek_slice: &[u8] = if let Some(slice) = self.reader.peek_bytes(4096) {
+                    slice
+                } else {
+                    let reader_cp = self.reader.checkpoint();
+                    let mut count: usize = 0;
+                    for slot in stack_buf.iter_mut() {
+                        if self.reader.is_eof() {
+                            break;
+                        }
+                        if let Ok(b) = self.reader.read_bits(8) {
+                            *slot = b as u8;
+                            count = count.saturating_add(1);
+                        } else {
+                            break;
+                        }
+                    }
+                    let _ = self.reader.rollback(reader_cp);
+                    stack_buf.get(..count).unwrap_or(&[])
+                };
                 crate::encoding::decode_text_bytes(peek_slice, &term.properties.encoding)
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+            };
 
             let is_true = if let Some(ref re) = assert_item.compiled_regex {
                 re.is_match(&raw_text_peek)
@@ -2428,23 +2557,35 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         builder: &InfosetBuilder,
     ) -> DFDLResult<()> {
         if let Some(ref disc_expr) = term.properties.discriminator {
-            let mut current_path = builder.current_path();
-            if let Some(name) = elem_name {
-                let clean_name = name.split(':').next_back().unwrap_or(name);
-                let last_seg = current_path
-                    .segments()
-                    .last()
-                    .map(|s| s.split(':').next_back().unwrap_or(s));
-                if last_seg != Some(clean_name) {
-                    let _ = current_path.try_push(clean_name);
+            // Pattern discriminators match against the input data stream (reader), not the XML infoset.
+            // Only expression discriminators with path navigation require building the active document.
+            let needs_doc = term.properties.discriminator_test_kind == crate::schema::ir::TestKind::Expression
+                && term.properties.discriminator_ast.as_ref().map_or(true, |a| a.needs_infoset_doc());
+            let (active_doc, current_path);
+            let (doc_ref, path_ref) = if needs_doc {
+                let mut path = builder.current_path();
+                if let Some(name) = elem_name {
+                    let clean_name = name.split(':').next_back().unwrap_or(name);
+                    let last_seg = path
+                        .last_step()
+                        .map(|s| s.local_name());
+                    if last_seg != Some(clean_name) {
+                        let _ = path.try_push(clean_name);
+                    }
                 }
-            }
-            let active_doc = builder.active_doc();
+                active_doc = Some(builder.active_doc());
+                current_path = path;
+                (active_doc.as_ref(), &current_path)
+            } else {
+                active_doc = None;
+                current_path = crate::types::InfosetPath::root();
+                (None, &current_path)
+            };
             let mut ctx = crate::expr::ExprContext::with_variable_map(
-                Some(&active_doc),
-                &current_path,
+                doc_ref,
+                path_ref,
                 &[],
-                Some(&self.variable_map),
+                Some(self.active_variable_map.as_ref().unwrap_or(&self.schema.variable_map)),
                 self.budget,
             )
             .with_occurs_index(self.current_occurs_index)
@@ -2482,7 +2623,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         !self.reader.is_eof()
                     } else {
                         let text_to_match = if let Some(elem) = active_doc
-                            .find_element_with_context(&current_path, self.current_occurs_index)
+                            .as_ref()
+                            .and_then(|doc| doc.find_element_with_context(&current_path, self.current_occurs_index))
                         {
                             match &elem.state {
                                 crate::infoset::state::ElementState::Value(v) => match v {
@@ -2577,30 +2719,6 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         builder: &InfosetBuilder,
     ) -> DFDLResult<()> {
         for assert_item in &term.properties.asserts {
-            let mut current_path = builder.current_path();
-            if let Some(name) = elem_name {
-                let clean_name = name.split(':').next_back().unwrap_or(name);
-                let last_seg = current_path
-                    .segments()
-                    .last()
-                    .map(|s| s.split(':').next_back().unwrap_or(s));
-                if last_seg != Some(clean_name) {
-                    let _ = current_path.try_push(clean_name);
-                }
-            }
-            let active_doc = builder.active_doc();
-            let mut ctx = crate::expr::ExprContext::with_variable_map(
-                Some(&active_doc),
-                &current_path,
-                &[],
-                Some(&self.variable_map),
-                self.budget,
-            )
-            .with_occurs_index(self.current_occurs_index)
-            .with_schema(self.schema)
-            .with_namespaces(&term.properties.in_scope_namespaces)
-            .with_enclosing_lengths(&self.enclosing_complex_elements);
-
             if assert_item.test_kind == crate::schema::ir::TestKind::Pattern {
                 continue;
             }
@@ -2613,6 +2731,38 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     &dynamic_ast
                 }
             };
+
+            let (active_doc, current_path);
+            let (doc_ref, path_ref) = if ast.needs_infoset_doc() {
+                let mut path = builder.current_path();
+                if let Some(name) = elem_name {
+                    let clean_name = name.split(':').next_back().unwrap_or(name);
+                    let last_seg = path
+                        .last_step()
+                        .map(|s| s.local_name());
+                    if last_seg != Some(clean_name) {
+                        let _ = path.try_push(clean_name);
+                    }
+                }
+                active_doc = Some(builder.active_doc());
+                current_path = path;
+                (active_doc.as_ref(), &current_path)
+            } else {
+                current_path = crate::types::InfosetPath::root();
+                (None, &current_path)
+            };
+            let mut ctx = crate::expr::ExprContext::with_variable_map(
+                doc_ref,
+                path_ref,
+                &[],
+                Some(self.active_variable_map.as_ref().unwrap_or(&self.schema.variable_map)),
+                self.budget,
+            )
+            .with_occurs_index(self.current_occurs_index)
+            .with_schema(self.schema)
+            .with_namespaces(&term.properties.in_scope_namespaces)
+            .with_enclosing_lengths(&self.enclosing_complex_elements);
+
             let val = crate::expr::eval_expr(ast, &mut ctx)?;
             let is_true = val.effective_boolean_value();
 
@@ -2632,7 +2782,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         m_str.clone()
                     }
                 } else {
-                    alloc::string::String::from("dfdl:assert evaluation failed")
+                    alloc::string::String::from("Assertion failed: dfdl:assert evaluation failed")
                 };
                 if assert_item.failure_type == crate::schema::ir::FailureType::RecoverableError {
                     continue;
@@ -2761,13 +2911,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     | crate::schema::ir::LengthUnits::Characters => bits.div_ceil(8),
                 };
                 if len < prefix_units {
-                    let diff = (len as i64) - (prefix_units as i64);
+                    let diff = (len as i64).saturating_sub(prefix_units as i64);
                     let msg = alloc::format!(
                         "Runtime Schema Definition Error: Prefixed length result ({len}) after dfdl:prefixIncludesPrefixLength adjustment is negative ({diff}), must be non-negative"
                     );
                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                 }
-                len - prefix_units
+                len.saturating_sub(prefix_units)
             } else {
                 len
             };
@@ -2845,6 +2995,27 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                                 }
                             },
                         };
+                        if props.encoding_error_policy_error {
+                            let matched_bytes = match sub_byte_bits {
+                                None => offsets.get(chars).copied().unwrap_or(chars),
+                                Some(cb) => chars.saturating_mul(cb).div_ceil(8),
+                            };
+                            let slice_to_check = bytes
+                                .get(..matched_bytes.min(bytes.len()))
+                                .unwrap_or(&[]);
+                            if crate::encoding::has_malformed_input(
+                                slice_to_check,
+                                &props.encoding,
+                            ) {
+                                return Err(DFDLError::new(
+                                    DFDLErrorKind::Parse,
+                                    &alloc::format!(
+                                        "Parse Error: Malformed input for encoding {} with encodingErrorPolicy 'error'",
+                                        props.encoding
+                                    ),
+                                ));
+                            }
+                        }
                         return Ok(Some(result_len));
                     }
                 }
@@ -2868,17 +3039,25 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             match prop {
                 crate::schema::ir::DfdlProp::Constant(l) => Ok(Some(*l)),
                 crate::schema::ir::DfdlProp::Expression { ast, .. } => {
-                    let mut current_path = builder.current_path();
-                    if let Some(name) = elem_name {
-                        let clean_name = name.split(':').next_back().unwrap_or(name);
-                        let last_seg = current_path.segments().last().map(|s| s.as_str());
-                        if last_seg != Some(clean_name) {
-                            let _ = current_path.try_push(clean_name);
+                    let (active_doc, current_path);
+                    let (doc_ref, path_ref) = if ast.needs_infoset_doc() {
+                        let mut path = builder.current_path();
+                        if let Some(name) = elem_name {
+                            let clean_name = name.split(':').next_back().unwrap_or(name);
+                            let last_seg = path.last_step().map(|s| s.local_name());
+                            if last_seg != Some(clean_name) {
+                                let _ = path.try_push(clean_name);
+                            }
                         }
-                    }
-                    let active_doc = builder.active_doc();
+                        active_doc = Some(builder.active_doc());
+                        current_path = path;
+                        (active_doc.as_ref(), &current_path)
+                    } else {
+                        current_path = crate::types::InfosetPath::root();
+                        (None, &current_path)
+                    };
                     let (variable_map, schema, budget, reader) = (
-                        &self.variable_map,
+                        self.active_variable_map.as_ref().unwrap_or(&self.schema.variable_map),
                         self.schema,
                         &mut *self.budget,
                         &mut *self.reader,
@@ -2888,8 +3067,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         reader_cell.borrow_mut().lookahead_bits(offset, num_bits)
                     };
                     let mut ctx = crate::expr::ExprContext::with_variable_map(
-                        Some(&active_doc),
-                        &current_path,
+                        doc_ref,
+                        path_ref,
                         &[],
                         Some(variable_map),
                         budget,
@@ -2917,20 +3096,28 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
         } else if let Some(ref expr_str) = props.length_expr {
             let ast = crate::expr::parse_expr(expr_str)?;
-            let mut current_path = builder.current_path();
-            if let Some(name) = elem_name {
-                let clean_name = name.split(':').next_back().unwrap_or(name);
-                let last_seg = current_path.segments().last().map(|s| s.as_str());
-                if last_seg != Some(clean_name) {
-                    let _ = current_path.try_push(clean_name);
+            let (active_doc, current_path);
+            let (doc_ref, path_ref) = if ast.needs_infoset_doc() {
+                let mut path = builder.current_path();
+                if let Some(name) = elem_name {
+                    let clean_name = name.split(':').next_back().unwrap_or(name);
+                    let last_seg = path.last_step().map(|s| s.local_name());
+                    if last_seg != Some(clean_name) {
+                        let _ = path.try_push(clean_name);
+                    }
                 }
-            }
-            let active_doc = builder.active_doc();
+                active_doc = Some(builder.active_doc());
+                current_path = path;
+                (active_doc.as_ref(), &current_path)
+            } else {
+                current_path = crate::types::InfosetPath::root();
+                (None, &current_path)
+            };
             let mut ctx = crate::expr::ExprContext::with_variable_map(
-                Some(&active_doc),
-                &current_path,
+                doc_ref,
+                path_ref,
                 &[],
-                Some(&self.variable_map),
+                Some(self.active_variable_map.as_ref().unwrap_or(&self.schema.variable_map)),
                 self.budget,
             )
             .with_occurs_index(self.current_occurs_index)
@@ -2977,19 +3164,17 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
             }
             if let Some(ast) = props.encoding_prop.expr_ast() {
                 let dyn_encoding = self.evaluate_ast_at(ast, builder, elem_name, None)?;
-                let dyn_upper = dyn_encoding.to_ascii_uppercase();
-                if dyn_upper.contains("6-BIT")
-                    || dyn_upper.contains("5-BIT")
-                    || dyn_upper.contains("7-BIT")
-                    || dyn_upper.contains("BIT-PACKED")
-                {
+                let parsed_kind = crate::encoding::EncodingKind::parse_name(&dyn_encoding);
+                if parsed_kind.is_sub_byte() {
                     let msg = alloc::format!(
                         "Runtime Schema Definition Error: Only encodings with byte-sized code units can be computed via expressions. The encoding '{}' must be specified as a literal encoding name in the DFDL schema.",
                         dyn_encoding
                     );
                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                 }
-                local_props.encoding = dyn_encoding;
+                local_props.encoding = parsed_kind;
+                local_props.encoding_char_bits = local_props.encoding.char_bits();
+                local_props.encoding_unit_bits = local_props.encoding.unit_bits();
             }
             if let Some(ref prop) = props.text_boolean_true_rep_prop {
                 if let Some(ast) = prop.expr_ast() {

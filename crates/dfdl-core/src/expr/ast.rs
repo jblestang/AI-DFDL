@@ -96,3 +96,94 @@ pub enum ExprAst {
         args: Vec<ExprAst>,
     },
 }
+
+impl ExprAst {
+    /// Returns `true` if evaluating this expression AST may access the active Infoset document.
+    ///
+    /// Expressions consisting only of literals, variable references, scalar arithmetic,
+    /// bitstream lookahead (`dfdlx:lookAhead`), occurs indexing (`dfdl:occursIndex`), or standard
+    /// scalar string functions do not require the active Infoset document. Gating document creation
+    /// behind this check avoids expensive deep-cloning of in-progress Infoset trees.
+    #[must_use]
+    pub fn needs_infoset_doc(&self) -> bool {
+        match self {
+            Self::Literal(_) | Self::Variable(_) => false,
+            Self::Path(_) => true,
+            Self::IfThenElse {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                cond.needs_infoset_doc()
+                    || then_expr.needs_infoset_doc()
+                    || else_expr.needs_infoset_doc()
+            }
+            Self::Unary { expr, .. } => expr.needs_infoset_doc(),
+            Self::Binary { left, right, .. } => {
+                left.needs_infoset_doc() || right.needs_infoset_doc()
+            }
+            Self::FnCall { name, args } => {
+                // Functions that inspect the element tree even without explicit path arguments:
+                if name.local_name == "checkConstraints"
+                    || name.local_name == "count"
+                    || name.local_name == "exists"
+                    || name.local_name == "empty"
+                    || name.local_name == "valueLength"
+                    || name.local_name == "contentLength"
+                {
+                    return true;
+                }
+                args.iter().any(|arg| arg.needs_infoset_doc())
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_needs_infoset_doc_detection() {
+        // Literals and variables do not need the document
+        let lit = ExprAst::Literal(DfdlValue::Int(42));
+        assert!(!lit.needs_infoset_doc());
+
+        let var = ExprAst::Variable(QName::local("my_var"));
+        assert!(!var.needs_infoset_doc());
+
+        // Arithmetic between variables and literals does not need doc
+        let bin = ExprAst::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(lit.clone()),
+            right: Box::new(var),
+        };
+        assert!(!bin.needs_infoset_doc());
+
+        // Function call without doc inspection (e.g. lookAhead)
+        let fn_la = ExprAst::FnCall {
+            name: QName::with_namespace("urn:dfdlx", "lookAhead", Some("dfdlx")),
+            args: alloc::vec![lit.clone(), ExprAst::Literal(DfdlValue::Int(8))],
+        };
+        assert!(!fn_la.needs_infoset_doc());
+
+        // Path expressions ALWAYS need doc
+        let path = ExprAst::Path(InfosetPath::parse("../header/len"));
+        assert!(path.needs_infoset_doc());
+
+        // Binary with path needs doc
+        let bin_with_path = ExprAst::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(lit),
+            right: Box::new(path),
+        };
+        assert!(bin_with_path.needs_infoset_doc());
+
+        // checkConstraints needs doc
+        let cc = ExprAst::FnCall {
+            name: QName::with_namespace("urn:dfdl", "checkConstraints", Some("dfdl")),
+            args: alloc::vec![],
+        };
+        assert!(cc.needs_infoset_doc());
+    }
+}

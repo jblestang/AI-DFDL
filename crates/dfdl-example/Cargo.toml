@@ -12,6 +12,9 @@ dfdl-schema = { path = "../dfdl-schema" }
 dfdl-xml = { path = "../dfdl-xml" }
 dfdl-vm = { path = "../dfdl-vm" }
 
+[dev-dependencies]
+dfdl-benchmark = { path = "../dfdl-benchmark" }
+
 [[example]]
 name = "validate_pcap"
 path = "examples/validate_pcap.rs"
@@ -23,6 +26,10 @@ path = "examples/dump_xml.rs"
 [[example]]
 name = "vm_decode"
 path = "examples/vm_decode.rs"
+
+[[example]]
+name = "stanag5602_simple"
+path = "examples/stanag5602_simple.rs"
 
 [lints]
 workspace = true

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- <![CDATA[
+TCP Message Payload DFDL Definition
+
+This file defines a group that is referenced from your `tcpContentType.dfdl.xsd`
+file.
+
+The group contains the definition of the TCP message contents a.k.a. the "payload",
+which you would customize for your data format.
+]]> -->
+<schema
+  xmlns="http://www.w3.org/2001/XMLSchema"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:tcpHdr="urn:dfdlschemas.github.io:schema:dfdl:tcpMessage:tcpHdr"
+  xmlns:msg="urn:example.com:schema:dfdl:message:msg"
+  targetNamespace="urn:example.com:schema:dfdl:message:msg">
+
+  <xs:import
+    namespace="urn:dfdlschemas.github.io:schema:dfdl:tcpMessage:tcpHdr"
+    schemaLocation="/io/github/dfdlschemas/tcpMessage/xsd/tcpMessageType.dfdl.xsd"/>
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="tcpHdr:baseFormat"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <!--
+   The import and default format above are boilerplate.
+
+   This group is where the payload fields are defined.
+
+   Just for isolated testing purposes this contains a single field named "testBytes"
+  -->
+
+  <group name="payloadGroup">
+    <sequence>
+      <element name="testBytes" type="xs:hexBinary" dfdl:lengthKind="delimited" dfdl:encoding="ISO-8859-1"/>
+    </sequence>
+  </group>
+
+</schema>

@@ -1,0 +1,18 @@
+[package]
+name = "dfdl-layers"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Concrete layer and extension implementations for the DFDL engine"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = []
+std = ["dfdl-core/std"]
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", default-features = false }
+miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
+
+[lints]
+workspace = true

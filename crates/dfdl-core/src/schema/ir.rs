@@ -249,7 +249,7 @@ pub struct InScopeDelimiter {
     /// Case sensitivity (`dfdl:ignoreCase`).
     pub ignore_case: bool,
     /// Encoding under which delimiter characters are encoded.
-    pub encoding: String,
+    pub encoding: crate::encoding::EncodingKind,
 }
 
 /// Compiled DFDL escapeScheme definition (§13.2.1).
@@ -984,9 +984,13 @@ pub struct ResolvedProperties {
     /// Number of bytes or bits to skip after terminator (`dfdl:trailingSkip`).
     pub trailing_skip: usize,
     /// Character encoding for textual scalars.
-    pub encoding: String,
-    /// Pre-compiled character encoding property (`Constant(String)` or pre-compiled `Expression`).
-    pub encoding_prop: DfdlProp<String>,
+    pub encoding: crate::encoding::EncodingKind,
+    /// Pre-compiled character encoding property (`Constant(EncodingKind)` or pre-compiled `Expression`).
+    pub encoding_prop: DfdlProp<crate::encoding::EncodingKind>,
+    /// Pre-computed character bits for sub-byte encodings (e.g. 1-7 bits), or None if standard/byte-aligned.
+    pub encoding_char_bits: Option<usize>,
+    /// Pre-computed mandatory character alignment in bits.
+    pub encoding_unit_bits: usize,
     /// Sequence separator string if specified.
     pub separator: Option<String>,
     /// Pre-compiled sequence separator property if specified.
@@ -1048,8 +1052,12 @@ pub struct ResolvedProperties {
     pub fill_byte_raw: Option<String>,
     /// Optional dynamic input value calculation expression string (`dfdl:inputValueCalc`).
     pub input_value_calc: Option<String>,
+    /// Pre-compiled input value calculation property (`dfdl:inputValueCalc`).
+    pub input_value_calc_prop: Option<DfdlProp<String>>,
     /// Optional dynamic output value calculation expression string (`dfdl:outputValueCalc`).
     pub output_value_calc: Option<String>,
+    /// Pre-compiled output value calculation property (`dfdl:outputValueCalc`).
+    pub output_value_calc_prop: Option<DfdlProp<String>>,
     /// Assertions attached to this term.
     pub asserts: Vec<CompiledAssert>,
     /// Optional hidden group reference string (`dfdl:hiddenGroupRef`).
@@ -1058,8 +1066,12 @@ pub struct ResolvedProperties {
     pub is_hidden: bool,
     /// DFDL setVariable statements attached to this term (`(var_name, value_expr)`).
     pub set_variables: Vec<(QName, String)>,
+    /// Pre-compiled DFDL setVariable statements (`(var_name, Option<ExprAst>, raw_string)`).
+    pub set_variables_compiled: Vec<(QName, Option<crate::expr::ExprAst>, String)>,
     /// DFDL newVariableInstance statements attached to this term (`(var_name, default_value_expr)`).
     pub new_variable_instances: Vec<(QName, Option<String>)>,
+    /// Pre-compiled DFDL newVariableInstance statements (`(var_name, Option<ExprAst>, raw_string_opt)`).
+    pub new_variable_instances_compiled: Vec<(QName, Option<crate::expr::ExprAst>, Option<String>)>,
     /// Text number check policy (Lax or Strict).
     pub text_number_check_policy: TextNumberCheckPolicy,
     /// Optional text number pattern (ICU DecimalFormat pattern string).
@@ -1550,8 +1562,10 @@ impl Default for ResolvedProperties {
             alignment_kind: AlignmentKind::default(),
             leading_skip: 0,
             trailing_skip: 0,
-            encoding: String::from("UTF-8"),
-            encoding_prop: DfdlProp::constant(String::from("UTF-8")),
+            encoding: crate::encoding::EncodingKind::Utf8,
+            encoding_prop: DfdlProp::constant(crate::encoding::EncodingKind::Utf8),
+            encoding_char_bits: None,
+            encoding_unit_bits: 8,
             separator: None,
             separator_prop: None,
             separator_position: SeparatorPosition::default(),
@@ -1582,12 +1596,16 @@ impl Default for ResolvedProperties {
             fill_byte_defined: true,
             fill_byte_raw: None,
             input_value_calc: None,
+            input_value_calc_prop: None,
             output_value_calc: None,
+            output_value_calc_prop: None,
             asserts: Vec::new(),
             hidden_group_ref: None,
             is_hidden: false,
             set_variables: Vec::new(),
+            set_variables_compiled: Vec::new(),
             new_variable_instances: Vec::new(),
+            new_variable_instances_compiled: Vec::new(),
             text_number_check_policy: TextNumberCheckPolicy::Lax,
             text_number_pattern: None,
             text_standard_decimal_separator: String::from("."),
@@ -1743,10 +1761,31 @@ pub struct CompiledSchema {
     pub unqualified_path_step_policy: crate::types::UnqualifiedPathStepPolicy,
     /// `maxHexBinaryLengthInBytes` tunable: maximum allowed byte length for xs:hexBinary values.
     pub max_hex_binary_length_in_bytes: Option<usize>,
+    /// `maxSkipLengthInBytes` tunable: maximum allowed byte length for leadingSkip and trailingSkip.
+    pub max_skip_length_in_bytes: usize,
+    /// Precomputed cache of whether each term has physical representation in the data stream.
+    /// Indexed by NodeId.0 as usize for O(1) zero-allocation lookup.
+    pub term_representation: Vec<bool>,
 }
 
 impl CompiledSchema {
+    /// Precomputes the representation table for all registered terms.
+    pub fn precompute_term_representations(&mut self) {
+        let max_id = self.terms.iter().map(|t| t.id.0 as usize).max().unwrap_or(0);
+        let mut rep = alloc::vec![false; max_id.saturating_add(1)];
+        let mut visited = alloc::vec::Vec::new();
+        for term in &self.terms {
+            visited.clear();
+            let has_rep = self.term_has_representation_impl(term.id, &mut visited);
+            if let Some(slot) = rep.get_mut(term.id.0 as usize) {
+                *slot = has_rep;
+            }
+        }
+        self.term_representation = rep;
+    }
+
     /// Resolves a term by `NodeId` from the schema graph arena.
+    #[inline]
     #[must_use]
     pub fn get_term(&self, id: NodeId) -> Option<&CompiledTerm> {
         let idx = id.0 as usize;
@@ -1781,10 +1820,15 @@ impl CompiledSchema {
     /// - Either it has framing (`dfdl:initiator` / `dfdl:terminator`), OR
     /// - It is a simple element, OR
     /// - It is a complex element containing at least one child term that has representation.
+    #[inline]
     #[must_use]
     pub fn term_has_representation(&self, term_id: NodeId) -> bool {
-        let mut visited = alloc::vec::Vec::new();
-        self.term_has_representation_impl(term_id, &mut visited)
+        if let Some(&has_rep) = self.term_representation.get(term_id.0 as usize) {
+            has_rep
+        } else {
+            let mut visited = alloc::vec::Vec::new();
+            self.term_has_representation_impl(term_id, &mut visited)
+        }
     }
 
     fn term_has_representation_impl(
@@ -1859,8 +1903,8 @@ impl CompiledSchema {
     /// Finds a compiled element term by traversing an `InfosetPath` from schema root.
     #[must_use]
     pub fn find_term_by_path(&self, path: &crate::types::InfosetPath) -> Option<&CompiledTerm> {
-        let segs = path.segments();
-        if segs.is_empty() {
+        let steps = path.steps();
+        if steps.is_empty() {
             return self.root_term();
         }
         let root = self.root_term()?;
@@ -1872,24 +1916,22 @@ impl CompiledSchema {
             .unwrap_or(&root.name.local_name);
 
         let mut idx = 0;
-        if let Some(first) = segs.first() {
-            let clean_first = first.split(':').next_back().unwrap_or(first);
+        if let Some(first) = steps.first() {
+            let clean_first = first.local_name();
             if clean_first == clean_root {
                 idx = 1;
             }
         }
 
         let mut curr_term = root;
-        while idx < segs.len() {
-            let seg = segs.get(idx)?;
-            let clean_seg = seg.split(':').next_back().unwrap_or(seg);
-            let target_name = clean_seg.split('[').next().unwrap_or(clean_seg);
-
-            if target_name == "." || target_name.starts_with(".(") || target_name == ".." || target_name.starts_with("..(") {
+        while idx < steps.len() {
+            let step = steps.get(idx)?;
+            if step.is_self() || step.is_parent() {
                 idx = idx.saturating_add(1);
                 continue;
             }
 
+            let target_name = step.local_name();
             let found = self.find_child_element_term(curr_term.id, target_name)?;
             curr_term = found;
             idx = idx.saturating_add(1);
@@ -1939,6 +1981,47 @@ impl CompiledSchema {
                 None
             }
             TermKind::GroupRef(target_id) => self.find_child_element_term(*target_id, child_name),
+        }
+    }
+
+    fn find_all_child_element_terms<'a>(
+        &'a self,
+        parent_id: NodeId,
+        child_name: &str,
+        results: &mut Vec<&'a CompiledTerm>,
+    ) {
+        let Some(parent) = self.get_term(parent_id) else { return; };
+        match &parent.kind {
+            TermKind::Element(el) => {
+                if let CompiledType::Complex(seq_id) = el.type_ir {
+                    self.find_all_child_element_terms(seq_id, child_name, results);
+                }
+            }
+            TermKind::Sequence(seq) => {
+                for &member_id in &seq.members {
+                    if let Some(term) = self.get_term(member_id) {
+                        let local = term.name.local_name.split(':').next_back().unwrap_or(&term.name.local_name);
+                        if local == child_name {
+                            results.push(term);
+                        }
+                        self.find_all_child_element_terms(member_id, child_name, results);
+                    }
+                }
+            }
+            TermKind::Choice(ch) => {
+                for &branch_id in &ch.branches {
+                    if let Some(term) = self.get_term(branch_id) {
+                        let local = term.name.local_name.split(':').next_back().unwrap_or(&term.name.local_name);
+                        if local == child_name {
+                            results.push(term);
+                        }
+                        self.find_all_child_element_terms(branch_id, child_name, results);
+                    }
+                }
+            }
+            TermKind::GroupRef(target_id) => {
+                self.find_all_child_element_terms(*target_id, child_name, results);
+            }
         }
     }
 
@@ -2056,8 +2139,8 @@ impl CompiledSchema {
     }
 
     fn check_path_for_query_style(&self, path: &crate::types::InfosetPath) -> DFDLResult<()> {
-        let segs = path.segments();
-        if segs.is_empty() {
+        let steps = path.steps();
+        if steps.is_empty() {
             return Ok(());
         }
         let root = match self.root_term() {
@@ -2077,29 +2160,25 @@ impl CompiledSchema {
 
         let mut idx = 0;
         if path.is_absolute() {
-            if let Some(first) = segs.first() {
-                let clean_first = first.split(':').next_back().unwrap_or(first);
-                let target_first = clean_first.split('[').next().unwrap_or(clean_first);
-                if target_first == clean_root {
+            if let Some(first) = steps.first() {
+                if first.local_name() == clean_root {
                     idx = 1;
                 }
             }
         }
 
-        while idx < segs.len() {
-            let seg = match segs.get(idx) {
+        while idx < steps.len() {
+            let step = match steps.get(idx) {
                 Some(s) => s,
                 None => break,
             };
-            let clean_seg = seg.split(':').next_back().unwrap_or(seg);
-            let target_name = clean_seg.split('[').next().unwrap_or(clean_seg);
 
-            if target_name == "." || target_name.starts_with(".(") {
+            if step.is_self() {
                 idx = idx.saturating_add(1);
                 continue;
             }
 
-            if target_name == ".." {
+            if step.is_parent() {
                 if stack.len() > 1 {
                     let _ = stack.pop();
                 }
@@ -2110,22 +2189,46 @@ impl CompiledSchema {
                 continue;
             }
 
-            if let Some(found) = self.find_child_element_term(curr_term.id, target_name) {
-                if let TermKind::Element(ref el) = found.kind {
-                    let is_array = el.max_occurs.is_none() || el.max_occurs > Some(1);
-                    let has_predicate = clean_seg.contains('[');
-                    if is_array && !has_predicate {
-                        let msg = alloc::format!(
-                            "Schema Definition Error: Query-style paths not supported. Path step '{}' references array element without an index predicate",
-                            target_name
-                        );
-                        return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
-                    }
+            let target_name = step.local_name();
+            let mut matches: Vec<&CompiledTerm> = Vec::new();
+            self.find_all_child_element_terms(curr_term.id, target_name, &mut matches);
+            if matches.is_empty() {
+                break;
+            }
+
+            let has_array = matches.iter().any(|t| {
+                if let TermKind::Element(ref el) = t.kind {
+                    el.max_occurs.is_none() || el.max_occurs > Some(1)
+                } else {
+                    false
                 }
+            });
+            let has_scalar = matches.iter().any(|t| {
+                if let TermKind::Element(ref el) = t.kind {
+                    el.max_occurs == Some(1)
+                } else {
+                    false
+                }
+            });
+            let has_predicate = step.index_predicate.is_some() || step.predicate_expr.is_some();
+            if has_array && has_scalar && !has_predicate {
+                let msg = alloc::format!(
+                    "Schema Definition Error: Path step is ambiguous: '{}' can be to an array or a non-array element depending on context",
+                    target_name
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+            if has_array && !has_predicate {
+                let msg = alloc::format!(
+                    "Schema Definition Error: Query-style paths not supported. Path step '{}' references array element without an index predicate",
+                    target_name
+                );
+                return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+            }
+
+            if let Some(&found) = matches.first() {
                 stack.push(found);
                 curr_term = found;
-            } else {
-                break;
             }
             idx = idx.saturating_add(1);
         }
@@ -2170,6 +2273,8 @@ mod tests {
             max_occurs_bounds: None,
             unqualified_path_step_policy: Default::default(),
             max_hex_binary_length_in_bytes: None,
+            max_skip_length_in_bytes: crate::limits::DEFAULT_MAX_SKIP_LENGTH_IN_BYTES,
+            term_representation: Vec::new(),
         };
 
         let root = schema.root_term().unwrap();
@@ -2461,6 +2566,8 @@ mod tests {
             max_occurs_bounds: None,
             unqualified_path_step_policy: Default::default(),
             max_hex_binary_length_in_bytes: None,
+            max_skip_length_in_bytes: crate::limits::DEFAULT_MAX_SKIP_LENGTH_IN_BYTES,
+            term_representation: Vec::new(),
         };
 
         // Find path through nested complex elements

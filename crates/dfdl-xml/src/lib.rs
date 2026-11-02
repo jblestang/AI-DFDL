@@ -11,6 +11,6 @@ pub mod event;
 pub mod limits;
 pub mod reader;
 
-pub use event::{Attribute, XmlEvent};
+pub use event::{Attribute, QNameRef, XmlEvent};
 pub use limits::XmlReaderLimits;
 pub use reader::XmlReader;

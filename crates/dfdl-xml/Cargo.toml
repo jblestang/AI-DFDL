@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
-std = []
+std = ["dfdl-core/std"]
 
 [dependencies]
 dfdl-core = { path = "../dfdl-core", default-features = false }

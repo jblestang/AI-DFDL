@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tdml:testSuite suiteName="PCAP"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" 
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:daf="urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext"
+  xmlns:pcap="urn:owlcyberdefense.com:schema:dfdl:pcap"
+  defaultRoundTrip="true"
+  defaultConfig="littleEndian">
+  
+  <tdml:defineConfig name="littleEndian">
+    <daf:externalVariableBindings>
+	    <daf:bind name="dfdl:byteOrder">littleEndian</daf:bind>
+    </daf:externalVariableBindings>
+    <daf:tunables>
+      <daf:maxOccursBounds>50000</daf:maxOccursBounds>
+    </daf:tunables>
+  </tdml:defineConfig>
+
+<!-- Test name: pcap_test_tcp_ecn_no_roundtrip
+       Purpose: Show that ecn data parses correctly. Note that this data is not
+       actually conforming to TCP ECN specs. The data is too short (58 bytes and
+       54 bytes, rather than expected minimum length 60 bytes). However, this data
+       parses correctly anyway. We consider it "well formed" just not valid. 
+-->
+ <tdml:parserTestCase name="pcap_test_tcp_ecn_no_roundtrip" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test"
+    roundTrip='none'>
+    <tdml:document>
+      <tdml:documentPart type="file">data/tcp.ecn.pcap</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">infosets/tcp.ecn.pcap.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  
+  <!--
+    Test name: pcap_test_tcp_ecn
+       Schema: pcap.dfdl.xsd
+         Root: PCAP
+      Purpose: This test is to exercise the pcap schema to parse a sample TCP/HTTP of a file transfer 
+      using ECN (Explicit Congestion Notification) feature per RFC3168. Frame 48 experienced Congestion Encountered. 
+  -->
+
+  <!-- This test cannot round trip without three pass mode.
+  
+  Two of the packets originally have length 58 and are not padded to 60.
+  When we unparse them we pad them to 60. On the re-parse, the <InclLen>
+  will be 60 instead of 58 and the round trip will fail.
+  
+  The schema in essence accepts data that it cannot and will not generate
+  on output. Three pass will reparse the data, then unparse again, and that
+  will match the length 60. 
+  -->
+  <tdml:parserTestCase name="pcap_test_tcp_ecn" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test"
+    roundTrip='threePass'>
+    <tdml:document>
+      <tdml:documentPart type="file">data/tcp.ecn.pcap</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">infosets/tcp.ecn.pcap-reparse.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="pcap_test_dns" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test" >
+    <tdml:document>
+      <tdml:documentPart type="file">data/dns.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">infosets/dns.pcap.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+  <tdml:parserTestCase name="pcap_test_http_ipv6" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test">
+    <tdml:document>
+      <tdml:documentPart type="file">data/http.ipv6.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">infosets/http.ipv6.pcap.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+
+  <tdml:parserTestCase name="pcap_test_icmp" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test">
+    <tdml:document>
+      <tdml:documentPart type="file">data/icmp.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">infosets/icmp.pcap.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+  
+  <tdml:unparserTestCase name="pcap_test_icmp_unparse1" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test" 
+    roundTrip="true">
+    <tdml:document>
+      <tdml:documentPart type="file">data/icmp1.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">infosets/icmp1.pcap.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:unparserTestCase>
+
+    <!--
+    Test name: invalid_magic_number
+       Schema: pcap.dfdl.xsd
+         Root: PCAP
+      Purpose: This test demonstrates the fix for DFDL-980, where an invalid magic number was resulting in 
+               the Abort error "Invariant broken"
+  -->
+
+  <tdml:parserTestCase name="invalid_magic_number" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test - DFDL-980">
+    <tdml:document>
+      <tdml:documentPart type="file">data/icmp.badMagicNum.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error: Assertion failed</tdml:error>
+      <tdml:error>Magic number was not 0xA1B2C3D4 (for bigEndian) or 0xD4C3B2A1 (for littleEndian)</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: invalid_version
+       Schema: pcap.dfdl.xsd
+         Root: PCAP
+      Purpose: This test demonstrates that the pcap schema will validate the version number, which should be 2.4
+  -->
+
+  <tdml:parserTestCase name="invalid_version" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test - DFDL-928">
+    <tdml:document>
+      <tdml:documentPart type="file">data/icmp.badVersion.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error: Assertion failed</tdml:error>
+      <tdml:error>PCAP version must be 2.4</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+  <!--
+    Test name: invalid_network_type
+       Schema: pcap.dfdl.xsd
+         Root: PCAP
+      Purpose: This test demonstrates that the pcap schema will validate the network type, which currently must be 1 (LINKTYPE_ETHERNET)
+  -->
+
+  <tdml:parserTestCase name="invalid_network_type" root="PCAP"
+    model="com/tresys/pcap/xsd/pcap.dfdl.xsd" description="pcap test - DFDL-928">
+    <tdml:document>
+      <tdml:documentPart type="file">data/http.ipv6.badNetwork.cap</tdml:documentPart>
+    </tdml:document>
+    <tdml:errors>
+      <tdml:error>Parse Error: Assertion failed</tdml:error>
+      <tdml:error>Link layer</tdml:error>
+      <tdml:error>unknown</tdml:error>
+      <tdml:error>21</tdml:error>
+    </tdml:errors>
+  </tdml:parserTestCase>
+  
+</tdml:testSuite>

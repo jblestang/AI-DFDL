@@ -38,6 +38,8 @@ pub enum VmEvent<'a> {
         id: SymbolId,
         /// Float value.
         val: f64,
+        /// True if 64-bit double precision, false if 32-bit single precision.
+        is_f64: bool,
     },
     /// Emitted boolean scalar value.
     ScalarBool {
@@ -105,6 +107,8 @@ pub enum StoredEvent {
         id: SymbolId,
         /// Float value.
         val: f64,
+        /// True if 64-bit double precision, false if 32-bit single precision.
+        is_f64: bool,
     },
     /// Emitted boolean scalar value.
     ScalarBool {
@@ -236,7 +240,7 @@ impl VmEventSink for ArenaEventSink {
             VmEvent::ScalarInt { id, val, is_signed } => {
                 StoredEvent::ScalarInt { id, val, is_signed }
             }
-            VmEvent::ScalarFloat { id, val } => StoredEvent::ScalarFloat { id, val },
+            VmEvent::ScalarFloat { id, val, is_f64 } => StoredEvent::ScalarFloat { id, val, is_f64 },
             VmEvent::ScalarBool { id, val } => StoredEvent::ScalarBool { id, val },
             VmEvent::ScalarString { id, val } => StoredEvent::ScalarString {
                 id,
@@ -378,11 +382,15 @@ impl<'a> VmEventSink for DomBuilderSink<'a> {
                 }
                 Ok(())
             }
-            VmEvent::ScalarFloat { id, val } => {
+            VmEvent::ScalarFloat { id, val, is_f64 } => {
                 let qname = self.symbols.resolve(id).cloned().ok_or_else(|| {
                     DFDLError::new(DFDLErrorKind::Parse, "Unresolved SymbolId in ScalarFloat")
                 })?;
-                let dfdl_val = DfdlValue::Double(val);
+                let dfdl_val = if is_f64 {
+                    DfdlValue::Double(val)
+                } else {
+                    DfdlValue::Float(val as f32)
+                };
                 if let Some(top) = self.stack.last_mut() {
                     if top.name == qname
                         && matches!(top.state, ElementState::NoValue)

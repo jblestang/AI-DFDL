@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<tdml:testSuite suiteName="Gpssps" description="Gpssps tests"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/" 
+  xmlns:fn="http://www.w3.org/2005/xpath-functions" 
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData" 
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  defaultRoundTrip="onePass">
+
+  <tdml:parserTestCase name="test_gpssps_01" root="Gpssps" model="com/owlcyberdefense/gpssps/xsd/gpssps.dfdl.xsd">
+    <tdml:document>
+      <tdml:documentPart type="file">com/owlcyberdefense/gpssps/data/test_01.gpssps</tdml:documentPart>
+    </tdml:document>
+    <tdml:infoset>
+      <tdml:dfdlInfoset type="file">com/owlcyberdefense/gpssps/infosets/test_01.gpssps.xml</tdml:dfdlInfoset>
+    </tdml:infoset>
+  </tdml:parserTestCase>
+
+</tdml:testSuite>

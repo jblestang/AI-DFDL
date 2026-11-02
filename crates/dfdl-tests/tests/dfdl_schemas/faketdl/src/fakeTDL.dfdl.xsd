@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xs:schema
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:fakeTDL="urn:com.owlcyberdefense.fakeTDL">
+  <!--
+  This schema has no target namespace on purpose.
+
+  It defines a reusable fakeTDL element which can be used directly for testing or
+  incorporated into a larger structure via an element reference.
+
+  It also defines a fakeTDLFile element which is primarily for testing and allows
+  parsing and unparsing files containing many fakeTDL messages.
+
+  Note that a schema with no target namespace cannot have a default namespace definition.
+  That means you can't get away with avoiding the need for the "xs:" prefixes on all
+  the XSD/DFDL keywords in a no-target-namespace schema. As a result, it's best for these
+  no-namespace schemas that define global elements to be kept as small as possible.
+
+  Hence, schema files that define global elements should *only* define global elements.
+  Other definitions of the types/groups used, should go in an imported schema file
+  which has a namespace.
+  -->
+
+  <xs:import namespace="urn:com.owlcyberdefense.fakeTDL" schemaLocation="fakeTDLType.dfdl.xsd" />
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="fakeTDL:baseFormat"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:element name="fakeTDL" type="fakeTDL:fakeTDLType" dfdl:ref="fakeTDL:msg">
+    <xs:annotation><xs:documentation>
+      Use this element to parse/unparse a single fakeTDL message.
+    </xs:documentation></xs:annotation>
+  </xs:element>
+
+  <xs:element name="fakeTDLFile">
+    <xs:annotation>
+      <xs:documentation>
+        Use this element for testing parse/unparse of files of multiple fakeTDL messages.
+        This is primarily for testing purposes.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="fakeTDL" type="fakeTDL:fakeTDLType" dfdl:ref="fakeTDL:msg"
+                    minOccurs="1" maxOccurs="1000" dfdl:occursCountKind="implicit">
+          <xs:annotation><xs:appinfo source="http://www.ogf.org/dfdl/">
+            <!--
+            This array of fakeTDL messages must consume the whole file.
+
+            This discriminator means: if there is even 1 byte of data available then
+            the DFDL parser decides that this variable-occurrences array *must* have
+            one more element.
+
+            That implies that the whole file must contain fakeTDL messages and
+            they must consume all the data in the file.
+            -->
+            <dfdl:discriminator testKind="pattern" testPattern="."/>
+          </xs:appinfo></xs:annotation>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

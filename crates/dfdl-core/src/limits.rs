@@ -22,7 +22,12 @@ pub struct ResourceLimits {
     pub max_infoset_nodes: usize,
     /// Maximum schema byte size accepted by the schema compiler.
     pub max_schema_bytes: usize,
+    /// Maximum skip length in bytes for leadingSkip and trailingSkip (Daffodil tunable: maxSkipLengthInBytes).
+    pub max_skip_length_in_bytes: usize,
 }
+
+/// Default limit for skip length in bytes (leadingSkip and trailingSkip) per DFDL tunable standards.
+pub const DEFAULT_MAX_SKIP_LENGTH_IN_BYTES: usize = 1024;
 
 impl Default for ResourceLimits {
     /// Returns safe default resource limits suitable for constrained environments.
@@ -35,6 +40,7 @@ impl Default for ResourceLimits {
             max_expression_work: 100_000,
             max_infoset_nodes: 500_000,
             max_schema_bytes: 10_485_760, // 10 MiB
+            max_skip_length_in_bytes: DEFAULT_MAX_SKIP_LENGTH_IN_BYTES,
         }
     }
 }
@@ -52,6 +58,13 @@ impl ResourceLimits {
     #[must_use]
     pub const fn check_array_occurrences(&self, count: usize) -> bool {
         count <= self.max_array_occurrences
+    }
+
+    /// Checks if a skip length in bytes exceeds the configured tunable limit.
+    #[inline]
+    #[must_use]
+    pub const fn check_skip_length(&self, skip_bytes: usize) -> bool {
+        skip_bytes <= self.max_skip_length_in_bytes
     }
 }
 

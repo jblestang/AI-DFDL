@@ -1,7 +1,5 @@
 //! Numeric parsing and conversion utilities for the DFDL parser engine.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -35,7 +33,7 @@ pub(crate) fn parse_flexible_int_i64(s: &str) -> Option<i64> {
         return i64::from_str_radix(&clean[2..], 16).ok();
     }
     if clean.starts_with("-0x") || clean.starts_with("-0X") {
-        return i64::from_str_radix(&clean[3..], 16).ok().map(|v| -v);
+        return i64::from_str_radix(&clean[3..], 16).ok().and_then(|v| v.checked_neg());
     }
     if let Some((int_part, dec_part)) = clean.split_once('.') {
         if dec_part.chars().all(|c| c == '0') {
@@ -153,10 +151,10 @@ pub(crate) fn parse_flexible_f64_with_props(
                 let lower_exp = exp.to_ascii_lowercase();
                 let mut start = 0;
                 while let Some(pos) = lower_norm[start..].find(&lower_exp) {
-                    let actual_pos = start + pos;
+                    let actual_pos = start.saturating_add(pos);
                     res.push_str(&norm_dec[start..actual_pos]);
                     res.push('E');
-                    start = actual_pos + lower_exp.len();
+                    start = actual_pos.saturating_add(lower_exp.len());
                 }
                 res.push_str(&norm_dec[start..]);
                 res
@@ -172,7 +170,7 @@ pub(crate) fn parse_flexible_f64_with_props(
                     None
                 }
             }) {
-                let mut res = String::with_capacity(norm_dec.len() + 1);
+                let mut res = String::with_capacity(norm_dec.len().saturating_add(1));
                 res.push_str(&norm_dec[..pos]);
                 res.push('E');
                 res.push_str(&norm_dec[pos..]);
@@ -294,27 +292,27 @@ pub(crate) fn extract_pattern_affixes(
 
         let mut pad = None;
         if let Some(star_pos) = find_unescaped_star(prefix) {
-            if let Some(ch) = prefix[star_pos + 1..].chars().next() {
-                let spec_len = 1 + ch.len_utf8();
+            if let Some(ch) = prefix.get(star_pos.saturating_add(1)..).and_then(|s| s.chars().next()) {
+                let spec_len = 1usize.saturating_add(ch.len_utf8());
                 if star_pos == 0 {
                     pad = Some((ch, PatternPadPos::BeforePrefix));
-                    prefix = &prefix[spec_len..];
-                } else if star_pos + spec_len == prefix.len() {
+                    prefix = prefix.get(spec_len..).unwrap_or("");
+                } else if star_pos.saturating_add(spec_len) == prefix.len() {
                     pad = Some((ch, PatternPadPos::AfterPrefix));
-                    prefix = &prefix[..star_pos];
+                    prefix = prefix.get(..star_pos).unwrap_or("");
                 }
             }
         }
         if pad.is_none() {
             if let Some(star_pos) = find_unescaped_star(suffix) {
-                if let Some(ch) = suffix[star_pos + 1..].chars().next() {
-                    let spec_len = 1 + ch.len_utf8();
+                if let Some(ch) = suffix.get(star_pos.saturating_add(1)..).and_then(|s| s.chars().next()) {
+                    let spec_len = 1usize.saturating_add(ch.len_utf8());
                     if star_pos == 0 {
                         pad = Some((ch, PatternPadPos::BeforeSuffix));
-                        suffix = &suffix[spec_len..];
-                    } else if star_pos + spec_len == suffix.len() {
+                        suffix = suffix.get(spec_len..).unwrap_or("");
+                    } else if star_pos.saturating_add(spec_len) == suffix.len() {
                         pad = Some((ch, PatternPadPos::AfterSuffix));
-                        suffix = &suffix[..star_pos];
+                        suffix = suffix.get(..star_pos).unwrap_or("");
                     }
                 }
             }
@@ -704,6 +702,18 @@ fn affix_has_whitespace(prefix: &str, suffix: &str) -> bool {
         .any(char::is_whitespace)
 }
 
+/// Checks whether a string starts or ends with whitespace, fast-pathing ASCII bytes.
+#[inline]
+fn has_outer_whitespace(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if let (Some(&first), Some(&last)) = (bytes.first(), bytes.last()) {
+        if first.is_ascii() && last.is_ascii() {
+            return first.is_ascii_whitespace() || last.is_ascii_whitespace();
+        }
+    }
+    s.starts_with(char::is_whitespace) || s.ends_with(char::is_whitespace)
+}
+
 pub(crate) fn parse_strict_int_i64(
     s: &str,
     pattern: Option<&str>,
@@ -712,7 +722,7 @@ pub(crate) fn parse_strict_int_i64(
     pad_char: Option<&str>,
     trim_kind: TextTrimKind,
 ) -> Option<i64> {
-    let had_outer_ws = s.starts_with(char::is_whitespace) || s.ends_with(char::is_whitespace);
+    let had_outer_ws = has_outer_whitespace(s);
     let mut clean = s;
     if trim_kind != TextTrimKind::None {
         if let Some(pad) = pad_char {
@@ -800,14 +810,14 @@ pub(crate) fn parse_strict_int_i64(
         (is_negative, rest, None)
     };
 
-    if body_str.starts_with(char::is_whitespace) || body_str.ends_with(char::is_whitespace) {
+    if has_outer_whitespace(body_str) {
         return None;
     }
 
     let (int_part, dec_part) = if let Some(idx) = body_str.find(decimal_sep) {
         (
             &body_str[..idx],
-            Some(&body_str[idx + decimal_sep.len()..]),
+            Some(&body_str[idx.saturating_add(decimal_sep.len())..]),
         )
     } else {
         (body_str, None)
@@ -824,12 +834,13 @@ pub(crate) fn parse_strict_int_i64(
 
     let abs_val = clean_int.parse::<u64>().ok()?;
     if is_neg {
-        if abs_val > (i64::MAX as u64) + 1 {
+        let max_neg_abs = (i64::MAX as u64).saturating_add(1);
+        if abs_val > max_neg_abs {
             None
-        } else if abs_val == (i64::MAX as u64) + 1 {
+        } else if abs_val == max_neg_abs {
             Some(i64::MIN)
         } else {
-            Some(-(abs_val as i64))
+            (abs_val as i64).checked_neg()
         }
     } else {
         if abs_val > i64::MAX as u64 {
@@ -848,7 +859,7 @@ pub(crate) fn parse_strict_uint_u64(
     pad_char: Option<&str>,
     trim_kind: TextTrimKind,
 ) -> Option<u64> {
-    let had_outer_ws = s.starts_with(char::is_whitespace) || s.ends_with(char::is_whitespace);
+    let had_outer_ws = has_outer_whitespace(s);
     let mut clean = s;
     if trim_kind != TextTrimKind::None {
         if let Some(pad) = pad_char {
@@ -892,7 +903,7 @@ pub(crate) fn parse_strict_f64(
     trim_kind: TextTrimKind,
 ) -> Option<f64> {
     use alloc::string::ToString;
-    let had_outer_ws = s.starts_with(char::is_whitespace) || s.ends_with(char::is_whitespace);
+    let had_outer_ws = has_outer_whitespace(s);
     let mut clean = s;
     if trim_kind != TextTrimKind::None {
         if let Some(pad) = pad_char {
@@ -999,12 +1010,12 @@ pub(crate) fn parse_strict_f64(
         (is_negative, rest, None)
     };
 
-    if body_str.starts_with(char::is_whitespace) || body_str.ends_with(char::is_whitespace) {
+    if has_outer_whitespace(body_str) {
         return None;
     }
 
     let (int_part, frac_and_exp) = if let Some(idx) = body_str.find(decimal_sep) {
-        (&body_str[..idx], Some(&body_str[idx + decimal_sep.len()..]))
+        (&body_str[..idx], Some(&body_str[idx.saturating_add(decimal_sep.len())..]))
     } else {
         (body_str, None)
     };
@@ -1022,10 +1033,10 @@ pub(crate) fn parse_strict_f64(
                     let lower_exp = exp.to_ascii_lowercase();
                     let mut start = 0;
                     while let Some(pos) = lower_norm[start..].find(&lower_exp) {
-                        let actual_pos = start + pos;
+                        let actual_pos = start.saturating_add(pos);
                         res.push_str(&frac_exp[start..actual_pos]);
                         res.push('E');
-                        start = actual_pos + lower_exp.len();
+                        start = actual_pos.saturating_add(lower_exp.len());
                     }
                     res.push_str(&frac_exp[start..]);
                     res
@@ -1041,7 +1052,7 @@ pub(crate) fn parse_strict_f64(
                         None
                     }
                 }) {
-                    let mut res = String::with_capacity(frac_exp.len() + 1);
+                    let mut res = String::with_capacity(frac_exp.len().saturating_add(1));
                     res.push_str(&frac_exp[..pos]);
                     res.push('E');
                     res.push_str(&frac_exp[pos..]);
@@ -1073,17 +1084,17 @@ pub(crate) fn convert_big_radix_to_dec(digits: &str, base: u32) -> DFDLResult<St
         })?;
         let mut carry = d;
         for place in &mut dec_digits {
-            let prod = (*place as u32) * base + carry;
-            *place = (prod % 10) as u8;
-            carry = prod / 10;
+            let prod = (*place as u32).saturating_mul(base).saturating_add(carry);
+            *place = (prod.checked_rem(10).unwrap_or(0)) as u8;
+            carry = prod.checked_div(10).unwrap_or(0);
         }
         while carry > 0 {
-            dec_digits.push((carry % 10) as u8);
-            carry /= 10;
+            dec_digits.push((carry.checked_rem(10).unwrap_or(0)) as u8);
+            carry = carry.checked_div(10).unwrap_or(0);
         }
     }
     dec_digits.reverse();
-    let s: String = dec_digits.into_iter().map(|d| (b'0' + d) as char).collect();
+    let s: String = dec_digits.into_iter().map(|d| (b'0'.saturating_add(d)) as char).collect();
     Ok(s)
 }
 
@@ -1457,11 +1468,11 @@ pub(crate) fn format_text_number(
             let sig = all_digits.get(lead..).unwrap_or("");
 
             // Decimal exponent of the first significant digit (negative for values < 1).
-            let raw_exp = int_part.len() as i64 - lead as i64 - 1;
+            let raw_exp = (int_part.len() as i64).saturating_sub(lead as i64).saturating_sub(1);
             let step = max_int as i64;
             let rem = raw_exp.rem_euclid(step);
-            let mut effective_exp = raw_exp - rem;
-            let num_int_digits = (1 + rem) as usize;
+            let mut effective_exp = raw_exp.saturating_sub(rem);
+            let num_int_digits = (1i64.saturating_add(rem)) as usize;
 
             let mut m_int: String = sig.chars().take(num_int_digits).collect();
             while m_int.len() < num_int_digits {
@@ -1479,7 +1490,7 @@ pub(crate) fn format_text_number(
             round_fraction(&mut m_int, &mut m_frac, max_frac, rounding.mode, is_negative);
             // Rounding carried past the mantissa width (e.g. 9.6 -> 10): renormalise.
             if m_int.len() > max_int {
-                effective_exp += step;
+                effective_exp = effective_exp.saturating_add(step);
                 m_int = String::from("1");
                 m_frac.clear();
             }

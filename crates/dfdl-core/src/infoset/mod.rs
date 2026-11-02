@@ -9,5 +9,8 @@ pub mod value;
 
 pub use events::{InfosetEvent, InfosetEventSink, InfosetSource};
 pub use state::ElementState;
-pub use tree::{InfosetBuilder, InfosetDocument, InfosetElement, InfosetNode, InfosetTreeSource};
+pub use tree::{
+    InfosetBuilder, InfosetCheckpoint, InfosetDocument, InfosetElement, InfosetNode,
+    InfosetTreeSource,
+};
 pub use value::{DfdlSimpleType, DfdlValue};

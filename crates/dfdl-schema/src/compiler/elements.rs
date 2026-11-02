@@ -178,6 +178,20 @@ pub(crate) fn validate_simple_type_facets(
         }
     }
 
+    for facet_name in &["length", "minLength", "maxLength"] {
+        if let Some(val_str) = props.get_property(facet_name) {
+            if let Ok(v) = val_str.trim().parse::<i64>() {
+                if v < 0 {
+                    let msg = alloc::format!(
+                        "Schema Definition Error: Value '{}' is not facet-valid with respect to minInclusive '0' for type 'nonNegativeInteger' on element '{}'",
+                        v, elem_name
+                    );
+                    return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+                }
+            }
+        }
+    }
+
     // 8. Inclusivity / Exclusivity conflict checks:
     if props.get_property("minInclusive").is_some() && props.get_property("minExclusive").is_some()
     {
@@ -194,6 +208,34 @@ pub(crate) fn validate_simple_type_facets(
             elem_name
         );
         return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+    }
+
+    let min_b = if let Some(s) = props.get_property("minInclusive") {
+        s.trim().parse::<f64>().ok().map(|v| (v, true))
+    } else if let Some(s) = props.get_property("minExclusive") {
+        s.trim().parse::<f64>().ok().map(|v| (v, false))
+    } else {
+        None
+    };
+    let max_b = if let Some(s) = props.get_property("maxInclusive") {
+        s.trim().parse::<f64>().ok().map(|v| (v, true))
+    } else if let Some(s) = props.get_property("maxExclusive") {
+        s.trim().parse::<f64>().ok().map(|v| (v, false))
+    } else {
+        None
+    };
+    if let (Some((min_val, min_inc)), Some((max_val, max_inc))) = (min_b, max_b) {
+        if min_val > max_val || (min_val == max_val && (!min_inc || !max_inc)) {
+            let msg = alloc::format!(
+                "Schema Definition Error: {}({}) must be less than or equal to {}({}) on element '{}'",
+                if min_inc { "MinInclusive" } else { "MinExclusive" },
+                min_val,
+                if max_inc { "MaxInclusive" } else { "MaxExclusive" },
+                max_val,
+                elem_name
+            );
+            return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
+        }
     }
 
     Ok(())
@@ -227,7 +269,7 @@ impl SchemaCompiler {
             if attr.name.prefix.is_some() {
                 continue;
             }
-            match attr.name.local_name.as_str() {
+            match attr.name.local_name {
                 "name" => name_opt = Some(alloc::string::ToString::to_string(&attr.value)),
                 "ref" => ref_opt = Some(alloc::string::ToString::to_string(&attr.value)),
                 "type" => type_opt = Some(alloc::string::ToString::to_string(&attr.value)),
@@ -738,8 +780,8 @@ pub(crate) fn parse_and_validate_enumeration_rep_attributes(
     seen_rep_items: &mut Vec<(String, RepRangeOrVal)>,
 ) -> DFDLResult<()> {
     let ranges_attr = attributes.iter().find(|a| {
-        (a.name.prefix.as_deref() == Some("dfdlx")
-            || a.name.prefix.as_deref() == Some("dfdl")
+        (a.name.prefix == Some("dfdlx")
+            || a.name.prefix == Some("dfdl")
             || a.name.prefix.is_none())
             && a.name.local_name == "repValueRanges"
     });
@@ -801,8 +843,8 @@ pub(crate) fn parse_and_validate_enumeration_rep_attributes(
     }
 
     let values_attr = attributes.iter().find(|a| {
-        (a.name.prefix.as_deref() == Some("dfdlx")
-            || a.name.prefix.as_deref() == Some("dfdl")
+        (a.name.prefix == Some("dfdlx")
+            || a.name.prefix == Some("dfdl")
             || a.name.prefix.is_none())
             && a.name.local_name == "repValues"
     });

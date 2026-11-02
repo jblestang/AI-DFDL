@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+Copyright (c) 2017-2023 Owl Cyber Defense. All rights reserved.
+
+Developed by: Owl Cyber Defense (formerly Tresys Technology) LLC
+              http://www.owlcyberdefense.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimers.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimers in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the names of Owl Cyber Defense, nor the names of its contributors
+    may be used to endorse or promote products derived from this Software
+    without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+-->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:sl="urn:syslog"
+           targetNamespace="urn:syslog">
+
+  <xs:include schemaLocation="common.dfdl.xsd"/>
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="sl:common"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:element name="SyslogRFC5424">
+    <xs:annotation>
+      <xs:documentation>
+        Defines a single syslog message of the RFC5424 format, including the
+        facility and severity. This should be used as the root element if the
+        goal is to only support RFC5424 messages.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="sl:PriorityValue" />
+        <xs:group ref="sl:RFC5424" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="RFC5424">
+    <xs:annotation>
+      <xs:documentation>
+        Defines a type containing the content of a RFC5424 syslog message,
+        excluding the facility and severity. This should be used when the
+        faciliy/severity are already parsed.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:group ref="sl:RFC5424" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:group name="RFC5424">
+    <xs:annotation>
+      <xs:documentation>
+        Defines all content of a RFC5424 syslog message that appears immediately
+        affter the severify/facility part of a syslog message.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="Header">
+        <xs:complexType>
+          <xs:group ref="sl:rfc5424headerGroup"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:group ref="sl:rfc5424BodyGroup"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="rfc5424headerGroup">
+    <xs:sequence>
+      <xs:sequence dfdl:separator="%SP;" dfdl:separatorPosition="postfix">
+        <xs:element name="Version" type="xs:int" dfdl:textNumberPattern="#0">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:discriminator test="{ . eq 1 }" />
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:element>
+        <xs:choice>
+          <xs:element name="Timestamp" type="xs:dateTime" dfdl:calendarPattern="yyyy-MM-dd'T'HH:mm:ssXXX" nillable="true" />
+          <xs:element name="TimestampNano" type="xs:dateTime" dfdl:calendarPattern="yyyy-MM-dd'T'HH:mm:ss.SSSXXX" nillable="true" />
+        </xs:choice>
+        <xs:element name="Hostname" nillable="true">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="1" />
+              <xs:maxLength value="255" />
+              <xs:pattern value="[!-~]{1,255}" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="AppName" nillable="true">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="1" />
+              <xs:maxLength value="48" />
+              <xs:pattern value="[!-~]{1,48}" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="ProcID" nillable="true">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="1" />
+              <xs:maxLength value="128" />
+              <xs:pattern value="[!-~]{1,128}" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="MsgID" nillable="true">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:minLength value="1" />
+              <xs:maxLength value="32" />
+              <xs:pattern value="[!-~]{1,32}" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:sequence>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="rfc5424BodyGroup">
+    <xs:sequence>
+      <xs:choice>
+        <xs:element name="NoStructuredData" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1" fixed="-">
+          <xs:annotation>
+            <xs:appinfo source="http://www.ogf.org/dfdl/">
+              <dfdl:assert test="{ . eq '-' }" />
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="StructuredData">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="SDElement" maxOccurs="32">
+                <xs:complexType>
+                  <xs:sequence dfdl:initiator="[" dfdl:terminator="]" dfdl:separator="%SP;">
+                    <xs:element name="SDID">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:minLength value="1" />
+                          <xs:maxLength value="32" />
+                          <xs:pattern value="[!-~-[= \]&quot;]]{1,32}" />
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:element>
+                    <xs:element name="SDParam" minOccurs="0" maxOccurs="32">
+                      <xs:complexType>
+                        <xs:sequence dfdl:separator="=">
+                          <xs:element name="ParamName">
+                            <xs:simpleType>
+                              <xs:restriction base="xs:string">
+                                <xs:minLength value="1" />
+                                <xs:maxLength value="32" />
+                                <xs:pattern value="[!-~-[= \]&quot;]]{1,32}" />
+                              </xs:restriction>
+                            </xs:simpleType>
+                          </xs:element>
+                          <xs:element name="ParamValue" dfdl:encoding="UTF-8" dfdl:escapeSchemeRef="sl:paramValueES">
+                            <xs:simpleType>
+                              <xs:restriction base="xs:string">
+                                <xs:minLength value="1" />
+                                <xs:maxLength value="255" />
+                              </xs:restriction>
+                            </xs:simpleType>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+      <xs:element name="Message" minOccurs="0" dfdl:initiator="%SP;">
+        <xs:complexType>
+          <xs:choice>
+            <xs:element name="UTF8" dfdl:initiator="%#xFEFF;" type="sl:msgStr" dfdl:encoding="UTF-8">
+              <xs:annotation>
+                <xs:documentation>
+                  The %#xFEFF; initiator represents the unicode byte-order mark character,
+                  which is the 3 bytes EF BB BF in UTF-8 encoding.
+                </xs:documentation>
+              </xs:annotation>
+            </xs:element>
+            <xs:element name="Any" type="sl:msgStr" dfdl:encoding="US-ASCII" />
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:group>
+
+</xs:schema>

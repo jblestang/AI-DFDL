@@ -383,6 +383,7 @@ impl VmInterpreter {
                     sink.on_event(VmEvent::ScalarFloat {
                         id: *symbol_id,
                         val,
+                        is_f64: *is_f64,
                     })?;
                     ip = ip.saturating_add(1);
                 }
@@ -525,6 +526,21 @@ impl VmInterpreter {
                     let current_bit = reader.position().0 as u64;
                     let target_bit =
                         start_bit.saturating_add((*total_bytes as u64).saturating_mul(8));
+                    if current_bit < target_bit {
+                        let skip_bits = target_bit.saturating_sub(current_bit) as usize;
+                        try_read!(reader.skip_bits(skip_bits));
+                    }
+                    ip = ip.saturating_add(1);
+                }
+                Instruction::PadToRegLength {
+                    start_reg,
+                    length_reg,
+                } => {
+                    let start_bit = self.get_reg(*start_reg);
+                    let total_bytes = self.get_reg(*length_reg);
+                    let current_bit = reader.position().0 as u64;
+                    let target_bit =
+                        start_bit.saturating_add(total_bytes.saturating_mul(8));
                     if current_bit < target_bit {
                         let skip_bits = target_bit.saturating_sub(current_bit) as usize;
                         try_read!(reader.skip_bits(skip_bits));

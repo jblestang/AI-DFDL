@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+Copyright (c) 2017-2023 Owl Cyber Defense. All rights reserved.
+
+Developed by: Owl Cyber Defense (formerly Tresys Technology) LLC
+              http://www.owlcyberdefense.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimers.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimers in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the names of Owl Cyber Defense, nor the names of its contributors
+    may be used to endorse or promote products derived from this Software
+    without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+-->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:sl="urn:syslog"
+           targetNamespace="urn:syslog">
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:defineFormat name="common">
+      <dfdl:format alignment="1" alignmentUnits="bytes"
+                   binaryBooleanFalseRep="0" binaryBooleanTrueRep="1"
+                   binaryCalendarEpoch="1970-01-01T00:00:00+00:00" binaryCalendarRep="bcd"
+                   binaryDecimalVirtualPoint="0" binaryFloatRep="ieee"
+                   binaryNumberCheckPolicy="lax" binaryNumberRep="binary"
+                   binaryPackedSignCodes="C D F C" calendarCenturyStart="53"
+                   calendarCheckPolicy="strict" calendarDaysInFirstWeek="4"
+                   calendarFirstDayOfWeek="Monday" calendarLanguage="en-US"
+                   calendarObserveDST="yes" calendarPatternKind="explicit"
+                   calendarTimeZone="UTC"
+                   choiceLengthKind="implicit" decimalSigned="yes"
+                   documentFinalTerminatorCanBeMissing="no" emptyValueDelimiterPolicy="none"
+                   encoding="iso-8859-1" encodingErrorPolicy="replace" escapeSchemeRef=""
+                   fillByte="%NUL;" floating="no" ignoreCase="no" initiatedContent="no"
+                   initiator="" leadingSkip="0" lengthKind="delimited" lengthUnits="bytes"
+                   nilKind="literalValue" nilValueDelimiterPolicy="none" nilValue="-"
+                   occursCountKind="implicit" outputNewLine="%CR;%LF;"
+                   prefixIncludesPrefixLength="no" representation="text" separator=""
+                   separatorPosition="infix" sequenceKind="ordered" terminator=""
+                   textBidi="no" textBooleanFalseRep="false" textBooleanJustification="left"
+                   textBooleanPadCharacter="%SP;" textBooleanTrueRep="true"
+                   textCalendarJustification="left" textCalendarPadCharacter="%SP;"
+                   textNumberCheckPolicy="strict" textNumberJustification="right"
+                   textNumberPadCharacter="0" textNumberRep="standard"
+                   textNumberRoundingIncrement="0.0" textNumberRoundingMode="roundUp"
+                   textNumberRounding="pattern" textOutputMinLength="0" textPadKind="none"
+                   textStandardBase="10" textStandardDecimalSeparator="."
+                   textStandardGroupingSeparator="," textStandardInfinityRep="Inf"
+                   textStandardNaNRep="NaN" textStandardZeroRep="" textStandardExponentRep="E"
+                   textStringJustification="left" textStringPadCharacter="%SP;"
+                   textTrimKind="none" textZonedSignStyle="asciiStandard" trailingSkip="0"
+                   truncateSpecifiedLengthString="no" useNilForDefault="no" utf16Width="fixed"
+                   separatorSuppressionPolicy="anyEmpty"
+                   byteOrder="littleEndian" bitOrder="mostSignificantBitFirst"/>
+      </dfdl:defineFormat>
+      <dfdl:defineEscapeScheme name="paramValueES">
+        <dfdl:escapeScheme escapeKind="escapeBlock" escapeBlockStart="&quot;" escapeBlockEnd="&quot;"
+                           escapeEscapeCharacter="\" extraEscapedCharacters="\ ]" generateEscapeBlock="always"/>
+      </dfdl:defineEscapeScheme>
+      <dfdl:format ref="sl:common"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:simpleType name="PriorityValueType" dfdl:textNumberPattern="##0" dfdl:initiator="&lt;" dfdl:terminator="&gt;">
+    <xs:restriction base="xs:int">
+      <xs:minInclusive value="0" />
+      <xs:maxInclusive value="191" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:group name="PriorityValue_hg">
+    <xs:sequence>
+      <xs:element name="PriorityValue" type="sl:PriorityValueType" dfdl:outputValueCalc="{ ../Facility * 8 + ../Severity }"/>
+    </xs:sequence>
+  </xs:group>
+
+  <xs:group name="PriorityValue">
+    <xs:annotation>
+      <xs:documentation>
+        Defines a Priority Value group that can be used with Daffodil to extract
+        severity/facility information. To use this, uncomment this and the
+        PriorityValue_hg group and comment out the below PriorityValue group.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:sequence dfdl:hiddenGroupRef="sl:PriorityValue_hg" />
+      <xs:element name="Facility" dfdl:inputValueCalc="{ ../PriorityValue idiv 8 }">
+        <xs:simpleType>
+          <xs:restriction base="xs:int">
+            <xs:minInclusive value="0" />
+            <xs:maxInclusive value="23" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="Severity" dfdl:inputValueCalc="{ ../PriorityValue mod 8 }">
+        <xs:simpleType>
+          <xs:restriction base="xs:int">
+            <xs:minInclusive value="0" />
+            <xs:maxInclusive value="7" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:sequence>
+  </xs:group>
+
+  <!--
+  <xs:group name="PriorityValue">
+    <xs:annotation>
+      <xs:documentation>
+        Defines a PriorityValue group that can be used with IBM DFDL but loses
+        severity/facility information. To use this, uncomment this group and
+        comment the above PriorityValue and PriorityValue_hg groups
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="PriorityValue" type="sl:PriorityValueType" />
+    </xs:sequence>
+  </xs:group>
+  -->
+
+  <xs:simpleType name="month3" dfdl:lengthKind="explicit" dfdl:length="3">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Jan" />
+      <xs:enumeration value="Feb" />
+      <xs:enumeration value="Mar" />
+      <xs:enumeration value="Apr" />
+      <xs:enumeration value="May" />
+      <xs:enumeration value="Jun" />
+      <xs:enumeration value="Jul" />
+      <xs:enumeration value="Aug" />
+      <xs:enumeration value="Sep" />
+      <xs:enumeration value="Oct" />
+      <xs:enumeration value="Nov" />
+      <xs:enumeration value="Dec" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="msgStr">
+    <xs:restriction base="xs:string">
+      <xs:maxLength value="9999" />
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

@@ -1081,7 +1081,7 @@ mod tests {
         };
         let props = crate::schema::ir::ResolvedProperties {
             representation: crate::schema::ir::Representation::Text,
-            encoding: alloc::string::ToString::to_string("{ 'X-DFDL-US-ASCII-6-BIT-PACKED' }"),
+            encoding_prop: crate::schema::ir::DfdlProp::parse_with("{ 'X-DFDL-US-ASCII-6-BIT-PACKED' }", |s| Ok(crate::encoding::EncodingKind::parse_name(s))).unwrap(),
             length_kind: crate::schema::ir::LengthKind::Explicit,
             length: Some(2),
             ..Default::default()
@@ -1230,7 +1230,7 @@ mod tests {
         // Manual alignment: automatic alignment disabled, so string starts at bit 4 (unaligned for byte charset)
         let elem2_props = crate::schema::ir::ResolvedProperties {
             representation: crate::schema::ir::Representation::Text,
-            encoding: alloc::string::String::from("US-ASCII"),
+            encoding: crate::encoding::EncodingKind::Ascii,
             length_kind: crate::schema::ir::LengthKind::Explicit,
             length: Some(3),
             length_units: crate::schema::ir::LengthUnits::Bytes,

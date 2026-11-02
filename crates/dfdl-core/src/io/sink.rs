@@ -89,6 +89,15 @@ impl VecByteSink {
         Self { buf: Vec::new() }
     }
 
+    /// Constructs a new [`VecByteSink`] pre-allocated with the given capacity.
+    #[inline]
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            buf: Vec::with_capacity(capacity),
+        }
+    }
+
     /// Consumes the sink and returns the underlying byte vector.
     #[inline]
     #[must_use]
@@ -106,6 +115,9 @@ impl VecByteSink {
 
 impl ByteSink for VecByteSink {
     fn write_byte(&mut self, byte: u8) -> DFDLResult<()> {
+        if self.buf.capacity() == 0 {
+            let _ = self.buf.try_reserve(64);
+        }
         try_push(&mut self.buf, byte)
     }
 

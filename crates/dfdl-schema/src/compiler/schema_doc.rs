@@ -10,21 +10,22 @@ use dfdl_core::types::QName;
 use dfdl_xml::{XmlEvent, XmlReader};
 
 use crate::annotation::{extract_dfdl_attributes, extract_dfdl_attributes_for_element};
+use crate::resolver::SchemaResolver;
 use crate::xsd_ast::{XsdSchema, XsdSequence, XsdType};
 use super::*;
 
 impl SchemaCompiler {
-    pub(crate) fn parse_schema_document_internal<F>(
+    pub(crate) fn parse_schema_document_internal<R>(
         &self,
         reader: &mut XmlReader,
-        resolver: &mut F,
+        resolver: &mut R,
         visited: &mut Vec<String>,
         root_xml: Option<&str>,
         enclosing_tns: Option<&str>,
         base_location: Option<&str>,
     ) -> DFDLResult<XsdSchema>
     where
-        F: FnMut(&str) -> Option<String>,
+        R: SchemaResolver,
     {
         let mut schema = XsdSchema::default();
         let mut in_schema = false;
@@ -268,7 +269,9 @@ impl SchemaCompiler {
                             let mut st_type = XsdType::Simple(DfdlSimpleType::String);
                             let mut seen_rep_items: Vec<(String, RepRangeOrVal)> = Vec::new();
 
-                            let mut in_restriction = false;
+                            let mut depth: usize = 1;
+                            let mut in_direct_restriction = false;
+                            let mut in_union = false;
                             while let Some(sub_ev) = reader.next_event()? {
                                 match sub_ev {
                                     XmlEvent::StartElement {
@@ -276,15 +279,32 @@ impl SchemaCompiler {
                                         ref attributes,
                                         ..
                                     } => {
+                                        depth = depth.saturating_add(1);
                                         let child_local = child_name.local_name.as_str();
-                                        extract_dfdl_attributes_for_element(
-                                            attributes,
-                                            &mut st_props,
-                                            Some(child_local),
-                                        )?;
-                                        st_props.update_namespaces(&reader.current_element_namespace_bindings());
-                                        if child_local == "restriction" {
-                                            in_restriction = true;
+                                        if depth == 2 {
+                                            extract_dfdl_attributes_for_element(
+                                                attributes,
+                                                &mut st_props,
+                                                Some(child_local),
+                                            )?;
+                                            st_props.update_namespaces(&reader.current_element_namespace_bindings());
+                                        }
+                                        if depth == 2 && child_local == "union" {
+                                            in_union = true;
+                                            if let Some(member_types) = attributes
+                                                .iter()
+                                                .find(|a| a.name.local_name == "memberTypes")
+                                                .map(|a| &a.value[..])
+                                            {
+                                                if let Some(first_type) = member_types.split_whitespace().next() {
+                                                    let parsed_type = self.parse_xsd_type_name(first_type, &schema.xsd_prefixes);
+                                                    if let XsdType::Simple(p) = parsed_type {
+                                                        st_type = XsdType::Simple(p);
+                                                    }
+                                                }
+                                            }
+                                        } else if depth == 2 && child_local == "restriction" {
+                                            in_direct_restriction = true;
                                             if let Some(base) = attributes
                                                 .iter()
                                                 .find(|a| a.name.local_name == "base")
@@ -323,7 +343,42 @@ impl SchemaCompiler {
                                                     return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                                                 }
                                             }
-                                        } else if child_local == "minInclusive"
+                                        } else if in_union && child_local == "restriction" {
+                                            // Nested restriction inside union
+                                            if let Some(base) = attributes
+                                                .iter()
+                                                .find(|a| a.name.local_name == "base")
+                                                .map(|a| &a.value[..])
+                                            {
+                                                let parsed = self.parse_xsd_type_name(base, &schema.xsd_prefixes);
+                                                match parsed {
+                                                    XsdType::Simple(p) => {
+                                                        st_type = XsdType::Simple(p);
+                                                    }
+                                                    XsdType::Complex(ref q) => {
+                                                        let resolved_prim = schema
+                                                            .named_simple_types
+                                                            .iter()
+                                                            .find(|nst| nst.name.local_name == q.local_name)
+                                                            .and_then(|nst| match nst.xsd_type {
+                                                                XsdType::Simple(p) => Some(XsdType::Simple(p)),
+                                                                _ => None,
+                                                            })
+                                                            .unwrap_or_else(|| {
+                                                                let lower = q.local_name.to_ascii_lowercase();
+                                                                if lower.contains("int") || lower.contains("digit") {
+                                                                    XsdType::Simple(DfdlSimpleType::UnsignedInt)
+                                                                } else {
+                                                                    XsdType::Simple(DfdlSimpleType::String)
+                                                                }
+                                                            });
+                                                        st_type = resolved_prim;
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        } else if in_direct_restriction && (
+                                            child_local == "minInclusive"
                                             || child_local == "maxInclusive"
                                             || child_local == "minExclusive"
                                             || child_local == "maxExclusive"
@@ -334,7 +389,7 @@ impl SchemaCompiler {
                                             || child_local == "totalDigits"
                                             || child_local == "fractionDigits"
                                             || child_local == "length"
-                                        {
+                                        ) {
                                             if let Some(val) = attributes
                                                 .iter()
                                                 .find(|a| a.name.local_name == "value")
@@ -364,7 +419,7 @@ impl SchemaCompiler {
                                             let mut dummy_vars = Vec::new();
                                             let mut dummy_fmts = Vec::new();
                                             let mut dummy_schemes = Vec::new();
-                                            let annot_comp = if in_restriction {
+                                            let annot_comp = if in_direct_restriction {
                                                 Some("xs:restriction")
                                             } else {
                                                 Some("xs:simpleType")
@@ -380,15 +435,20 @@ impl SchemaCompiler {
                                                 &schema.xsd_prefixes,
                                                 schema.target_namespace.as_deref(),
                                             )?;
+                                            depth = depth.saturating_sub(1);
                                         }
                                     }
                                     XmlEvent::EndElement {
                                         name: ref end_n, ..
                                     } => {
-                                        if end_n.local_name == "restriction" {
-                                            in_restriction = false;
-                                        } else if end_n.local_name == "simpleType" {
+                                        depth = depth.saturating_sub(1);
+                                        if depth == 0 {
                                             break;
+                                        }
+                                        if end_n.local_name == "restriction" && depth == 1 {
+                                            in_direct_restriction = false;
+                                        } else if end_n.local_name == "union" && depth == 1 {
+                                            in_union = false;
                                         }
                                     }
                                     _ => {}
@@ -403,12 +463,9 @@ impl SchemaCompiler {
                                 ));
                             }
                             Self::resolve_qname_properties(reader, &mut st_props);
+                            st_props.add_namespaces(&reader.in_scope_namespace_bindings());
                             let mut effective_props = st_props.clone();
-                            for binding in schema.global_format.bindings() {
-                                if effective_props.get_property(&binding.key).is_none() {
-                                    let _ = effective_props.set_property(&binding.key, &binding.value);
-                                }
-                            }
+                            effective_props.extend(&schema.global_format);
                             schema.named_simple_types.push(crate::xsd_ast::XsdNamedSimpleType {
                                 name: st_qname,
                                 xsd_type: st_type,
@@ -433,16 +490,26 @@ impl SchemaCompiler {
                                 .as_deref()
                                 .or(enclosing_tns)
                                 .unwrap_or("");
-                            let visit_key = alloc::format!("{}|{}", eff_ns, resolved_loc);
-                            if !visited.iter().any(|v: &String| v == &visit_key) {
+                            let norm_loc = resolved_loc.trim_start_matches('/');
+                            let visit_key = if local == "import" {
+                                alloc::format!("import|{}|{}", ns_opt.unwrap_or(""), norm_loc)
+                            } else {
+                                alloc::format!("include|{}|{}", eff_ns, norm_loc)
+                            };
+                            if !visited
+                                .iter()
+                                .any(|v: &String| v == &visit_key)
+                            {
                                 visited.push(visit_key);
-                                let imported_xml_opt = resolver(&resolved_loc).or_else(|| {
-                                    if resolved_loc != location {
-                                        resolver(location)
-                                    } else {
-                                        None
-                                    }
-                                });
+                                let imported_xml_opt = resolver
+                                    .resolve_schema(&resolved_loc, base_location)
+                                    .or_else(|| {
+                                        if resolved_loc != location {
+                                            resolver.resolve_schema(location, base_location)
+                                        } else {
+                                            None
+                                        }
+                                    });
                                 if let Some(imported_xml) = imported_xml_opt {
                                     if root_xml == Some(imported_xml.as_str()) {
                                         continue;
@@ -723,7 +790,7 @@ impl SchemaCompiler {
                         }
                     } else if in_schema && local == "format" {
                         for a in &attributes {
-                            if a.name.prefix.as_deref() == Some("dfdl") {
+                            if a.name.prefix == Some("dfdl") {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: Attribute 'dfdl:{}' is not allowed on DFDL annotation element '<dfdl:format>'",
                                     a.name.local_name
@@ -737,15 +804,15 @@ impl SchemaCompiler {
                     } else if in_schema && local == "defineFormat" {
                         let mut disallowed = alloc::vec::Vec::new();
                         for a in &attributes {
-                            if a.name.prefix.as_deref() == Some("dfdl") {
+                            if a.name.prefix == Some("dfdl") {
                                 let msg = alloc::format!(
                                     "Schema Definition Error: Attribute 'dfdl:{}' is not allowed on DFDL annotation element '<dfdl:defineFormat>'",
                                     a.name.local_name
                                 );
                                 return Err(DFDLError::new(DFDLErrorKind::SchemaDefinition, &msg));
                             }
-                            let pfx = a.name.prefix.as_deref().unwrap_or("");
-                            let loc = a.name.local_name.as_str();
+                            let pfx = a.name.prefix.unwrap_or("");
+                            let loc = a.name.local_name;
                             if pfx != "xmlns" && loc != "xmlns" && loc != "name" && loc != "ref" {
                                 disallowed.push(loc);
                             }
@@ -882,6 +949,119 @@ impl SchemaCompiler {
                     }
                 }
                 XmlEvent::EndElement { name, .. } if name.local_name == "schema" => break,
+                _ => {}
+            }
+        }
+
+        if !schema.global_format.is_empty() {
+            let mut resolved_doc_format = schema.global_format.clone();
+            let _ = self.resolve_ref_formats(&mut resolved_doc_format, &schema.defined_formats);
+            if !schema.doc_formats.iter().any(|(ns, _)| ns == &schema.target_namespace) {
+                schema.doc_formats.push((schema.target_namespace.clone(), resolved_doc_format));
+            }
+        }
+
+        fn tag_term_ns(term: &mut crate::xsd_ast::XsdTerm, tns: &str) {
+            match term {
+                crate::xsd_ast::XsdTerm::Element(el) => {
+                    if el.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = el.properties.set_property("__dfdl_target_ns", tns);
+                    }
+                    match &mut el.elem_type {
+                        crate::xsd_ast::XsdType::InlineSequence(seq) => {
+                            if seq.properties.get_property("__dfdl_target_ns").is_none() {
+                                let _ = seq.properties.set_property("__dfdl_target_ns", tns);
+                            }
+                            for m in &mut seq.members {
+                                tag_term_ns(m, tns);
+                            }
+                        }
+                        crate::xsd_ast::XsdType::InlineChoice(ch) => {
+                            if ch.properties.get_property("__dfdl_target_ns").is_none() {
+                                let _ = ch.properties.set_property("__dfdl_target_ns", tns);
+                            }
+                            for opt in &mut ch.options {
+                                tag_term_ns(opt, tns);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                crate::xsd_ast::XsdTerm::Sequence(seq) => {
+                    if seq.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = seq.properties.set_property("__dfdl_target_ns", tns);
+                    }
+                    for m in &mut seq.members {
+                        tag_term_ns(m, tns);
+                    }
+                }
+                crate::xsd_ast::XsdTerm::Choice(ch) => {
+                    if ch.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = ch.properties.set_property("__dfdl_target_ns", tns);
+                    }
+                    for opt in &mut ch.options {
+                        tag_term_ns(opt, tns);
+                    }
+                }
+                crate::xsd_ast::XsdTerm::GroupRef(_, props) => {
+                    if props.get_property("__dfdl_target_ns").is_none() {
+                        let _ = props.set_property("__dfdl_target_ns", tns);
+                    }
+                }
+            }
+        }
+
+        let cur_tns = String::from(schema.target_namespace.as_deref().unwrap_or(""));
+        for (_, seq) in &mut schema.named_groups {
+            if seq.properties.get_property("__dfdl_target_ns").is_none() {
+                let _ = seq.properties.set_property("__dfdl_target_ns", &cur_tns);
+            }
+            for m in &mut seq.members {
+                tag_term_ns(m, &cur_tns);
+            }
+        }
+        for (_, ct) in &mut schema.named_complex_types {
+            match ct {
+                crate::xsd_ast::XsdType::InlineSequence(seq) => {
+                    if seq.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = seq.properties.set_property("__dfdl_target_ns", &cur_tns);
+                    }
+                    for m in &mut seq.members {
+                        tag_term_ns(m, &cur_tns);
+                    }
+                }
+                crate::xsd_ast::XsdType::InlineChoice(ch) => {
+                    if ch.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = ch.properties.set_property("__dfdl_target_ns", &cur_tns);
+                    }
+                    for opt in &mut ch.options {
+                        tag_term_ns(opt, &cur_tns);
+                    }
+                }
+                _ => {}
+            }
+        }
+        for elem in &mut schema.top_level_elements {
+            if elem.properties.get_property("__dfdl_target_ns").is_none() {
+                let _ = elem.properties.set_property("__dfdl_target_ns", &cur_tns);
+            }
+            match &mut elem.elem_type {
+                crate::xsd_ast::XsdType::InlineSequence(seq) => {
+                    if seq.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = seq.properties.set_property("__dfdl_target_ns", &cur_tns);
+                    }
+                    for m in &mut seq.members {
+                        tag_term_ns(m, &cur_tns);
+                    }
+                }
+                crate::xsd_ast::XsdType::InlineChoice(ch) => {
+                    if ch.properties.get_property("__dfdl_target_ns").is_none() {
+                        let _ = ch.properties.set_property("__dfdl_target_ns", &cur_tns);
+                    }
+                    for opt in &mut ch.options {
+                        tag_term_ns(opt, &cur_tns);
+                    }
+                }
                 _ => {}
             }
         }

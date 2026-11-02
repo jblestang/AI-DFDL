@@ -29,9 +29,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfdl-codegen"
+version = "0.1.0"
+dependencies = [
+ "dfdl-benchmark",
+ "dfdl-core",
+ "dfdl-schema",
+]
+
+[[package]]
 name = "dfdl-core"
 version = "0.1.0"
 dependencies = [
+ "dfdl-layers",
  "miniz_oxide",
  "pest",
  "pest_derive",
@@ -43,6 +53,7 @@ dependencies = [
 name = "dfdl-example"
 version = "0.1.0"
 dependencies = [
+ "dfdl-benchmark",
  "dfdl-core",
  "dfdl-schema",
  "dfdl-vm",
@@ -59,10 +70,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfdl-layers"
+version = "0.1.0"
+dependencies = [
+ "dfdl-core",
+ "miniz_oxide",
+]
+
+[[package]]
 name = "dfdl-schema"
 version = "0.1.0"
 dependencies = [
  "dfdl-core",
+ "dfdl-layers",
  "dfdl-xml",
  "regex",
 ]
@@ -82,6 +102,7 @@ version = "0.1.0"
 dependencies = [
  "dfdl-core",
  "dfdl-fuzz",
+ "dfdl-layers",
  "dfdl-schema",
  "dfdl-xml",
 ]

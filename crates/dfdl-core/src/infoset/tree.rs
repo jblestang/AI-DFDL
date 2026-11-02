@@ -93,6 +93,9 @@ impl InfosetElement {
 
     /// Adds a child node to a complex element using fallible allocation.
     pub fn try_add_child(&mut self, child: InfosetNode) -> DFDLResult<()> {
+        if self.children.capacity() == 0 {
+            let _ = self.children.try_reserve(24);
+        }
         try_push(&mut self.children, child)
     }
 }
@@ -476,6 +479,15 @@ impl Default for InfosetBuilder {
     }
 }
 
+/// Lightweight, allocation-free checkpoint marker of [`InfosetBuilder`] state for backtracking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InfosetCheckpoint {
+    stack_depth: usize,
+    parent_child_count: usize,
+    has_root: bool,
+    total_nodes: usize,
+}
+
 impl InfosetBuilder {
     /// Creates a new [`InfosetBuilder`] with default resource limits.
     #[inline]
@@ -498,14 +510,26 @@ impl InfosetBuilder {
     /// Creates a checkpoint marker of current builder state for backtracking.
     #[inline]
     #[must_use]
-    pub fn checkpoint(&self) -> Self {
-        self.clone()
+    pub fn checkpoint(&self) -> InfosetCheckpoint {
+        InfosetCheckpoint {
+            stack_depth: self.stack.len(),
+            parent_child_count: self.stack.last().map_or(0, |p| p.children.len()),
+            has_root: self.doc.root.is_some(),
+            total_nodes: self.doc.total_nodes,
+        }
     }
 
     /// Restores builder state to a previous checkpoint.
     #[inline]
-    pub fn rollback(&mut self, cp: Self) {
-        *self = cp;
+    pub fn rollback(&mut self, cp: InfosetCheckpoint) {
+        self.stack.truncate(cp.stack_depth);
+        if let Some(parent) = self.stack.last_mut() {
+            parent.children.truncate(cp.parent_child_count);
+        }
+        if !cp.has_root {
+            self.doc.root = None;
+        }
+        self.doc.total_nodes = cp.total_nodes;
     }
 
     /// Returns a reference to the constructed [`InfosetDocument`].
@@ -520,17 +544,21 @@ impl InfosetBuilder {
     /// This enables O(1) zero-allocation lookup for relative path expressions like `../fieldName`.
     #[must_use]
     pub fn find_sibling_in_parent(&self, name: &str) -> Option<&InfosetElement> {
+        let clean_target = if let Some(idx) = name.rfind(':') {
+            &name[idx.saturating_add(1)..]
+        } else {
+            name
+        };
         let parent = self.stack.last()?;
         for child in parent.children.iter().rev() {
             let InfosetNode::Element(ref elem) = child;
-            let clean_elem = elem
-                .name
-                .local_name
-                .split(':')
-                .next_back()
-                .unwrap_or(&elem.name.local_name);
-            if clean_elem == name || elem.name.local_name == name {
+            if elem.name.local_name == clean_target || elem.name.local_name == name {
                 return Some(elem);
+            }
+            if let Some(idx) = elem.name.local_name.rfind(':') {
+                if &elem.name.local_name[idx.saturating_add(1)..] == clean_target {
+                    return Some(elem);
+                }
             }
         }
         None
@@ -558,33 +586,43 @@ impl InfosetBuilder {
         }
     }
 
-    /// Returns current Infoset path corresponding to active element stack.
+    /// Returns current Infoset path corresponding to active element stack on demand.
+    ///
+    /// Computing the path on demand eliminates per-element path step string allocations and pops
+    /// during ordinary parsing when relative expressions are not evaluated.
     #[must_use]
     pub fn current_path(&self) -> InfosetPath {
         let mut path = InfosetPath::root();
+        if self.stack.is_empty() {
+            if let Some(ref root) = self.doc.root {
+                let _ = path.try_push(&root.name.local_name);
+            }
+            return path;
+        }
         for (i, elem) in self.stack.iter().enumerate() {
-            let seg = if let Some(parent) = i.checked_sub(1).and_then(|idx| self.stack.get(idx)) {
-                let prev_count = parent
+            let prev_count = if i > 0 {
+                let parent = &self.stack[i.saturating_sub(1)];
+                parent
                     .children
                     .iter()
                     .filter(|child| match child {
                         InfosetNode::Element(c) => c.name.local_name == elem.name.local_name,
                     })
-                    .count();
-                if prev_count > 0 {
-                    alloc::format!("{}[{}]", elem.name.local_name, prev_count.saturating_add(1))
-                } else {
-                    elem.name.local_name.clone()
-                }
+                    .count()
             } else {
-                elem.name.local_name.clone()
+                0
             };
-            let _ = path.try_push(&seg);
-        }
-        if path.segments().is_empty() {
-            if let Some(ref root) = self.doc.root {
-                let _ = path.try_push(&root.name.local_name);
-            }
+            let step = crate::types::PathStep {
+                axis: crate::types::PathAxis::Child,
+                target: crate::types::StepTarget::Unprefixed(elem.name.local_name.clone()),
+                index_predicate: if prev_count > 0 {
+                    Some(prev_count.saturating_add(1))
+                } else {
+                    None
+                },
+                predicate_expr: None,
+            };
+            let _ = path.try_push_step(step);
         }
         path
     }
@@ -592,31 +630,32 @@ impl InfosetBuilder {
     /// Returns the number of occurrences of a child element with `local_name` added to current active parent.
     #[must_use]
     pub fn count_child_occurrences(&self, local_name: &str) -> usize {
-        let clean_target = local_name.split(':').next_back().unwrap_or(local_name);
+        let clean_target = if let Some(idx) = local_name.rfind(':') {
+            &local_name[idx.saturating_add(1)..]
+        } else {
+            local_name
+        };
         if let Some(parent) = self.stack.last() {
             parent
                 .children
                 .iter()
                 .filter(|child| match child {
                     InfosetNode::Element(elem) => {
-                        let clean_elem = elem
-                            .name
-                            .local_name
-                            .split(':')
-                            .next_back()
-                            .unwrap_or(&elem.name.local_name);
-                        clean_elem == clean_target
+                        if elem.name.local_name == clean_target {
+                            true
+                        } else if let Some(idx) = elem.name.local_name.rfind(':') {
+                            &elem.name.local_name[idx.saturating_add(1)..] == clean_target
+                        } else {
+                            false
+                        }
                     }
                 })
                 .count()
         } else if let Some(ref root) = self.doc.root {
-            let clean_root = root
-                .name
-                .local_name
-                .split(':')
-                .next_back()
-                .unwrap_or(&root.name.local_name);
-            if clean_root == clean_target {
+            if root.name.local_name == clean_target
+                || (root.name.local_name.contains(':')
+                    && root.name.local_name.split(':').next_back().unwrap_or(&root.name.local_name) == clean_target)
+            {
                 1
             } else {
                 0
@@ -709,29 +748,13 @@ impl InfosetBuilder {
                     ElementState::NoValue
                 };
 
-                let elem = InfosetElement::simple(name, state).with_hidden(is_hidden);
+                let mut elem = InfosetElement::simple(name, state).with_hidden(is_hidden);
+                if !is_nil {
+                    let _ = elem.children.try_reserve(24);
+                }
                 try_push(&mut self.stack, elem)
             }
-            InfosetEvent::EndElement { name } => {
-                let elem = self.stack.pop().ok_or_else(|| {
-                    DFDLError::new(DFDLErrorKind::Parse, "Unexpected EndElement event")
-                })?;
-
-                if elem.name != name {
-                    return Err(DFDLError::new(
-                        DFDLErrorKind::Parse,
-                        "Mismatched EndElement event QName",
-                    ));
-                }
-
-                if let Some(parent) = self.stack.last_mut() {
-                    parent.try_add_child(InfosetNode::Element(elem))?;
-                } else {
-                    self.doc.total_nodes = InfosetDocument::count_nodes_in_elem(&elem);
-                    self.doc.root = Some(elem);
-                }
-                Ok(())
-            }
+            InfosetEvent::EndElement { name } => self.end_element(&name),
             InfosetEvent::SimpleValue { name, value } => {
                 let elem =
                     InfosetElement::simple(name, ElementState::Value(value)).with_hidden(is_hidden);
@@ -764,6 +787,28 @@ impl InfosetBuilder {
                 }
             }
         }
+    }
+
+    /// Closes the currently active element matching `expected_name` without allocating an event or cloning the QName.
+    pub fn end_element(&mut self, expected_name: &crate::types::QName) -> DFDLResult<()> {
+        let elem = self.stack.pop().ok_or_else(|| {
+            DFDLError::new(DFDLErrorKind::Parse, "Unexpected EndElement event")
+        })?;
+
+        if &elem.name != expected_name {
+            return Err(DFDLError::new(
+                DFDLErrorKind::Parse,
+                "Mismatched EndElement event QName",
+            ));
+        }
+
+        if let Some(parent) = self.stack.last_mut() {
+            parent.try_add_child(InfosetNode::Element(elem))?;
+        } else {
+            self.doc.total_nodes = InfosetDocument::count_nodes_in_elem(&elem);
+            self.doc.root = Some(elem);
+        }
+        Ok(())
     }
 
     /// Sets the bit location `(start_bit, bit_length)` of the most recently inserted child element.

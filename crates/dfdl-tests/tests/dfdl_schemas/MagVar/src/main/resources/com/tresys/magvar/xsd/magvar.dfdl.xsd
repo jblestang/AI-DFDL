@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+
+<!-- 
+Copyright (c) 2012-2021 Owl Cyber Defense. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimers.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimers in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the names of Owl Cyber Defense, nor the names of its contributors
+    may be used to endorse or promote products derived from this Software
+    without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+ -->
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  targetNamespace="urn:com.tresys.magvar" 
+  elementFormDefault="unqualified" 
+  xmlns:m="urn:com.tresys.magvar">
+
+  <xs:include schemaLocation="org/apache/daffodil/xsd/DFDLGeneralFormatPortable.dfdl.xsd" />
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="m:GeneralFormat" separator="" initiator=""
+        terminator="" initiatedContent="no" ignoreCase="no"
+        separatorPosition="infix" occursCountKind="implicit"
+        emptyValueDelimiterPolicy="both" representation="text" textNumberRep="standard"
+        lengthKind="implicit" encoding="ASCII" encodingErrorPolicy="replace" outputNewLine="%CR;%LF;"
+        textNumberJustification="right" textNumberPadCharacter="%SP;" textTrimKind="padChar" textPadKind="padChar"
+        textStandardZeroRep="" />
+      <dfdl:defineFormat name="floatFmt">
+        <dfdl:format textNumberPattern="###0.0##;-###0.0##"/>
+      </dfdl:defineFormat>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:complexType name="Header">
+    <xs:sequence>
+      <xs:element
+          name="modelEpoch"
+          type="xs:decimal"
+          dfdl:lengthKind="explicit"
+          dfdl:initiator="%SP;%SP;%SP;%SP;"
+          dfdl:terminator="%SP;%SP;%SP;%SP;%SP;%SP;%SP;%SP;%SP;%SP;%SP;%SP;"
+          dfdl:textTrimKind="none"
+          dfdl:textNumberPattern="0000.0"
+          dfdl:length="6" />
+      <xs:element
+          name="modelName"
+          type="xs:string"
+          dfdl:lengthKind="pattern"
+          dfdl:lengthPattern="WMM-\d{4}\w*" />
+      <xs:element
+          name="spaces"
+          type="xs:string"
+          dfdl:lengthKind="pattern"
+          dfdl:textTrimKind="none"
+          dfdl:lengthPattern="\s+" />
+      <xs:element
+          name="dateOfRelease"
+          type="xs:date"
+          dfdl:lengthKind="delimited"
+          dfdl:calendarFirstDayOfWeek="Monday" 
+          dfdl:calendarDaysInFirstWeek="7"
+          dfdl:calendarCheckPolicy="strict"
+          dfdl:calendarTimeZone="" 
+          dfdl:textCalendarPadCharacter="%SP;"
+          dfdl:textCalendarJustification="right" 
+          dfdl:calendarPattern="MM/dd/yyyy"
+          dfdl:calendarPatternKind="explicit"
+          dfdl:calendarLanguage="en" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="magvar" dfdl:terminator="999999999999999999999999999999999999999999999999%NL;999999999999999999999999999999999999999999999999%NL;">
+    <xs:complexType>
+      <xs:sequence dfdl:separator="%NL;" dfdl:separatorPosition="postfix">
+        <xs:element name="header" type="m:Header" />
+        <xs:element name="coefficients" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence dfdl:separator="%SP;">
+              <xs:element name="n" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="3"/>
+              <xs:element name="m" type="xs:int" dfdl:lengthKind="explicit" dfdl:length="2"/>
+              <xs:element name="g_nm" type="xs:double" dfdl:lengthKind="explicit" dfdl:length="9" dfdl:ref="m:floatFmt"/>
+              <xs:element name="h_nm" type="xs:double" dfdl:lengthKind="explicit" dfdl:length="9" dfdl:ref="m:floatFmt"/>
+              <xs:element name="g_dot_nm" type="xs:double" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:ref="m:floatFmt"/>
+              <xs:element name="h_dot_nm" type="xs:double" dfdl:lengthKind="explicit" dfdl:length="10" dfdl:ref="m:floatFmt"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element> 
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  
+  <xs:simpleType name="paddedString">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

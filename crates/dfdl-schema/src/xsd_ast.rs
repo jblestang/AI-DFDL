@@ -80,6 +80,93 @@ pub enum XsdTerm {
     GroupRef(QName, PropertyStore),
 }
 
+/// Strongly-typed 32-bit identifier referencing an [`XsdTerm`] stored in an [`XsdArena`].
+///
+/// Using a compact 32-bit index reduces memory footprint on 64-bit architectures
+/// compared to direct pointers or `Box` allocations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TermId(pub u32);
+
+impl core::fmt::Display for TermId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Term#{}", self.0)
+    }
+}
+
+/// Linear contiguous arena storage for XSD terms (§RUST-SCH-03).
+///
+/// Stores [`XsdTerm`] instances in a flat contiguous vector indexed by [`TermId`],
+/// mitigating heap fragmentation and cache-miss overhead during schema lowering.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct XsdArena {
+    /// Contiguous storage buffer for all allocated terms.
+    terms: Vec<XsdTerm>,
+}
+
+impl XsdArena {
+    /// Creates an empty arena with default initial capacity.
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self { terms: Vec::new() }
+    }
+
+    /// Creates an empty arena with the specified pre-allocated capacity.
+    #[inline]
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            terms: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Allocates an [`XsdTerm`] into the arena and returns its unique [`TermId`].
+    pub fn alloc(&mut self, term: XsdTerm) -> TermId {
+        let idx = self.terms.len() as u32;
+        self.terms.push(term);
+        TermId(idx)
+    }
+
+    /// Returns a shared reference to the term associated with the given [`TermId`],
+    /// or `None` if the id is out of bounds.
+    #[inline]
+    #[must_use]
+    pub fn get(&self, id: TermId) -> Option<&XsdTerm> {
+        self.terms.get(id.0 as usize)
+    }
+
+    /// Returns a mutable reference to the term associated with the given [`TermId`],
+    /// or `None` if the id is out of bounds.
+    #[inline]
+    #[must_use]
+    pub fn get_mut(&mut self, id: TermId) -> Option<&mut XsdTerm> {
+        self.terms.get_mut(id.0 as usize)
+    }
+
+    /// Returns the total number of terms currently allocated in the arena.
+    #[inline]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.terms.len()
+    }
+
+    /// Returns `true` if no terms are allocated in the arena.
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.terms.is_empty()
+    }
+
+    /// Returns an iterator over all allocated terms alongside their [`TermId`].
+    pub fn iter(&self) -> impl Iterator<Item = (TermId, &XsdTerm)> {
+        self.terms
+            .iter()
+            .enumerate()
+            .map(|(idx, term)| (TermId(idx as u32), term))
+    }
+}
+
+
 /// Parsed DFDL Variable Definition declaration (§7.6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfdlVariableDef {
@@ -140,6 +227,8 @@ pub struct XsdSchema {
     pub xsd_prefixes: Vec<String>,
     /// Whether local elements are qualified by default (elementFormDefault="qualified").
     pub element_form_default: bool,
+    /// Resolved document-level default formats keyed by target namespace.
+    pub doc_formats: Vec<(Option<String>, PropertyStore)>,
 }
 
 impl Default for XsdSchema {
@@ -156,6 +245,7 @@ impl Default for XsdSchema {
             defined_variables: Vec::new(),
             xsd_prefixes: alloc::vec![String::from("xs"), String::from("xsd")],
             element_form_default: false,
+            doc_formats: Vec::new(),
         }
     }
 }
@@ -163,8 +253,17 @@ impl Default for XsdSchema {
 impl XsdSchema {
     /// Merges another parsed schema into this schema (for includes and imports).
     pub fn merge(&mut self, other: Self) -> DFDLResult<()> {
-        if !other.global_format.is_empty() {
-            self.global_format.merge_parent(&other.global_format);
+        if self.target_namespace == other.target_namespace
+            && self.global_format.is_empty()
+            && !other.global_format.is_empty()
+        {
+            self.global_format = other.global_format.clone();
+        }
+
+        for (ns, fmt) in other.doc_formats {
+            if !self.doc_formats.iter().any(|(n, _)| n == &ns) {
+                self.doc_formats.push((ns, fmt));
+            }
         }
 
         for (fmt_name, fmt_store) in other.defined_formats {
@@ -466,5 +565,52 @@ mod tests {
         assert_eq!(s_base.named_simple_types[0].effective_props.get_property("byteOrder"), Some("bigEndian"));
         assert_eq!(s_base.defined_variables.len(), 1);
     }
+
+    /// Verifies XsdArena linear allocation, index lookup, and iteration behavior (§RUST-SCH-03).
+    #[test]
+    fn test_xsd_arena_allocation_and_indexing() {
+        let mut arena = XsdArena::with_capacity(4);
+        assert!(arena.is_empty());
+        assert_eq!(arena.len(), 0);
+
+        let elem_term = XsdTerm::Element(XsdElement {
+            name: QName::local("root"),
+            elem_type: XsdType::Simple(DfdlSimpleType::String),
+            type_name: None,
+            min_occurs: 1,
+            max_occurs: Some(1),
+            is_nillable: false,
+            default_value: None,
+            properties: PropertyStore::new(),
+        });
+        let seq_term = XsdTerm::Sequence(XsdSequence {
+            members: Vec::new(),
+            properties: PropertyStore::new(),
+        });
+
+        let id0 = arena.alloc(elem_term);
+        let id1 = arena.alloc(seq_term);
+
+        assert_eq!(id0, TermId(0));
+        assert_eq!(id1, TermId(1));
+        assert_eq!(arena.len(), 2);
+        assert!(!arena.is_empty());
+
+        assert!(matches!(arena.get(id0), Some(XsdTerm::Element(_))));
+        assert!(matches!(arena.get(id1), Some(XsdTerm::Sequence(_))));
+        assert!(arena.get(TermId(99)).is_none());
+
+        assert_eq!(alloc::format!("{}", id0), "Term#0");
+
+        // Safe mutable lookup check
+        assert!(arena.get_mut(id0).is_some());
+
+        // Iterator check
+        let terms: Vec<(TermId, &XsdTerm)> = arena.iter().collect();
+        assert_eq!(terms.len(), 2);
+        assert_eq!(terms[0].0, TermId(0));
+        assert_eq!(terms[1].0, TermId(1));
+    }
 }
+
 

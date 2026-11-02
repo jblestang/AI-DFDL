@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='UTF-8'?>
+
+<schema
+  targetNamespace="urn:milstd2045DFDLMessageSize"
+  xmlns:hdrsz="urn:milstd2045DFDLMessageSize"
+  xmlns:hdr="urn:milstd2045DFDL"
+  xmlns="http://www.w3.org/2001/XMLSchema"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+>
+
+  <import namespace="urn:milstd2045DFDL"
+          schemaLocation="/com/owlcyberdefense/mil-std-2045/xsd/milstd2045_application_header.dfdl.xsd"/>
+
+  <annotation>
+    <appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="hdr:msCommon"/>
+    </appinfo>
+  </annotation>
+
+  <!--
+  The mil-std-2045 header schema declares, but doesn't define this hdrsz:message_size_type complex type.
+
+  The definition is provided by schemas that use that header along with a payload.
+
+  If this feels like object oriented programming, that's not an accident. The mil-std-2045 schema
+  is analogous to an abstract base class.
+  -->
+  <complexType name="message_size_type">
+    <sequence>
+      <element name="value" type="hdr:tIntField"
+               dfdl:length="20"
+               dfdl:outputValueCalc="{
+                 dfdl:valueLength(/message/data/content/payload, 'bytes')
+               }"/>
+    </sequence>
+  </complexType>
+
+</schema>

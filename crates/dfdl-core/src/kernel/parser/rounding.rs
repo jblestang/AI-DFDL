@@ -59,11 +59,11 @@ pub(crate) fn expand_exponent(raw: &str) -> String {
         return raw.to_string();
     }
     let all = format!("{}{}", m_int, m_frac);
-    let point = m_int.len() as i64 + exp;
+    let point = (m_int.len() as i64).saturating_add(exp);
     if point <= 0 {
         format!("0.{}{}", "0".repeat(point.unsigned_abs() as usize), all)
     } else if point as usize >= all.len() {
-        format!("{}{}", all, "0".repeat(point as usize - all.len()))
+        format!("{}{}", all, "0".repeat((point as usize).saturating_sub(all.len())))
     } else {
         let (i, f) = all.split_at(point as usize);
         format!("{}.{}", i, f)
@@ -163,12 +163,12 @@ pub(crate) fn round_to_increment(
         return None;
     }
     let scale = frac.len().max(inc_frac.len());
-    if int.len().max(inc_int.len()) + scale > MAX_INCREMENT_DIGITS {
+    if int.len().max(inc_int.len()).saturating_add(scale) > MAX_INCREMENT_DIGITS {
         return None;
     }
     let scaled = |i: &str, f: &str| -> Option<u128> {
         let mut s = format!("{}{}", i, f);
-        s.push_str(&"0".repeat(scale - f.len()));
+        s.push_str(&"0".repeat(scale.saturating_sub(f.len())));
         s.parse::<u128>().ok()
     };
     let value = scaled(int, frac)?;
@@ -176,15 +176,18 @@ pub(crate) fn round_to_increment(
     if step == 0 {
         return None;
     }
-    let (mut q, r) = (value / step, value % step);
+    let q = value.checked_div(step)?;
+    let r = value.checked_rem(step)?;
+    let mut q = q;
     if r != 0 {
         let half = r.checked_mul(2)?.cmp(&step);
-        if should_round_up(mode, negative, half, q % 2 == 1) {
+        let last_odd = q.checked_rem(2) == Some(1);
+        if should_round_up(mode, negative, half, last_odd) {
             q = q.checked_add(1)?;
         }
     }
-    let digits = format!("{:0>width$}", q.checked_mul(step)?, width = scale + 1);
-    let (i, f) = digits.split_at(digits.len() - scale);
+    let digits = format!("{:0>width$}", q.checked_mul(step)?, width = scale.saturating_add(1));
+    let (i, f) = digits.split_at(digits.len().saturating_sub(scale));
     let i = i.trim_start_matches('0');
     Some((
         if i.is_empty() { "0".to_string() } else { i.to_string() },

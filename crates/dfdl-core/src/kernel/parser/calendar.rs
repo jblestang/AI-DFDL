@@ -1,7 +1,5 @@
 //! Calendar, date, and time parsing utilities for the DFDL parser engine.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -17,6 +15,9 @@ pub(crate) fn is_leap_year(y: i64) -> bool {
     (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
 }
 
+/// Calculates days before January 1 of proleptic Gregorian year `y`.
+/// Arithmetical operations are required for 400-year, 100-year, and 4-year leap cycle calculations.
+#[allow(clippy::arithmetic_side_effects)]
 pub(crate) fn days_before_year(y: i64) -> i64 {
     let y = y - 1;
     y * 365 + y / 4 - y / 100 + y / 400
@@ -33,6 +34,9 @@ pub(crate) fn days_in_month(y: i64, m: usize) -> i64 {
     }
 }
 
+/// Converts Gregorian year, month, and day into epoch days.
+/// Cumulative calendar day addition.
+#[allow(clippy::arithmetic_side_effects)]
 pub(crate) fn ymd_to_days(y: i64, m: usize, d: i64) -> i64 {
     let mut total_days = days_before_year(y) + d - 1;
     for prev_m in 1..m {
@@ -41,6 +45,9 @@ pub(crate) fn ymd_to_days(y: i64, m: usize, d: i64) -> i64 {
     total_days
 }
 
+/// Converts epoch days into Gregorian year, month, and day.
+/// Gregorian 400-year cycle arithmetic and month boundary iteration.
+#[allow(clippy::arithmetic_side_effects)]
 pub(crate) fn days_to_ymd(days: i64) -> (i64, usize, i64) {
     let cycles_400 = days.div_euclid(146097);
     let day_in_cycle = days.rem_euclid(146097);
@@ -68,6 +75,9 @@ pub(crate) fn days_to_ymd(days: i64) -> (i64, usize, i64) {
     (year, m, day)
 }
 
+/// Parses an xs:dateTime wall-clock epoch into milliseconds.
+/// Arithmetical calculations convert epoch days and HMS into total milliseconds.
+#[allow(clippy::arithmetic_side_effects)]
 pub(crate) fn parse_xs_date_time_wall_ms(s: &str) -> DFDLResult<(i64, &str)> {
     let clean_s = s.strip_prefix('-').unwrap_or(s);
     let (date_part, time_part) = clean_s.split_once('T').ok_or_else(|| {
@@ -195,6 +205,12 @@ pub(crate) fn match_day_of_week(s: &str) -> Option<(u32, usize)> {
     best
 }
 
+/// Parses calendar string matching an ICU date/time pattern.
+/// Arithmetic operations are required for:
+/// - FirstDayOfWeek modulo rotation and mapping (e.g. `(dow_raw + offset) % 7 + 1`)
+/// - Two-digit year expansion (e.g. `1900 + y_val`)
+/// - CalendarCheckPolicy::Lax time normalization across second/minute/hour/day/month boundaries.
+#[allow(clippy::arithmetic_side_effects)]
 pub(crate) fn parse_calendar_with_pattern(
     mut text: &str,
     pattern: &str,
@@ -215,7 +231,19 @@ pub(crate) fn parse_calendar_with_pattern(
     let mut is_bc = false;
     let mut tz_str = String::new();
 
-    let pat_chars: Vec<char> = pattern.chars().collect();
+    let mut stack_chars = ['\0'; 64];
+    let heap_chars: Vec<char>;
+    let pat_chars: &[char] = if pattern.len() <= 64 {
+        let mut n = 0;
+        for c in pattern.chars() {
+            stack_chars[n] = c;
+            n = n.saturating_add(1);
+        }
+        &stack_chars[..n]
+    } else {
+        heap_chars = pattern.chars().collect();
+        &heap_chars[..]
+    };
     let mut p_idx = 0usize;
 
     while let Some(&ch) = pat_chars.get(p_idx) {
@@ -949,12 +977,12 @@ pub(crate) fn parse_calendar_from_text(
             };
             if h > 23 || min > 59 || sec > 59 {
                 if check_policy == crate::schema::ir::CalendarCheckPolicy::Lax {
-                    let extra_min = sec / 60;
-                    let s_norm = sec % 60;
-                    let total_min = min + extra_min;
-                    let extra_hr = total_min / 60;
-                    let m_norm = total_min % 60;
-                    let total_hr = (h + extra_hr) % 24;
+                    let extra_min = sec.checked_div(60).unwrap_or(0);
+                    let s_norm = sec.checked_rem(60).unwrap_or(0);
+                    let total_min = min.saturating_add(extra_min);
+                    let extra_hr = total_min.checked_div(60).unwrap_or(0);
+                    let m_norm = total_min.checked_rem(60).unwrap_or(0);
+                    let total_hr = (h.saturating_add(extra_hr)).checked_rem(24).unwrap_or(0);
                     return Ok(alloc::format!("{:02}:{:02}:{:02}{}{}", total_hr, m_norm, s_norm, frac_str, norm_tz));
                 } else {
                     return Err(DFDLError::new(
@@ -984,7 +1012,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let d = digits;
         if let Some(pat) = pattern {
             if pat == "MMddyyyyHHmmss" && d.len() >= 14 {
-                let s = &d[d.len() - 14..];
+                let s = &d[d.len().saturating_sub(14)..];
                 let mm = &s[0..2];
                 let dd = &s[2..4];
                 let yyyy = &s[4..8];
@@ -1009,9 +1037,21 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     );
                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                 }
-                return Ok(alloc::format!("{}-{}-{}T{}:{}:{}", yyyy, mm, dd, hh, min, ss));
+                let mut out = String::with_capacity(19);
+                out.push_str(yyyy);
+                out.push('-');
+                out.push_str(mm);
+                out.push('-');
+                out.push_str(dd);
+                out.push('T');
+                out.push_str(hh);
+                out.push(':');
+                out.push_str(min);
+                out.push(':');
+                out.push_str(ss);
+                return Ok(out);
             } else if pat == "MMddyy" && d.len() >= 6 {
-                let s = &d[d.len() - 6..];
+                let s = &d[d.len().saturating_sub(6)..];
                 let mm = &s[0..2];
                 let dd = &s[2..4];
                 let yy = &s[4..6];
@@ -1027,13 +1067,13 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 }
                 let year_val: u32 = yy.parse().unwrap_or(0);
                 let full_year = if year_val >= 50 {
-                    1900 + year_val
+                    1900u32.saturating_add(year_val)
                 } else {
-                    2000 + year_val
+                    2000u32.saturating_add(year_val)
                 };
                 return Ok(alloc::format!("{:04}-{}-{}", full_year, mm, dd));
             } else if pat == "yyyyMMdd" && d.len() >= 8 {
-                let s = &d[d.len() - 8..];
+                let s = &d[d.len().saturating_sub(8)..];
                 let yyyy = &s[0..4];
                 let mm = &s[4..6];
                 let dd = &s[6..8];
@@ -1047,9 +1087,15 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     );
                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                 }
-                return Ok(alloc::format!("{}-{}-{}", yyyy, mm, dd));
+                let mut out = String::with_capacity(10);
+                out.push_str(yyyy);
+                out.push('-');
+                out.push_str(mm);
+                out.push('-');
+                out.push_str(dd);
+                return Ok(out);
             } else if (pat == "HHmmss" || pat == "hhmmss") && d.len() >= 6 {
-                let s = &d[d.len() - 6..];
+                let s = &d[d.len().saturating_sub(6)..];
                 let hh = &s[0..2];
                 let mm = &s[2..4];
                 let ss = &s[4..6];
@@ -1064,11 +1110,17 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     );
                     return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
                 }
-                return Ok(alloc::format!("{}:{}:{}", hh, mm, ss));
+                let mut out = String::with_capacity(8);
+                out.push_str(hh);
+                out.push(':');
+                out.push_str(mm);
+                out.push(':');
+                out.push_str(ss);
+                return Ok(out);
             }
         }
         if d.len() >= 14 {
-            let s = &d[d.len() - 14..];
+            let s = &d[d.len().saturating_sub(14)..];
             let mm = &s[0..2];
             let dd = &s[2..4];
             let yyyy = &s[4..8];
@@ -1093,7 +1145,19 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 );
                 return Err(DFDLError::new(DFDLErrorKind::Parse, &msg));
             }
-            Ok(alloc::format!("{}-{}-{}T{}:{}:{}", yyyy, mm, dd, hh, min, ss))
+            let mut out = String::with_capacity(19);
+            out.push_str(yyyy);
+            out.push('-');
+            out.push_str(mm);
+            out.push('-');
+            out.push_str(dd);
+            out.push('T');
+            out.push_str(hh);
+            out.push(':');
+            out.push_str(min);
+            out.push(':');
+            out.push_str(ss);
+            Ok(out)
         } else {
             Ok(alloc::string::String::from(digits))
         }
@@ -1146,7 +1210,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                 let is_neg = (*bytes.get(check_idx).unwrap_or(&0) & 0x80) != 0;
                 let mut b = if is_neg { [0xFF; 8] } else { [0u8; 8] };
                 if is_be {
-                    if let Some(dst) = b.get_mut(8 - len..) {
+                    if let Some(dst) = b.get_mut(8usize.saturating_sub(len)..) {
                         dst.copy_from_slice(bytes);
                     }
                     i64::from_be_bytes(b)
@@ -1308,11 +1372,16 @@ pub(crate) fn validate_calendar_language_syntax(lang: &str) -> DFDLResult<()> {
 }
 
 fn parse_tz_offset_minutes(s: &str) -> Option<i32> {
-    let clean = s.trim().trim_start_matches("UTC").trim_start_matches("GMT");
+    let mut clean = s.trim();
+    if let Some(stripped) = clean.strip_prefix("UTC") {
+        clean = stripped;
+    } else if let Some(stripped) = clean.strip_prefix("GMT") {
+        clean = stripped;
+    }
     if clean.is_empty() || clean == "Z" {
         return Some(0);
     }
-    let (sign, rest) = if let Some(stripped) = clean.strip_prefix('+') {
+    let (sign, rest): (i32, &str) = if let Some(stripped) = clean.strip_prefix('+') {
         (1, stripped)
     } else if let Some(stripped) = clean.strip_prefix('-') {
         (-1, stripped)
@@ -1322,13 +1391,13 @@ fn parse_tz_offset_minutes(s: &str) -> Option<i32> {
     if let Some((h_str, m_str)) = rest.split_once(':') {
         let h: i32 = h_str.parse().ok()?;
         let m: i32 = m_str.parse().ok()?;
-        Some(sign * (h * 60 + m))
+        Some(sign.saturating_mul(h.saturating_mul(60).saturating_add(m)))
     } else if rest.len() == 4 && rest.chars().all(|c| c.is_ascii_digit()) {
         let h: i32 = rest.get(..2)?.parse().ok()?;
         let m: i32 = rest.get(2..4)?.parse().ok()?;
-        Some(sign * (h * 60 + m))
+        Some(sign.saturating_mul(h.saturating_mul(60).saturating_add(m)))
     } else if let Ok(h) = rest.parse::<i32>() {
-        Some(sign * h * 60)
+        Some(sign.saturating_mul(h.saturating_mul(60)))
     } else {
         None
     }
@@ -1386,12 +1455,14 @@ pub(crate) fn format_calendar_with_pattern(
         };
         let is_neg = d_base.starts_with('-');
         let abs_d = if is_neg { &d_base[1..] } else { d_base };
-        let d_parts: Vec<&str> = abs_d.split('-').collect();
-        if d_parts.len() == 3 {
-            let raw_y: Option<i64> = d_parts.first().and_then(|s| s.parse().ok());
-            year = raw_y.map(|y| if is_neg { -y } else { y });
-            month = d_parts.get(1).and_then(|s| s.parse().ok());
-            day = d_parts.get(2).and_then(|s| s.parse().ok());
+        let mut d_iter = abs_d.split('-');
+        if let (Some(y_s), Some(m_s), Some(d_s), None) =
+            (d_iter.next(), d_iter.next(), d_iter.next(), d_iter.next())
+        {
+            let raw_y: Option<i64> = y_s.parse().ok();
+            year = raw_y.map(|y| if is_neg { y.checked_neg().unwrap_or(y) } else { y });
+            month = m_s.parse().ok();
+            day = d_s.parse().ok();
         }
         if tz_offset_mins.is_none() {
             if let Some(tz) = d_tz {
@@ -1423,12 +1494,12 @@ pub(crate) fn format_calendar_with_pattern(
         };
         frac_str = frac_part;
 
-        let c_parts: Vec<&str> = clock_part.split(':').collect();
-        if c_parts.len() >= 2 {
-            hour = c_parts.first().and_then(|s| s.parse().ok());
-            minute = c_parts.get(1).and_then(|s| s.parse().ok());
-            if c_parts.len() >= 3 {
-                second = c_parts.get(2).and_then(|s| s.parse().ok());
+        let mut c_iter = clock_part.split(':');
+        if let (Some(h_s), Some(m_s)) = (c_iter.next(), c_iter.next()) {
+            hour = h_s.parse().ok();
+            minute = m_s.parse().ok();
+            if let Some(s_s) = c_iter.next() {
+                second = s_s.parse().ok();
             }
         }
     }
@@ -1446,15 +1517,24 @@ pub(crate) fn format_calendar_with_pattern(
     let min = minute.unwrap_or(0);
     let sec = second.unwrap_or(0);
 
-    // Identify calendar language for localized month and weekday formatting.
-    // Supports German ("de"), Spanish ("es"), Russian ("ru"), and default English ("en").
-    let lang = lang_opt.map(|l| l.to_ascii_lowercase()).unwrap_or_default();
-    let is_german = lang.starts_with("de");
-    let is_spanish = lang.starts_with("es");
-    let is_russian = lang.starts_with("ru");
+    let is_german = lang_opt.map_or(false, |l| l.get(..2).map_or(false, |s| s.eq_ignore_ascii_case("de")));
+    let is_spanish = lang_opt.map_or(false, |l| l.get(..2).map_or(false, |s| s.eq_ignore_ascii_case("es")));
+    let is_russian = lang_opt.map_or(false, |l| l.get(..2).map_or(false, |s| s.eq_ignore_ascii_case("ru")));
 
-    let mut result = String::new();
-    let chars: Vec<char> = pattern.chars().collect();
+    let mut result = String::with_capacity(32);
+    let mut stack_chars = ['\0'; 64];
+    let heap_chars: Vec<char>;
+    let chars: &[char] = if pattern.len() <= 64 {
+        let mut n = 0;
+        for c in pattern.chars() {
+            stack_chars[n] = c;
+            n = n.saturating_add(1);
+        }
+        &stack_chars[..n]
+    } else {
+        heap_chars = pattern.chars().collect();
+        &heap_chars[..]
+    };
     let mut i = 0;
     while i < chars.len() {
         let ch = match chars.get(i) {
@@ -1627,7 +1707,7 @@ pub(crate) fn format_calendar_with_pattern(
                 'E' => {
                     // Localized day of week.
                     let days = ymd_to_days(y, m, d);
-                    let dow = (days + 1).rem_euclid(7) as usize;
+                    let dow = (days.saturating_add(1)).rem_euclid(7) as usize;
                     let days_de_short = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
                     let days_de_long = [
                         "Sonntag",
@@ -1809,7 +1889,7 @@ pub(crate) fn format_calendar_with_pattern(
             }
         } else {
             result.push(ch);
-            i += 1;
+            i = i.saturating_add(1);
         }
     }
 

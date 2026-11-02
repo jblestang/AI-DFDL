@@ -2,8 +2,6 @@
 //!
 //! Implements XML 1.0 and Namespaces in XML 1.0 specs under `#![no_std]` + `alloc`.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::borrow::Cow;
 use alloc::string::String;
@@ -15,30 +13,49 @@ use dfdl_core::types::{QName, SourceLocation};
 use dfdl_core::util::{get_checked, try_push};
 use xmlparser::{ElementEnd, Token, Tokenizer};
 
-use crate::event::{Attribute, XmlEvent};
+use crate::event::{Attribute, QNameRef, XmlEvent};
 use crate::limits::XmlReaderLimits;
 
-fn format_num_commas(n: usize) -> String {
-    let s = alloc::format!("{}", n);
-    let mut out = String::new();
-    let bytes = s.as_bytes();
-    let rem = bytes.len() % 3;
-    for (i, &b) in bytes.iter().enumerate() {
-        if i > 0 && (i % 3 == rem || (rem == 0 && i % 3 == 0)) {
-            out.push(',');
+/// Formats a `usize` with comma separators without intermediate heap allocations.
+///
+/// Implemented per RUST-XML-03 using checked and saturating arithmetic to eliminate
+/// all arithmetic side-effects without requiring compiler lint suppressions.
+fn format_num_commas(mut n: usize) -> String {
+    if n == 0 {
+        return String::from("0");
+    }
+    let mut digits = [0u8; 32];
+    let mut count = 0;
+    while n > 0 && count < digits.len() {
+        let digit = (n.checked_rem(10).unwrap_or(0)) as u8;
+        if let Some(slot) = digits.get_mut(count) {
+            *slot = b'0'.saturating_add(digit);
         }
-        out.push(b as char);
+        n = n.checked_div(10).unwrap_or(0);
+        count = count.saturating_add(1);
+    }
+    let commas = count.saturating_sub(1).checked_div(3).unwrap_or(0);
+    let mut out = String::with_capacity(count.saturating_add(commas));
+    let rem = count.checked_rem(3).unwrap_or(0);
+    if let Some(slice) = digits.get(..count) {
+        for (i, &d) in slice.iter().rev().enumerate() {
+            let i_rem = i.checked_rem(3).unwrap_or(0);
+            if i > 0 && (i_rem == rem || (rem == 0 && i_rem == 0)) {
+                out.push(',');
+            }
+            out.push(d as char);
+        }
     }
     out
 }
 
 /// Stack frame maintaining namespace prefix bindings for an element scope.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct NamespaceFrame {
+struct NamespaceFrame<'a> {
     /// Default namespace URI declared in this scope (xmlns="...").
-    default_ns: Option<String>,
+    default_ns: Option<&'a str>,
     /// Prefixed namespace bindings declared in this scope (xmlns:prefix="...").
-    bindings: Vec<(String, String)>,
+    bindings: Vec<(&'a str, &'a str)>,
 }
 
 /// Pending start element building state during attribute tokenization.
@@ -47,7 +64,7 @@ struct StartElementState<'a> {
     raw_prefix: Option<&'a str>,
     raw_local: &'a str,
     raw_attrs: Vec<(Option<&'a str>, &'a str, Cow<'a, str>, SourceLocation)>,
-    frame: NamespaceFrame,
+    frame: NamespaceFrame<'a>,
     location: SourceLocation,
 }
 
@@ -56,8 +73,8 @@ struct StartElementState<'a> {
 pub struct XmlReader<'a> {
     tokenizer: Tokenizer<'a>,
     limits: XmlReaderLimits,
-    ns_stack: Vec<NamespaceFrame>,
-    initial_bindings: Vec<(String, String)>,
+    ns_stack: Vec<NamespaceFrame<'a>>,
+    initial_bindings: Vec<(&'a str, &'a str)>,
     tag_stack: Vec<QName>,
     pending_start: Option<StartElementState<'a>>,
     pending_events: Vec<(XmlEvent<'a>, bool)>,
@@ -94,9 +111,8 @@ impl<'a> XmlReader<'a> {
     }
 
     /// Registers an outer/ambient namespace prefix binding (e.g. from an enclosing test suite).
-    pub fn add_namespace_binding(&mut self, prefix: &str, uri: &str) {
-        self.initial_bindings
-            .push((alloc::string::ToString::to_string(prefix), alloc::string::ToString::to_string(uri)));
+    pub fn add_namespace_binding(&mut self, prefix: &'a str, uri: &'a str) {
+        self.initial_bindings.push((prefix, uri));
     }
 
     /// Sets whether namespace prefix resolution is permissive (fallback to prefix string if undeclared).
@@ -112,7 +128,7 @@ impl<'a> XmlReader<'a> {
     /// Resolves namespace URI for a given prefix string in the active scope.
     #[inline]
     #[must_use]
-    pub fn resolve_prefix(&self, prefix: &str) -> Option<&str> {
+    pub fn resolve_prefix(&self, prefix: &str) -> Option<&'a str> {
         if prefix == "xml" {
             return Some("http://www.w3.org/XML/1998/namespace");
         }
@@ -121,15 +137,15 @@ impl<'a> XmlReader<'a> {
         }
 
         for frame in self.ns_stack.iter().rev() {
-            for (p, uri) in &frame.bindings {
+            for &(p, uri) in &frame.bindings {
                 if p == prefix {
-                    return Some(uri.as_str());
+                    return Some(uri);
                 }
             }
         }
-        for (p, uri) in &self.initial_bindings {
+        for &(p, uri) in &self.initial_bindings {
             if p == prefix {
-                return Some(uri.as_str());
+                return Some(uri);
             }
         }
         None
@@ -138,13 +154,13 @@ impl<'a> XmlReader<'a> {
     /// Resolves default namespace URI in active scope.
     #[inline]
     #[must_use]
-    pub fn resolve_default_ns(&self) -> Option<&str> {
+    pub fn resolve_default_ns(&self) -> Option<&'a str> {
         for frame in self.ns_stack.iter().rev() {
-            if let Some(ref uri) = frame.default_ns {
+            if let Some(uri) = frame.default_ns {
                 return if uri.is_empty() {
                     None
                 } else {
-                    Some(uri.as_str())
+                    Some(uri)
                 };
             }
         }
@@ -156,42 +172,64 @@ impl<'a> XmlReader<'a> {
     pub fn find_prefixes_for_uri(&self, uri: &str) -> Vec<String> {
         let mut res = Vec::new();
         for frame in &self.ns_stack {
-            for (p, u) in &frame.bindings {
-                if u == uri && !res.contains(p) {
-                    res.push(p.clone());
+            for &(p, u) in &frame.bindings {
+                if u == uri && !res.iter().any(|existing: &String| existing == p) {
+                    res.push(alloc::string::ToString::to_string(p));
                 }
             }
-            if let Some(ref def_uri) = frame.default_ns {
+            if let Some(def_uri) = frame.default_ns {
                 if def_uri == uri && !res.iter().any(|p| p.is_empty()) {
                     res.push(String::new());
                 }
             }
         }
-        for (p, u) in &self.initial_bindings {
-            if u == uri && !res.contains(p) {
-                res.push(p.clone());
+        for &(p, u) in &self.initial_bindings {
+            if u == uri && !res.iter().any(|existing: &String| existing == p) {
+                res.push(alloc::string::ToString::to_string(p));
             }
         }
         res
     }
 
-    /// Returns all prefix-to-URI bindings currently in active scope.
+    /// Returns all prefix-to-URI bindings currently in active scope as owned strings.
     #[must_use]
     pub fn in_scope_namespace_bindings(&self) -> Vec<(String, String)> {
         let mut res = Vec::new();
         if let Some(def_ns) = self.resolve_default_ns() {
-            res.push((String::new(), String::from(def_ns)));
+            res.push((String::new(), alloc::string::ToString::to_string(def_ns)));
         }
         for frame in self.ns_stack.iter().rev() {
-            for (p, u) in &frame.bindings {
+            for &(p, u) in &frame.bindings {
                 if !res.iter().any(|(existing_p, _)| existing_p == p) {
-                    res.push((p.clone(), u.clone()));
+                    res.push((alloc::string::ToString::to_string(p), alloc::string::ToString::to_string(u)));
                 }
             }
         }
-        for (p, u) in &self.initial_bindings {
+        for &(p, u) in &self.initial_bindings {
             if !res.iter().any(|(existing_p, _)| existing_p == p) {
-                res.push((p.clone(), u.clone()));
+                res.push((alloc::string::ToString::to_string(p), alloc::string::ToString::to_string(u)));
+            }
+        }
+        res
+    }
+
+    /// Returns all prefix-to-URI bindings currently in active scope without heap allocation.
+    #[must_use]
+    pub fn in_scope_namespace_bindings_ref(&self) -> Vec<(&'a str, &'a str)> {
+        let mut res = Vec::new();
+        if let Some(def_ns) = self.resolve_default_ns() {
+            res.push(("", def_ns));
+        }
+        for frame in self.ns_stack.iter().rev() {
+            for &(p, u) in &frame.bindings {
+                if !res.iter().any(|(existing_p, _)| *existing_p == p) {
+                    res.push((p, u));
+                }
+            }
+        }
+        for &(p, u) in &self.initial_bindings {
+            if !res.iter().any(|(existing_p, _)| *existing_p == p) {
+                res.push((p, u));
             }
         }
         res
@@ -206,11 +244,11 @@ impl<'a> XmlReader<'a> {
     pub fn current_element_namespace_bindings(&self) -> Vec<(String, String)> {
         let mut res = Vec::new();
         if let Some(frame) = self.ns_stack.last() {
-            if let Some(ref def_uri) = frame.default_ns {
-                let _ = try_push(&mut res, (String::new(), def_uri.clone()));
+            if let Some(def_uri) = frame.default_ns {
+                let _ = try_push(&mut res, (String::new(), alloc::string::ToString::to_string(def_uri)));
             }
-            for (p, u) in &frame.bindings {
-                let _ = try_push(&mut res, (p.clone(), u.clone()));
+            for &(p, u) in &frame.bindings {
+                let _ = try_push(&mut res, (alloc::string::ToString::to_string(p), alloc::string::ToString::to_string(u)));
             }
         }
         res
@@ -441,9 +479,9 @@ impl<'a> XmlReader<'a> {
                     )
                     .with_location(aloc)
                 })?;
-                QName::with_namespace(auri, alocal, Some(pref))
+                QNameRef::with_namespace(auri, alocal, Some(pref))
             } else {
-                QName::local(alocal)
+                QNameRef::local(alocal)
             };
 
             if attributes.iter().any(|a: &Attribute| a.name == aqname) {
@@ -604,12 +642,17 @@ impl<'a> XmlReader<'a> {
                     }
 
                     if p_str.is_empty() && l_str == "xmlns" {
-                        state.frame.default_ns = Some(String::from(decoded.as_ref()));
+                        let uri_str = match &decoded {
+                            Cow::Borrowed(b) => *b,
+                            Cow::Owned(_) => value.as_str(),
+                        };
+                        state.frame.default_ns = Some(uri_str);
                     } else if p_str == "xmlns" {
-                        try_push(
-                            &mut state.frame.bindings,
-                            (String::from(l_str), String::from(decoded.as_ref())),
-                        )?;
+                        let uri_str = match &decoded {
+                            Cow::Borrowed(b) => *b,
+                            Cow::Owned(_) => value.as_str(),
+                        };
+                        try_push(&mut state.frame.bindings, (l_str, uri_str))?;
                     } else {
                         let pref_opt = if p_str.is_empty() { None } else { Some(p_str) };
                         try_push(&mut state.raw_attrs, (pref_opt, l_str, decoded, loc))?;
@@ -1125,5 +1168,20 @@ mod tests {
         } else {
             panic!("Expected StartElement");
         }
+
+        // 14. In-place format_num_commas verification (RUST-XML-03)
+        assert_eq!(format_num_commas(0), "0");
+        assert_eq!(format_num_commas(5), "5");
+        assert_eq!(format_num_commas(42), "42");
+        assert_eq!(format_num_commas(999), "999");
+        assert_eq!(format_num_commas(1000), "1,000");
+        assert_eq!(format_num_commas(1234567), "1,234,567");
+
+        // 15. Zero-allocation in_scope_namespace_bindings_ref
+        let xml_ref = "<root xmlns=\"http://default.com\" xmlns:p=\"http://p.com\"/>";
+        let mut r_ref = XmlReader::new(xml_ref);
+        let _ = r_ref.next_event();
+        let refs = r_ref.in_scope_namespace_bindings_ref();
+        assert!(refs.iter().any(|&(p, u)| p == "p" && u == "http://p.com"));
     }
 }

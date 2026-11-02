@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NATO STANAG 5602: Standard Interface for Multiple Platform Link Evaluation (SIMPLE)
+  DFDL Schema definition for military tactical data link IP encapsulation (Link 16, Link 11, Link 22, VMF).
+-->
+<xs:schema
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+    xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions"
+    xmlns:fn="http://www.w3.org/2005/xpath-functions"
+    xmlns:simple="urn:nato:stanag:5602:simple">
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format
+          representation="binary"
+          byteOrder="bigEndian"
+          bitOrder="mostSignificantBitFirst"
+          binaryNumberRep="binary"
+          lengthUnits="bytes"
+          alignment="1"
+          alignmentUnits="bytes"
+          lengthKind="implicit"
+          leadingSkip="0"
+          trailingSkip="0"
+          initiator=""
+          terminator=""
+          separator=""
+          encoding="ISO-8859-1"
+          textBidi="no"
+          floating="no"
+          fillByte="%#r00;"
+          calendarPatternKind="explicit"
+          calendarPattern="hhmmss"
+          calendarTimeZone="UTC"
+          occursCountKind="implicit"
+      />
+    </xs:appinfo>
+  </xs:annotation>
+
+  <!-- ========================================================================= -->
+  <!-- Strict Simple Types with NATO Constraints and Numerical Facets            -->
+  <!-- ========================================================================= -->
+
+  <!-- STANAG 5602 Edition / Protocol Version: 1 = Edition 1, 2 = Edition 2 -->
+  <xs:simpleType name="SimpleVersionType">
+    <xs:annotation>
+      <xs:documentation>
+        NATO STANAG 5602 Protocol Version / Edition:
+        - 1: Edition 1 (Legacy SIMPLE)
+        - 2: Edition 2 (Current NATO Operational Standard)
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="1"/>
+      <xs:maxInclusive value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- NATO Security Classification Level (0 to 4) -->
+  <xs:simpleType name="SecurityClassificationType">
+    <xs:annotation>
+      <xs:documentation>
+        NATO Security Classification:
+        - 0: Unclassified
+        - 1: NATO Restricted
+        - 2: NATO Confidential
+        - 3: NATO Secret
+        - 4: Cosmic Top Secret
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="4"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- STANAG 5602 Message Type (1 to 5) -->
+  <xs:simpleType name="SimpleMessageType">
+    <xs:annotation>
+      <xs:documentation>
+        STANAG 5602 Functional Message Types:
+        - 1: Tactical Data Link (TDL) Data Packet (Link 16, Link 11, Link 22, VMF)
+        - 2: Time Synchronization Packet
+        - 3: Platform / Radio Terminal Status (Keep-Alive)
+        - 4: RF Transmission Event (RF Emission / Reception Notification)
+        - 5: Connection and Filter Configuration Control
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="1"/>
+      <xs:maxInclusive value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Tactical Data Link Standard Identifier (Strictly 0 = SIMPLE Control, 3 = Link 16) -->
+  <xs:simpleType name="TdlType">
+    <xs:annotation>
+      <xs:documentation>
+        Tactical Data Link Identifier:
+        - 0: Native STANAG 5602 SIMPLE Control / Management Messages
+        - 3: Link 16 (STANAG 5516 / TADIL J - J-Series messages)
+        Only SIMPLE Control (0) and Link 16 (3) are accepted; any other value is rejected.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="3"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Control and Simulation Status Flags (0 to 7) -->
+  <xs:simpleType name="SimpleFlagsType">
+    <xs:annotation>
+      <xs:documentation>
+        Control Flags bitmask:
+        - Bit 0 (0x01): 1 = Simulated Data, 0 = Live Operational
+        - Bit 1 (0x02): 1 = Loopback / Echo Test
+        - Bit 2 (0x04): 1 = Diagnostic / Engineering Test Data
+        - Bits 3..7: Reserved (Must be 0)
+        Valid integer range: 0 to 7.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="7"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Monotonic Sequence Counter (0 to 4294967295) -->
+  <xs:simpleType name="SequenceNumberType">
+    <xs:annotation>
+      <xs:documentation>Monotonic 32-bit sequence counter for packet loss detection.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedInt">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="4294967295"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Node / Platform Identifier (0 to 4294967295, 0xFFFFFFFF = Broadcast) -->
+  <xs:simpleType name="NodeIdType">
+    <xs:annotation>
+      <xs:documentation>Platform, terminal or radio node identifier. 4294967295 (0xFFFFFFFF) indicates Broadcast.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedInt">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="4294967295"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Length in bytes of the encapsulated TDL payload (0 to 65507 bytes) -->
+  <xs:simpleType name="PayloadLengthType">
+    <xs:annotation>
+      <xs:documentation>
+        Length in octets of the encapsulated TDL payload.
+        Range: 0 bytes (header-only status/heartbeat) up to 65507 octets (maximum UDP payload size).
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65507"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ========================================================================= -->
+  <!-- Layer 2: Tactical Data Link Included Sub-Schemas                          -->
+  <!-- ========================================================================= -->
+
+  <!-- Include NATO STANAG 5602 Native Control & Management Schemas (tdlType = 0) -->
+  <xs:include schemaLocation="stanag5602_control.dfdl.xsd"/>
+
+  <!-- Include Link 16 (STANAG 5516 / TADIL J) J-Series Message Definitions (tdlType = 3) -->
+  <xs:include schemaLocation="link16.dfdl.xsd"/>
+
+  <!-- ========================================================================= -->
+  <!-- Top-Level Root Elements                                                   -->
+  <!-- ========================================================================= -->
+
+  <!-- A single STANAG 5602 (SIMPLE) Packet -->
+  <xs:element name="SimplePacket" type="SimplePacketType"/>
+
+  <!-- A stream or capture of multiple sequential STANAG 5602 (SIMPLE) Packets -->
+  <xs:element name="SimpleStream" type="SimpleStreamType"/>
+
+  <!-- ========================================================================= -->
+  <!-- Complex Types                                                             -->
+  <!-- ========================================================================= -->
+
+  <xs:complexType name="SimpleStreamType">
+    <xs:sequence>
+      <xs:element name="packet" type="SimplePacketType" minOccurs="0" maxOccurs="unbounded" dfdl:occursCountKind="parsed"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Standard STANAG 5602 (SIMPLE) Packet Structure with Layered Payload -->
+  <xs:complexType name="SimplePacketType">
+    <xs:sequence>
+      <!-- Layer 1: STANAG 5602 Transport Header (Strict 28 octets) -->
+      <xs:element name="version" type="SimpleVersionType"/>
+      <xs:element name="securityClassification" type="SecurityClassificationType"/>
+      <xs:element name="messageType" type="SimpleMessageType"/>
+      <xs:element name="tdlType" type="TdlType">
+        <xs:annotation>
+          <xs:appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:assert test="{ . eq 0 or . eq 3 }" message="Unsupported TDL type: only SIMPLE Control (tdlType = 0) and Link 16 (tdlType = 3) are accepted"/>
+          </xs:appinfo>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="flags" type="SimpleFlagsType"/>
+      <xs:element name="sequenceNumber" type="SequenceNumberType"/>
+      <xs:element name="timestampNanos" type="xs:unsignedLong"/>
+      <xs:element name="transmitterId" type="NodeIdType"/>
+      <xs:element name="receiverId" type="NodeIdType"/>
+      <xs:element name="payloadLength" type="PayloadLengthType"/>
+
+      <!-- Layer 2: Polymorphic Dispatch on tdlType (0 = Native SIMPLE Control, 3 = Link 16) -->
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(tdlType) }">
+        <!-- Native STANAG 5602 Management & Control Payload bounded by header payloadLength -->
+        <xs:element name="control" type="SimpleControlPayloadType" dfdl:choiceBranchKey="0"
+                    dfdl:lengthKind="explicit" dfdl:length="{ ../payloadLength }"/>
+        <!-- Link 16 J-Series Tactical Data Link Payload bounded by header payloadLength -->
+        <xs:element name="link16" type="Link16PayloadType" dfdl:choiceBranchKey="3"
+                    dfdl:lengthKind="explicit" dfdl:length="{ ../payloadLength }"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

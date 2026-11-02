@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<testSuite
+  suiteName="Envelopepayload"
+  description="Envelopepayload tests"
+  xmlns="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:tdml="http://www.ibm.com/xmlns/dfdl/testData"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  defaultRoundTrip="onePass">
+
+  <parserTestCase name="test_envelopepayload_01"
+                  model="/dfdl-envelope-payload.bin">
+    <document>
+      <documentPart type="file">test_01.dat</documentPart>
+    </document>
+    <infoset>
+      <dfdlInfoset type="file">test_01.dat.xml</dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+  <parserTestCase name="test_envelopepayload_02"
+                  model="/dfdl-envelope-payload.bin">
+    <document>
+      <documentPart type="file">test_02.dat</documentPart>
+    </document>
+    <infoset>
+      <dfdlInfoset type="file">test_02.dat.xml</dfdlInfoset>
+    </infoset>
+  </parserTestCase>
+
+</testSuite>

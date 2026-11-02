@@ -24,8 +24,8 @@ pub fn extract_dfdl_attributes_for_element(
     xsd_elem_name: Option<&str>,
 ) -> DFDLResult<()> {
     for attr in attributes {
-        let prefix = attr.name.prefix.as_deref().unwrap_or("");
-        let local = attr.name.local_name.as_str();
+        let prefix = attr.name.prefix.unwrap_or("");
+        let local = attr.name.local_name;
 
         if prefix == "xmlns" || local == "xmlns" {
             continue;
@@ -121,15 +121,16 @@ pub fn parse_property_element(
 mod tests {
     use super::*;
     use alloc::borrow::Cow;
-    use dfdl_core::types::{QName, SourceLocation};
+    use dfdl_core::types::SourceLocation;
+    use dfdl_xml::QNameRef;
 
     fn make_attr<'a>(prefix: Option<&'a str>, local: &'a str, val: &'a str) -> Attribute<'a> {
-        let mut qn = QName::local(local);
-        if let Some(p) = prefix {
-            qn.prefix = Some(alloc::string::String::from(p));
-        }
         Attribute {
-            name: qn,
+            name: QNameRef {
+                prefix,
+                local_name: local,
+                namespace: None,
+            },
             value: Cow::Borrowed(val),
             location: SourceLocation::at_offset(0),
         }

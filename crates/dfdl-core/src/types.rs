@@ -140,6 +140,17 @@ impl QName {
             self.local_name.clone()
         }
     }
+
+    /// Formats this QName with its prefix if present, borrowing `local_name` directly when unprefixed.
+    #[inline]
+    #[must_use]
+    pub fn prefixed_name_cow(&self) -> alloc::borrow::Cow<'_, str> {
+        if let Some(ref p) = self.prefix {
+            alloc::borrow::Cow::Owned(alloc::format!("{}:{}", p, self.local_name))
+        } else {
+            alloc::borrow::Cow::Borrowed(self.local_name.as_str())
+        }
+    }
 }
 
 impl fmt::Display for QName {
@@ -469,7 +480,6 @@ impl PathStep {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct InfosetPath {
     steps: Vec<PathStep>,
-    segments: Vec<String>,
     is_absolute: bool,
 }
 
@@ -480,7 +490,6 @@ impl InfosetPath {
     pub const fn root() -> Self {
         Self {
             steps: Vec::new(),
-            segments: Vec::new(),
             is_absolute: true,
         }
     }
@@ -492,17 +501,16 @@ impl InfosetPath {
         let steps = segments.iter().map(|s| PathStep::from_segment(s.as_str())).collect();
         Self {
             steps,
-            segments,
             is_absolute,
         }
     }
 
     /// Constructs an [`InfosetPath`] directly from structured [`PathStep`]s and absolute flag.
+    #[inline]
+    #[must_use]
     pub fn from_steps(steps: Vec<PathStep>, is_absolute: bool) -> Self {
-        let segments = steps.iter().map(|s| s.to_segment_string()).collect();
         Self {
             steps,
-            segments,
             is_absolute,
         }
     }
@@ -527,30 +535,22 @@ impl InfosetPath {
         &self.steps
     }
 
-    /// Returns a slice of segments in the path.
+    /// Returns a collection of segment strings in the path.
     #[inline]
     #[must_use]
-    pub fn segments(&self) -> &[String] {
-        &self.segments
+    pub fn segments(&self) -> Vec<String> {
+        self.steps.iter().map(|s| s.to_segment_string()).collect()
     }
 
     /// Pushes a structured [`PathStep`] onto the path using fallible allocation.
     pub fn try_push_step(&mut self, step: PathStep) -> DFDLResult<()> {
-        let seg = step.to_segment_string();
         self.steps.try_reserve(1).map_err(|_| {
             DFDLError::new(
                 DFDLErrorKind::ImplementationLimit,
                 "InfosetPath growth allocation failed",
             )
         })?;
-        self.segments.try_reserve(1).map_err(|_| {
-            DFDLError::new(
-                DFDLErrorKind::ImplementationLimit,
-                "InfosetPath growth allocation failed",
-            )
-        })?;
         self.steps.push(step);
-        self.segments.push(seg);
         Ok(())
     }
 
@@ -570,52 +570,29 @@ impl InfosetPath {
             alloc::string::ToString::to_string(clean_ns)
         };
         let step = PathStep::from_segment(&clean);
-        self.steps.try_reserve(1).map_err(|_| {
-            DFDLError::new(
-                DFDLErrorKind::ImplementationLimit,
-                "InfosetPath growth allocation failed",
-            )
-        })?;
-        self.segments.try_reserve(1).map_err(|_| {
-            DFDLError::new(
-                DFDLErrorKind::ImplementationLimit,
-                "InfosetPath growth allocation failed",
-            )
-        })?;
-        self.steps.push(step);
-        self.segments.push(clean);
-        Ok(())
+        self.try_push_step(step)
     }
 
     /// Pushes a segment verbatim onto the path using fallible allocation, preserving QName prefixes.
     pub fn try_push_raw(&mut self, segment: &str) -> DFDLResult<()> {
         let step = PathStep::from_segment(segment);
-        self.steps.try_reserve(1).map_err(|_| {
-            DFDLError::new(
-                DFDLErrorKind::ImplementationLimit,
-                "InfosetPath growth allocation failed",
-            )
-        })?;
-        self.segments.try_reserve(1).map_err(|_| {
-            DFDLError::new(
-                DFDLErrorKind::ImplementationLimit,
-                "InfosetPath growth allocation failed",
-            )
-        })?;
-        self.steps.push(step);
-        self.segments.push(alloc::string::ToString::to_string(segment));
-        Ok(())
+        self.try_push_step(step)
     }
 
-    /// Pops the last segment from the path.
-    pub fn pop(&mut self) -> Option<String> {
-        self.steps.pop();
-        self.segments.pop()
+    /// Pops the last structured step from the path.
+    #[inline]
+    pub fn pop(&mut self) -> Option<PathStep> {
+        self.steps.pop()
+    }
+
+    /// Truncates the path to the specified length.
+    #[inline]
+    pub fn truncate(&mut self, len: usize) {
+        self.steps.truncate(len);
     }
 
     /// Pops the last structured step from the path.
     pub fn pop_step(&mut self) -> Option<PathStep> {
-        self.segments.pop();
         self.steps.pop()
     }
 
@@ -670,11 +647,11 @@ impl InfosetPath {
 
 impl fmt::Display for InfosetPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.segments.is_empty() {
+        if self.steps.is_empty() {
             write!(f, "/")
         } else {
-            for seg in &self.segments {
-                write!(f, "/{}", seg)?;
+            for step in &self.steps {
+                write!(f, "/{}", step.to_segment_string())?;
             }
             Ok(())
         }
@@ -825,7 +802,7 @@ mod tests {
         path.try_push("root").unwrap();
         path.try_push("header").unwrap();
         assert_eq!(path.to_string(), "/root/header");
-        assert_eq!(path.pop(), Some(String::from("header")));
+        assert_eq!(path.pop().as_ref().map(|s| s.raw_target()), Some("header"));
         assert_eq!(path.to_string(), "/root");
     }
 
@@ -867,7 +844,7 @@ mod tests {
 
         let mut path = InfosetPath::from_parts(alloc::vec!["root".into()], false);
         assert!(!path.is_absolute());
-        assert_eq!(path.segments(), &["root"]);
+        assert_eq!(&path.segments()[..], &["root"]);
 
         path.try_push("pfx:item[1]").unwrap();
         assert_eq!(path.segments()[1], "item[1]");
@@ -880,7 +857,7 @@ mod tests {
         assert_eq!(alloc::format!("{}", path), "/root/item[1]/item]reversed[/raw:segment");
 
         let popped = path.pop();
-        assert_eq!(popped.as_deref(), Some("raw:segment"));
+        assert_eq!(popped.as_ref().map(|s| s.raw_target()), Some("raw:segment"));
 
         // InfosetPath parse and fallback on invalid syntax
         let parsed = InfosetPath::parse("/root/header");
@@ -965,7 +942,7 @@ mod tests {
         let mut path = InfosetPath::from_steps(alloc::vec![step, parent_step], true);
         assert!(path.is_absolute());
         assert_eq!(path.steps().len(), 2);
-        assert_eq!(path.segments(), &["ns:field[2]", ".."]);
+        assert_eq!(&path.segments()[..], &["ns:field[2]", ".."]);
 
         let popped_step = path.pop_step();
         assert!(popped_step.is_some());

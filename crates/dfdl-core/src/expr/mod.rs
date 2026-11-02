@@ -15,7 +15,7 @@ use crate::error::{DFDLError, DFDLErrorKind, DFDLResult};
 pub use ast::{BinaryOp, ExprAst, UnaryOp};
 pub use eval::{eval_expr, ExprContext, MAX_EVAL_DEPTH};
 pub use parser::parse_expr;
-pub use properties::{PropertyBinding, PropertyStore};
+pub use properties::{PropertyBinding, PropertyKey, PropertyKeyName, PropertyScope, PropertyStore};
 pub use variables::{DfdlVariable, VariableMap};
 
 /// Validates that all prefixes used in QNames, function calls, variables, and path steps
@@ -212,7 +212,7 @@ mod tests {
         match ast {
             ExprAst::Binary { ref left, .. } => {
                 if let ExprAst::Path(ref p) = **left {
-                    assert_eq!(p.segments(), &["..", "..", "E1Word[1]", "contents"]);
+                    assert_eq!(&p.segments()[..], &["..", "..", "E1Word[1]", "contents"]);
                 } else {
                     panic!("Expected Path, got {:?}", left);
                 }

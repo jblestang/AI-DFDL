@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NATO STANAG 5602: Standard Interface for Multiple Platform Link Evaluation (SIMPLE)
+  Control and Management Messages Schema (tdlType = 0).
+
+  Provides structured definitions for native SIMPLE management payloads:
+  - Message Type 2: Time Synchronization & RTT (Round Trip Timing)
+  - Message Type 3: Platform / Radio Terminal Status & Keep-Alive
+  - Message Type 4: RF Transmission Event Notification
+  - Message Type 5: Connection and Message Filter Configuration Control
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format
+        alignment="1"
+        alignmentUnits="bytes"
+        byteOrder="bigEndian"
+        bitOrder="mostSignificantBitFirst"
+        encoding="ASCII"
+        representation="binary"
+        binaryNumberRep="binary"
+        binaryFloatRep="ieee"
+        lengthUnits="bytes"
+        lengthKind="implicit"
+        calendarPatternKind="explicit"
+        calendarPattern="hhmmss"
+        calendarTimeZone="UTC"
+        initiatedContent="no"
+        sequenceKind="ordered"
+        floating="no"
+        leadingSkip="0"
+        trailingSkip="0"
+        textBidi="no"
+        encodingErrorPolicy="replace"
+        truncateSpecifiedLengthString="no"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <!-- ========================================================================= -->
+  <!-- Top-Level Root Elements for Standalone Decoding                           -->
+  <!-- ========================================================================= -->
+
+  <xs:element name="SimpleTerminalStatus" type="SimpleTerminalStatusType"/>
+  <xs:element name="SimpleTimeSync" type="SimpleTimeSyncType"/>
+  <xs:element name="SimpleRfEvent" type="SimpleRfEventType"/>
+  <xs:element name="SimpleFilterConfig" type="SimpleFilterConfigType"/>
+
+  <!-- ========================================================================= -->
+  <!-- Polymorphic Native SIMPLE Control Message Dispatcher (tdlType = 0)         -->
+  <!-- ========================================================================= -->
+
+  <xs:complexType name="SimpleControlPayloadType">
+    <xs:sequence>
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(../messageType) }">
+        <!-- Message Type 2: Time Synchronization & RTT -->
+        <xs:element name="timeSync" type="SimpleTimeSyncType" dfdl:choiceBranchKey="2"/>
+        <!-- Message Type 3: Platform / Radio Terminal Status (Keep-Alive) -->
+        <xs:element name="status" type="SimpleTerminalStatusType" dfdl:choiceBranchKey="3"/>
+        <!-- Message Type 4: RF Transmission Event Notification -->
+        <xs:element name="rfEvent" type="SimpleRfEventType" dfdl:choiceBranchKey="4"/>
+        <!-- Message Type 5: Connection and Message Filter Configuration -->
+        <xs:element name="filterConfig" type="SimpleFilterConfigType" dfdl:choiceBranchKey="5"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- 1. Platform / Radio Terminal Status & Keep-Alive (Message Type 3)         -->
+  <!-- ========================================================================= -->
+
+  <xs:complexType name="SimpleTerminalStatusType">
+    <xs:annotation>
+      <xs:documentation>
+        Operational telemetry and health of a simulated or live MIDS/JTRS terminal:
+        - terminalState: 0=Off, 1=Idle, 2=Net Entry, 3=Synchronized, 4=Transmitting, 5=Receiving, 6=Degraded, 7=Fault
+        - syncQuality: Fine synchronization quality index (0 to 15)
+        - netNumber: Frequency-hopping tactical net number (0 to 511)
+        - rfPowerWatts: Current effective RF transmission power in Watts
+        - cryptoState: Crypto variable key state (0=Zeroized, 1=Unloaded, 2=Loaded, 3=Active)
+        - latitude, longitude, altitudeMeters: Antenna reference position
+        - biteStatus: Built-In Test Equipment fault bitmask (0 = All Systems Operational)
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="terminalState" type="xs:unsignedByte"/>
+      <xs:element name="syncQuality" type="xs:unsignedByte"/>
+      <xs:element name="netNumber" type="xs:unsignedShort"/>
+      <xs:element name="rfPowerWatts" type="xs:float"/>
+      <xs:element name="cryptoState" type="xs:unsignedByte"/>
+      <xs:element name="latitude" type="xs:float"/>
+      <xs:element name="longitude" type="xs:float"/>
+      <xs:element name="altitudeMeters" type="xs:float"/>
+      <xs:element name="biteStatus" type="xs:unsignedInt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- 2. Time Synchronization & Round Trip Timing (RTT) (Message Type 2)        -->
+  <!-- ========================================================================= -->
+
+  <xs:complexType name="SimpleTimeSyncType">
+    <xs:annotation>
+      <xs:documentation>
+        NTP/PTP-like time synchronization across distributed NATO simulation WAN nodes:
+        - t1TransmitTime: Origin timestamp sent by master (UTC epoch nanoseconds)
+        - t2ReceiveTime: Timestamp received by slave (UTC epoch nanoseconds)
+        - t3TransmitTime: Timestamp response sent by slave (UTC epoch nanoseconds)
+        - t4ReceiveTime: Timestamp response received by master (UTC epoch nanoseconds)
+        - roundTripDelayNanos: Computed round-trip latency in nanoseconds
+        - clockOffsetNanos: Computed clock difference between nodes
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="t1TransmitTime" type="xs:unsignedLong"/>
+      <xs:element name="t2ReceiveTime" type="xs:unsignedLong"/>
+      <xs:element name="t3TransmitTime" type="xs:unsignedLong"/>
+      <xs:element name="t4ReceiveTime" type="xs:unsignedLong"/>
+      <xs:element name="roundTripDelayNanos" type="xs:unsignedInt"/>
+      <xs:element name="clockOffsetNanos" type="xs:long"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- 3. RF Transmission Event Notification (Message Type 4)                     -->
+  <!-- ========================================================================= -->
+
+  <xs:complexType name="SimpleRfEventType">
+    <xs:annotation>
+      <xs:documentation>
+        Notification of tactical RF signal emission for simulation environment propagation:
+        - frequencyKhz: Center carrier frequency in kHz
+        - bandwidthKhz: Emission channel bandwidth in kHz
+        - powerDbm: Effective radiated power in dBm
+        - modulation: Modulation index (1=FSK, 2=PSK, 3=MSK, 4=AM, 5=FM)
+        - antennaLat, antennaLon: Emitter antenna coordinates
+        - antennaElev: Elevation in meters
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="frequencyKhz" type="xs:unsignedInt"/>
+      <xs:element name="bandwidthKhz" type="xs:unsignedInt"/>
+      <xs:element name="powerDbm" type="xs:float"/>
+      <xs:element name="modulation" type="xs:unsignedByte"/>
+      <xs:element name="antennaLat" type="xs:float"/>
+      <xs:element name="antennaLon" type="xs:float"/>
+      <xs:element name="antennaElev" type="xs:short"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ========================================================================= -->
+  <!-- 4. Message Filter & Connection Configuration (Message Type 5)             -->
+  <!-- ========================================================================= -->
+
+  <xs:complexType name="SimpleFilterConfigType">
+    <xs:annotation>
+      <xs:documentation>
+        Dynamic filtering control to manage bandwidth over constrained NATO tactical IP links:
+        - filterType: 1=Geographic AOI (Geocage), 2=Track Number Filter, 3=J-Series Label Filter
+        - action: 1=Add Filter Rule, 2=Remove Filter Rule, 3=Clear All Filters
+        - minLat, maxLat, minLon, maxLon: Geographic Area of Interest bounding box
+        - reserved: Protocol reserved alignment padding
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="filterType" type="xs:unsignedByte"/>
+      <xs:element name="action" type="xs:unsignedByte"/>
+      <xs:element name="minLat" type="xs:float"/>
+      <xs:element name="maxLat" type="xs:float"/>
+      <xs:element name="minLon" type="xs:float"/>
+      <xs:element name="maxLon" type="xs:float"/>
+      <xs:element name="reserved" type="xs:unsignedShort"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

@@ -2,6 +2,7 @@ use super::*;
 use super::elements::*;
 use super::lower::*;
 use super::schema_doc::*;
+use alloc::string::String;
 use dfdl_core::expr::variables::VariableMap;
 use dfdl_core::expr::PropertyStore;
 use dfdl_core::infoset::value::{DfdlSimpleType, DfdlValue};
@@ -1532,7 +1533,7 @@ fn test_hidden_choice_validation() {
         <dfdl:format byteOrder="bigEndian" alignment="1" lengthUnits="bytes" representation="text" lengthKind="delimited"/>
         <xs:group name="c1">
             <xs:choice>
-                <xs:element name="x" type="xs:string" dfdl:inputValueCalc="{ 'hello' }"/>
+                <xs:element name="x" type="xs:string" default="hello"/>
                 <xs:element name="y" type="xs:string" dfdl:outputValueCalc="{ 'world' }"/>
             </xs:choice>
         </xs:group>
@@ -1551,7 +1552,7 @@ fn test_hidden_choice_validation() {
         <dfdl:format byteOrder="bigEndian" alignment="1" lengthUnits="bytes" representation="text" lengthKind="delimited"/>
         <xs:group name="c2">
             <xs:choice>
-                <xs:element name="x" type="xs:string" dfdl:inputValueCalc="{ 'hello' }"/>
+                <xs:element name="x" type="xs:string"/>
                 <xs:element name="y" type="xs:string"/>
             </xs:choice>
         </xs:group>
@@ -1938,6 +1939,7 @@ fn test_nested_prefixed_depth_validation() {
 
 #[test]
 fn test_is_known_layer_validation() {
+    dfdl_layers::init();
     use super::lower::is_known_layer;
 
     // Standard Daffodil extension layers.

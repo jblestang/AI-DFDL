@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<schema
+  xmlns="http://www.w3.org/2001/XMLSchema"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+  xmlns:tcpHdr="urn:dfdlschemas.github.io:schema:dfdl:tcpMessage:tcpHdr"
+  targetNamespace="urn:dfdlschemas.github.io:schema:dfdl:tcpMessage:tcpHdr"
+  elementFormDefault="unqualified">
+
+  <include schemaLocation="baseFormat.dfdl.xsd"/>
+  <include schemaLocation="/io/github/dfdlschemas/tcpMessage/xsd/tcpContentType.dfdl.xsd"/>
+
+  <annotation>
+    <appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format ref="tcpHdr:baseFormat"/>
+
+    </appinfo>
+  </annotation>
+
+  <complexType name="messageType">
+    <sequence>
+      <sequence dfdl:hiddenGroupRef="tcpHdr:lengthGroup"/>
+      <element name="data" dfdl:lengthKind="explicit" dfdl:length="{ ../length }">
+        <complexType>
+          <sequence>
+            <!--
+            Uses of this DFDL schema will define this tcpContentType
+            in a file io/github/dfdlschemas/tcpMessage/tcpContentType.dfdl.xsd.
+
+            This schema does NOT define that (except under test dir so that unit tests
+            of this schema can run).
+            -->
+            <element name="content" type="tcpHdr:tcpContentType"/>
+          </sequence>
+        </complexType>
+      </element>
+    </sequence>
+  </complexType>
+
+  <group name="lengthGroup">
+    <sequence>
+      <!--
+       This really should be much easier. DFDL has dfdl:lengthKind="prefixed" and that and related
+       properties should eliminate the need for the dfdl:outputValueCalc, and the extra element tier
+       named 'content' which is needed to avoid circularity between the outputValueCalc on length
+       and the dfdl:length expression on the 'data' element.
+       -->
+      <element name="length" type="xs:unsignedInt"
+               dfdl:alignment="1" dfdl:alignmentUnits="bytes"
+               dfdl:outputValueCalc='{ dfdl:valueLength(../data/content, "bytes" ) }'/>
+      <sequence>
+        <annotation>
+          <appinfo source="http://www.ogf.org/dfdl/">
+            <dfdl:assert message="length is out of range.">{ length le $tcpHdr:maxLength }</dfdl:assert>
+          </appinfo>
+        </annotation>
+      </sequence>
+    </sequence>
+  </group>
+
+</schema>

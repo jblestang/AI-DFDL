@@ -1,7 +1,5 @@
 //! Text parsing and character decoding logic for the DFDL parser engine.
 
-#![allow(clippy::arithmetic_side_effects)]
-
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -57,8 +55,8 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         Ok(())
     }
 
-    pub(crate) fn check_mandatory_alignment(&self, encoding: &str) -> DFDLResult<()> {
-        let align = crate::encoding::encoding_mandatory_alignment_bits(encoding);
+    pub(crate) fn check_mandatory_alignment(&self, encoding: &crate::encoding::EncodingKind) -> DFDLResult<()> {
+        let align = encoding.mandatory_alignment_bits();
 
         if align > 1 {
             let bit_pos = self.reader.position().0;
@@ -83,25 +81,28 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         elem_name: Option<&str>,
     ) -> DFDLResult<DfdlValue> {
         self.check_mandatory_alignment(&props.encoding)?;
-        let mut bytes = Vec::new();
-
         let raw_len = dynamic_len;
         let byte_len = raw_len.map(|l| match props.length_units {
             crate::schema::ir::LengthUnits::Bits => l.saturating_add(7) / 8,
             crate::schema::ir::LengthUnits::Characters => {
-                let unit_bits = crate::encoding::encoding_unit_bits(&props.encoding);
+                let unit_bits = props.encoding_unit_bits;
                 l.saturating_mul(unit_bits).saturating_add(7) / 8
             }
             crate::schema::ir::LengthUnits::Bytes => l,
         });
+        let mut bytes = if let Some(l) = byte_len {
+            Vec::with_capacity(l.min(1024))
+        } else {
+            Vec::new()
+        };
 
         let eval_sep = if let Some(ref prop) = props.separator_prop {
-            Some(self.evaluate_prop_at(prop, builder, elem_name, Some(&props.in_scope_namespaces))?)
+            Some(self.evaluate_prop_cow(prop, builder, elem_name, Some(&props.in_scope_namespaces))?)
         } else if let Some(ref raw) = props.separator {
             if raw.is_empty() {
                 None
             } else {
-                Some(self.evaluate_property_str_at(raw, builder, elem_name)?)
+                Some(alloc::borrow::Cow::Owned(self.evaluate_property_str_at(raw, builder, elem_name)?))
             }
         } else {
             None
@@ -109,26 +110,26 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         let sep_str = eval_sep.as_deref();
 
         let eval_term = if let Some(ref prop) = props.terminator_prop {
-            Some(self.evaluate_prop_at(prop, builder, elem_name, Some(&props.in_scope_namespaces))?)
+            Some(self.evaluate_prop_cow(prop, builder, elem_name, Some(&props.in_scope_namespaces))?)
         } else if let Some(ref raw) = props.terminator {
             if raw.is_empty() {
                 None
             } else {
-                Some(self.evaluate_property_str_at(raw, builder, elem_name)?)
+                Some(alloc::borrow::Cow::Owned(self.evaluate_property_str_at(raw, builder, elem_name)?))
             }
         } else {
             None
         };
         let term_str = eval_term.as_deref();
 
-        let sub_byte_bits = crate::encoding::encoding_char_bits(&props.encoding);
+        let sub_byte_bits = props.encoding_char_bits.or_else(|| props.encoding.char_bits());
         let raw_val_string = if let Some(cb) = sub_byte_bits {
             let mut s = String::new();
             if let Some(char_or_byte_len) = raw_len {
                 let num_chars = match props.length_units {
-                    crate::schema::ir::LengthUnits::Bits => char_or_byte_len / cb,
+                    crate::schema::ir::LengthUnits::Bits => char_or_byte_len.checked_div(cb).unwrap_or(0),
                     crate::schema::ir::LengthUnits::Characters => char_or_byte_len,
-                    crate::schema::ir::LengthUnits::Bytes => (char_or_byte_len.saturating_mul(8)) / cb,
+                    crate::schema::ir::LengthUnits::Bytes => (char_or_byte_len.saturating_mul(8)).checked_div(cb).unwrap_or(0),
                 };
                 for _ in 0..num_chars {
                     if self.reader.is_eof() {
@@ -169,14 +170,16 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
         } else {
             if let Some(char_or_byte_len) = raw_len {
                 if props.length_units == crate::schema::ir::LengthUnits::Characters
-                    && props.encoding.to_ascii_uppercase().contains("UTF-8")
+                    && props.encoding == crate::encoding::EncodingKind::Utf8
                 {
                     for _ in 0..char_or_byte_len {
                         self.read_utf8_char_bytes(&mut bytes)?;
                     }
                 } else if props.length_units == crate::schema::ir::LengthUnits::Characters
-                    && (props.encoding.to_ascii_uppercase().contains("UTF-16")
-                        || props.encoding.to_ascii_uppercase().contains("UCS-2"))
+                    && matches!(
+                        props.encoding,
+                        crate::encoding::EncodingKind::Utf16Be | crate::encoding::EncodingKind::Utf16Le
+                    )
                 {
                     for _ in 0..char_or_byte_len {
                         for _ in 0..2 {
@@ -191,8 +194,10 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         }
                     }
                 } else if props.length_units == crate::schema::ir::LengthUnits::Characters
-                    && (props.encoding.to_ascii_uppercase().contains("UTF-32")
-                        || props.encoding.to_ascii_uppercase().contains("UCS-4"))
+                    && matches!(
+                        props.encoding,
+                        crate::encoding::EncodingKind::Utf32Be | crate::encoding::EncodingKind::Utf32Le
+                    )
                 {
                     for _ in 0..char_or_byte_len {
                         for _ in 0..4 {
@@ -217,10 +222,11 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             ));
                         }
                         let val = self.reader.read_bits(chunk)? as u8;
+                        let shift = 8usize.saturating_sub(chunk);
                         let byte_val = if chunk < 8
                             && self.reader.bit_order() == BitOrder::MostSignificantBitFirst
                         {
-                            val << (8 - chunk)
+                            val.checked_shl(shift as u32).unwrap_or(0)
                         } else {
                             val
                         };
@@ -228,15 +234,20 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         bits_left = bits_left.saturating_sub(chunk);
                     }
                 } else if let Some(len) = byte_len {
-                    for _ in 0..len {
-                        if self.reader.is_eof() {
-                            return Err(DFDLError::new_static(
-                                DFDLErrorKind::Parse,
-                                "Insufficient text data for explicit length scalar",
-                            ));
+                    if self.reader.is_byte_aligned() {
+                        bytes.resize(len, 0);
+                        self.reader.read_bytes(&mut bytes)?;
+                    } else {
+                        for _ in 0..len {
+                            if self.reader.is_eof() {
+                                return Err(DFDLError::new_static(
+                                    DFDLErrorKind::Parse,
+                                    "Insufficient text data for explicit length scalar",
+                                ));
+                            }
+                            let b = self.reader.read_bits(8)? as u8;
+                            try_push(&mut bytes, b)?;
                         }
-                        let b = self.reader.read_bits(8)? as u8;
-                        try_push(&mut bytes, b)?;
                     }
                 }
             } else if let Some(ref scheme) = props.escape_scheme {
@@ -709,12 +720,12 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     props.text_trim_kind,
                 ) {
                     if let Ok(v) = norm_str.parse::<i64>() {
-                        return Some(if is_neg { -v } else { v });
+                        return Some(if is_neg { v.checked_neg().unwrap_or(v) } else { v });
                     }
                     if let Some((int_part, dec_part)) = norm_str.split_once('.') {
                         if dec_part.chars().all(|c| c == '0') {
                             if let Ok(v) = int_part.parse::<i64>() {
-                                return Some(if is_neg { -v } else { v });
+                                return Some(if is_neg { v.checked_neg().unwrap_or(v) } else { v });
                             }
                         }
                     }
@@ -902,8 +913,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                     &alloc::format!("Schema Definition Error: textNumberRep=\"zoned\" is not allowed for {:?}", simple_type),
                 ));
             }
-            let enc_upper = props.encoding.to_ascii_uppercase();
-            let is_ebcdic = enc_upper.starts_with("EBCDIC") || enc_upper == "IBM037" || enc_upper == "CP037";
+            let is_ebcdic = props.encoding == crate::encoding::EncodingKind::Ebcdic;
             let zoned_str = crate::kernel::parser::numbers::parse_zoned_number(
                 val_str,
                 pattern_opt,
@@ -1221,20 +1231,24 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                         "Failed to parse text double scalar",
                     )
                 }),
-            DfdlSimpleType::String => Ok(DfdlValue::String(alloc::string::ToString::to_string(
-                val_str,
-            ))),
+            DfdlSimpleType::String => {
+                if val_str.len() == raw_val_string.len() {
+                    Ok(DfdlValue::String(raw_val_string))
+                } else {
+                    Ok(DfdlValue::String(alloc::string::ToString::to_string(val_str)))
+                }
+            }
             DfdlSimpleType::HexBinary => {
                 if let Ok(s) = crate::encoding::decode_text_bytes(&bytes, &props.encoding) {
                     let trimmed = s.trim();
                     if !trimmed.is_empty()
-                        && trimmed.len() % 2 == 0
+                        && trimmed.len().checked_rem(2) == Some(0)
                         && trimmed.chars().all(|c| c.is_ascii_hexdigit())
                     {
-                        let mut parsed_bytes = Vec::with_capacity(trimmed.len() / 2);
+                        let mut parsed_bytes = Vec::with_capacity(trimmed.len().checked_div(2).unwrap_or(0));
                         let b_arr = trimmed.as_bytes();
                         for i in (0..b_arr.len()).step_by(2) {
-                            if let (Some(&b1), Some(&b2)) = (b_arr.get(i), b_arr.get(i + 1)) {
+                            if let (Some(&b1), Some(&b2)) = (b_arr.get(i), b_arr.get(i.saturating_add(1))) {
                                 if let (Some(h1), Some(h2)) =
                                     ((b1 as char).to_digit(16), (b2 as char).to_digit(16))
                                 {
@@ -1351,7 +1365,7 @@ impl<'a, S: ByteSource> ParserEngine<'a, S> {
                             let (_, _, pos_grp, _) = crate::kernel::parser::numbers::extract_pattern_affixes(first_part);
                             if let Some(grp_size) = pos_grp {
                                 let (int_part, _) = if let Some(idx) = norm.find('.') {
-                                    (&norm[..idx], Some(&norm[idx + 1..]))
+                                    (&norm[..idx], Some(&norm[idx.saturating_add(1)..]))
                                 } else {
                                     (norm.as_str(), None)
                                 };

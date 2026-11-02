@@ -238,6 +238,7 @@ impl DfdlValue {
     }
 
     /// Converts numeric or string scalar value to `i128` if possible.
+    #[inline]
     #[must_use]
     pub fn as_i128(&self) -> Option<i128> {
         match self {
@@ -255,6 +256,7 @@ impl DfdlValue {
     }
 
     /// Returns the Effective Boolean Value (EBV) per XPath 2.0 §2.4.3.
+    #[inline]
     #[must_use]
     pub fn effective_boolean_value(&self) -> bool {
         match self {

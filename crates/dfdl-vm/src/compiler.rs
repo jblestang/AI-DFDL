@@ -4,11 +4,13 @@
 //! [`BytecodeProgram`] instructions suitable for direct execution by [`crate::interpreter::VmInterpreter`].
 
 extern crate alloc;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use dfdl_core::error::{DFDLError, DFDLErrorKind, DFDLResult};
+use dfdl_core::expr::ast::{BinaryOp, ExprAst, UnaryOp};
+use dfdl_core::expr::parse_expr;
 use dfdl_core::infoset::value::DfdlSimpleType;
 use dfdl_core::io::traits::ByteOrder;
 use dfdl_core::schema::ir::{
@@ -86,7 +88,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.lower_sequence(seq)?;
             }
             TermKind::Choice(choice) => {
-                self.lower_choice(choice)?;
+                self.lower_choice(choice, &term.properties)?;
             }
             TermKind::GroupRef(target_id) => {
                 self.lower_term(*target_id)?;
@@ -107,18 +109,11 @@ impl<'a> BytecodeCompiler<'a> {
 
         let saved_sibling_regs = self.sibling_regs.clone();
 
-        // Scan flattened sequence terms for sibling field references in dynamic occurrences
+        // Scan terms recursively for sibling field references in dynamic occurrences
         let mut referenced_names: Vec<String> = Vec::new();
+        let mut visited = BTreeSet::new();
         for &term_id in &flattened {
-            if let Some(term) = self.schema.get_term(term_id) {
-                if let Some(ref expr) = term.properties.occurs_count_expr {
-                    for target in extract_sibling_references(expr) {
-                        if !referenced_names.iter().any(|n| n.as_str() == target) {
-                            let _ = try_push(&mut referenced_names, String::from(target));
-                        }
-                    }
-                }
-            }
+            self.collect_referenced_siblings_recursive(term_id, &mut referenced_names, &mut visited);
         }
 
         const SIBLING_REG_POOL: [Register; 5] = [
@@ -129,8 +124,15 @@ impl<'a> BytecodeCompiler<'a> {
             Register::R7,
         ];
 
-        for (idx, name) in referenced_names.into_iter().enumerate() {
-            if let Some(&reg) = SIBLING_REG_POOL.get(idx) {
+        for name in referenced_names {
+            if self.sibling_regs.contains_key(&name) {
+                // Sibling was already allocated in an enclosing scope; preserve its register and value
+                continue;
+            }
+            if let Some(&reg) = SIBLING_REG_POOL
+                .iter()
+                .find(|r| !self.sibling_regs.values().any(|v| v == *r))
+            {
                 self.program.emit(Instruction::LoadImm {
                     dest: reg,
                     imm: 0,
@@ -201,6 +203,75 @@ impl<'a> BytecodeCompiler<'a> {
             }
         }
         let _ = try_push(out, term_id);
+    }
+
+    /// Recursively scans schema terms (including nested choices, sequences, and group references)
+    /// to identify all sibling fields referenced by dynamic occurs count expressions (`../<sibling_name>`).
+    fn collect_referenced_siblings_recursive(
+        &self,
+        term_id: NodeId,
+        referenced_names: &mut Vec<String>,
+        visited: &mut BTreeSet<NodeId>,
+    ) {
+        if !visited.insert(term_id) {
+            return;
+        }
+
+        // Retrieve the term from the schema graph
+        if let Some(term) = self.schema.get_term(term_id) {
+            // Check if the current term has a dynamic occurs count expression
+            if let Some(ref expr) = term.properties.occurs_count_expr {
+                // Extract sibling field names referenced via XPath `../<name>`
+                for target in extract_sibling_references(expr) {
+                    if !referenced_names.iter().any(|n| n == &target) {
+                        let _ = try_push(referenced_names, target);
+                    }
+                }
+            }
+            // Check if the current term has a dynamic choice dispatch expression
+            if let Some(ref expr) = term.properties.choice_dispatch_key {
+                // Extract sibling field names referenced via XPath `../<name>` or `<name>`
+                for target in extract_sibling_references(expr) {
+                    if !referenced_names.iter().any(|n| n == &target) {
+                        let _ = try_push(referenced_names, target);
+                    }
+                }
+            }
+            // Check if the current term has a dynamic length expression
+            if let Some(ref expr) = term.properties.length_expr {
+                // Extract sibling field names referenced via XPath `../<name>` or `<name>`
+                for target in extract_sibling_references(expr) {
+                    if !referenced_names.iter().any(|n| n == &target) {
+                        let _ = try_push(referenced_names, target);
+                    }
+                }
+            }
+            // Recurse into child terms according to the term kind
+            match &term.kind {
+                // Recurse into members of sequence groups
+                TermKind::Sequence(s) => {
+                    for &m in &s.members {
+                        self.collect_referenced_siblings_recursive(m, referenced_names, visited);
+                    }
+                }
+                // Recurse into branches of choice groups
+                TermKind::Choice(c) => {
+                    for &b in &c.branches {
+                        self.collect_referenced_siblings_recursive(b, referenced_names, visited);
+                    }
+                }
+                // Recurse into global group definitions
+                TermKind::GroupRef(target) => {
+                    self.collect_referenced_siblings_recursive(*target, referenced_names, visited);
+                }
+                // Recurse into complex element definitions (guaranteed safe by visited set)
+                TermKind::Element(elem) => {
+                    if let CompiledType::Complex(type_term_id) = elem.type_ir {
+                        self.collect_referenced_siblings_recursive(type_term_id, referenced_names, visited);
+                    }
+                }
+            }
+        }
     }
 
     /// Checks if a schema term represents a contiguous scalar field that can be fused into a block.
@@ -551,7 +622,7 @@ impl<'a> BytecodeCompiler<'a> {
         props: &ResolvedProperties,
     ) -> DFDLResult<()> {
         let is_explicit_complex = props.length_kind == LengthKind::Explicit
-            && props.length.is_some()
+            && (props.length.is_some() || props.length_expr.is_some())
             && matches!(elem.type_ir, CompiledType::Complex(_));
 
         let reg = if self.length_depth == 0 {
@@ -593,6 +664,16 @@ impl<'a> BytecodeCompiler<'a> {
                     start_reg: reg,
                     total_bytes: total_bytes as u32,
                 });
+            } else if let Some(ref expr) = props.length_expr {
+                for target in extract_sibling_references(expr) {
+                    if let Some(&length_reg) = self.sibling_regs.get(&target) {
+                        self.program.emit(Instruction::PadToRegLength {
+                            start_reg: reg,
+                            length_reg,
+                        });
+                        break;
+                    }
+                }
             }
         }
 
@@ -871,6 +952,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn lower_choice(
         &mut self,
         choice: &dfdl_core::schema::ir::CompiledChoice,
+        props: &ResolvedProperties,
     ) -> DFDLResult<()> {
         if choice.branches.is_empty() {
             return Ok(());
@@ -894,16 +976,36 @@ impl<'a> BytecodeCompiler<'a> {
         }
 
         if all_have_keys && !branch_keys.is_empty() {
-            // Fast path: deterministic choice dispatch via 1-byte peek
-            self.program.emit(Instruction::PeekBitsU8 {
-                dest: Register::R0,
-                count: 8,
-            });
+            let dispatch_reg = if let Some(ref expr) = props.choice_dispatch_key {
+                let inner = unwrap_expression(expr);
+                if let Ok(ast) = parse_expr(inner) {
+                    if let Some(target) = extract_sibling_from_ast(&ast) {
+                        self.sibling_regs.get(target).copied()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let test_reg = if let Some(reg) = dispatch_reg {
+                reg
+            } else {
+                // Fast path: deterministic choice dispatch via 1-byte peek
+                self.program.emit(Instruction::PeekBitsU8 {
+                    dest: Register::R0,
+                    count: 8,
+                });
+                Register::R0
+            };
 
             let mut jump_table = Vec::new();
             for &(branch_id, key) in &branch_keys {
                 let j = self.program.emit(Instruction::JumpIfEq {
-                    reg: Register::R0,
+                    reg: test_reg,
                     imm: key,
                     target_ip: 0,
                 });
@@ -977,66 +1079,235 @@ impl<'a> BytecodeCompiler<'a> {
         }
         None
     }
-    /// Resolves a dynamic occurs count expression to a source register and optional bit index.
+    /// Resolves a dynamic occurs count expression to a source register and optional bit index
+    /// by structurally analyzing the compiled XPath expression AST.
     fn resolve_sibling_bit_expr(&self, expr_str: &str) -> Option<(Register, Option<u8>)> {
-        let targets = extract_sibling_references(expr_str);
-        let target_name = targets.first()?;
-        let &src_reg = self.sibling_regs.get(*target_name)?;
+        let inner = unwrap_expression(expr_str);
+        if let Ok(ast) = parse_expr(inner) {
+            if let Some((target_name, maybe_bit)) = analyze_sibling_bit_ast(&ast) {
+                if let Some(&src_reg) = self.sibling_regs.get(target_name) {
+                    return Some((src_reg, maybe_bit));
+                }
+            }
+        }
+        None
+    }
+}
 
-        let bit = if expr_str.contains("idiv 128") {
-            Some(7)
-        } else if expr_str.contains("idiv 64") {
-            Some(6)
-        } else if expr_str.contains("idiv 32") {
-            Some(5)
-        } else if expr_str.contains("idiv 16") {
-            Some(4)
-        } else if expr_str.contains("idiv 8") {
-            Some(3)
-        } else if expr_str.contains("idiv 4") {
-            Some(2)
-        } else if expr_str.contains("idiv 2") {
-            Some(1)
-        } else if expr_str.contains("mod 2") {
-            Some(0)
-        } else {
-            None
-        };
-
-        Some((src_reg, bit))
+/// Unwraps outer curly braces `{ ... }` if present around a DFDL expression string.
+#[inline]
+fn unwrap_expression(expr_str: &str) -> &str {
+    let trimmed = expr_str.trim();
+    if trimmed.starts_with('{') && trimmed.ends_with('}') && !trimmed.starts_with("{{") {
+        trimmed[1..trimmed.len().saturating_sub(1)].trim()
+    } else {
+        trimmed
     }
 }
 
 /// Extracts sibling field names referenced via XPath `../<name>` in expression strings.
-fn extract_sibling_references(expr_str: &str) -> Vec<&str> {
+fn extract_sibling_references(expr_str: &str) -> Vec<String> {
+    let inner = unwrap_expression(expr_str);
+    let Ok(ast) = parse_expr(inner) else {
+        return Vec::new();
+    };
     let mut refs = Vec::new();
-    let mut remaining = expr_str;
+    collect_sibling_references_from_ast(&ast, &mut refs);
+    refs
+}
 
-    while let Some(pos) = remaining.find("../") {
-        let after_prefix = match remaining.get(pos.saturating_add(3)..) {
-            Some(s) => s,
-            None => break,
-        };
+/// Collects all sibling references (`../<name>`) by walking the expression AST.
+fn collect_sibling_references_from_ast(ast: &ExprAst, refs: &mut Vec<String>) {
+    match ast {
+        ExprAst::Path(path) => {
+            if let [step0, step1] = path.steps() {
+                if step0.is_parent() && !step1.is_parent() {
+                    let name = step1.local_name();
+                    if !refs.iter().any(|r| r == name) {
+                        let _ = try_push(refs, String::from(name));
+                    }
+                }
+            } else if let [step0] = path.steps() {
+                if !step0.is_parent() {
+                    let name = step0.local_name();
+                    if !refs.iter().any(|r| r == name) {
+                        let _ = try_push(refs, String::from(name));
+                    }
+                }
+            }
+        }
+        ExprAst::IfThenElse {
+            cond,
+            then_expr,
+            else_expr,
+        } => {
+            collect_sibling_references_from_ast(cond, refs);
+            collect_sibling_references_from_ast(then_expr, refs);
+            collect_sibling_references_from_ast(else_expr, refs);
+        }
+        ExprAst::Unary { expr, .. } => {
+            collect_sibling_references_from_ast(expr, refs);
+        }
+        ExprAst::Binary { left, right, .. } => {
+            collect_sibling_references_from_ast(left, refs);
+            collect_sibling_references_from_ast(right, refs);
+        }
+        ExprAst::FnCall { args, .. } => {
+            for arg in args {
+                collect_sibling_references_from_ast(arg, refs);
+            }
+        }
+        ExprAst::Literal(_) | ExprAst::Variable(_) => {}
+    }
+}
 
-        // Extract identifier characters: ASCII alphanumeric or underscore
-        let end = after_prefix
-            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-            .unwrap_or(after_prefix.len());
+/// Helper to extract sibling field name from an AST node if it targets a sibling path `../<name>` or `<name>`.
+fn extract_sibling_from_ast(ast: &ExprAst) -> Option<&str> {
+    match ast {
+        ExprAst::Path(path) => {
+            if let [step0, step1] = path.steps() {
+                if step0.is_parent() && !step1.is_parent() {
+                    Some(step1.local_name())
+                } else {
+                    None
+                }
+            } else if let [step0] = path.steps() {
+                if !step0.is_parent() {
+                    Some(step0.local_name())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        ExprAst::Unary {
+            op: UnaryOp::Plus,
+            expr,
+        } => extract_sibling_from_ast(expr),
+        ExprAst::FnCall { args, .. } if args.len() == 1 => {
+            args.first().and_then(extract_sibling_from_ast)
+        }
+        _ => None,
+    }
+}
 
-        if end > 0 {
-            if let Some(ident) = after_prefix.get(..end) {
-                if !refs.contains(&ident) {
-                    let _ = try_push(&mut refs, ident);
+/// Checks whether an AST node is a literal integer zero.
+fn is_zero_literal(ast: &ExprAst) -> bool {
+    match ast {
+        ExprAst::Literal(val) => val.as_i128() == Some(0),
+        _ => false,
+    }
+}
+
+/// Structurally analyzes an expression AST to detect:
+/// 1. A bit extraction idiom: `(sibling idiv 2^N) mod 2` -> `(sibling, Some(N))`
+/// 2. Low-bit extraction: `sibling mod 2` -> `(sibling, Some(0))`
+/// 3. Inverted bit extraction: `(sibling mod (2 * 2^N)) idiv 2^N` -> `(sibling, Some(N))`
+/// 4. Direct sibling reference: `../sibling` -> `(sibling, None)`
+///
+/// Handles `if (condition) then ... else 0` conditionals transparently.
+fn analyze_sibling_bit_ast(ast: &ExprAst) -> Option<(&str, Option<u8>)> {
+    match ast {
+        // Case: if (cond) then A else 0, or if (cond) then 0 else B
+        ExprAst::IfThenElse {
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            if is_zero_literal(else_expr) {
+                analyze_sibling_bit_ast(then_expr)
+            } else if is_zero_literal(then_expr) {
+                analyze_sibling_bit_ast(else_expr)
+            } else {
+                None
+            }
+        }
+
+        // Case: (expr) mod 2
+        ExprAst::Binary {
+            op: BinaryOp::Mod,
+            left,
+            right,
+        } => {
+            let is_mod_2 = match &**right {
+                ExprAst::Literal(val) => val.as_i128() == Some(2),
+                _ => false,
+            };
+            if !is_mod_2 {
+                return None;
+            }
+
+            match &**left {
+                // Subcase: (sibling idiv 2^N) mod 2  (or div)
+                ExprAst::Binary {
+                    op: BinaryOp::IDiv | BinaryOp::Div,
+                    left: inner,
+                    right: div_right,
+                } => {
+                    let divisor = match &**div_right {
+                        ExprAst::Literal(val) => val.as_i128()?,
+                        _ => return None,
+                    };
+                    if divisor > 0 {
+                        let udiv = divisor as u128;
+                        if udiv.is_power_of_two() {
+                            let bit = udiv.trailing_zeros();
+                            if bit <= 63 {
+                                let target = extract_sibling_from_ast(inner)?;
+                                return Some((target, Some(bit as u8)));
+                            }
+                        }
+                    }
+                    None
+                }
+                // Subcase: sibling mod 2 -> bit 0
+                _ => {
+                    let target = extract_sibling_from_ast(left)?;
+                    Some((target, Some(0)))
                 }
             }
         }
 
-        remaining = match after_prefix.get(end..) {
-            Some(s) => s,
-            None => break,
-        };
-    }
+        // Case: (sibling mod (2 * 2^N)) idiv 2^N
+        ExprAst::Binary {
+            op: BinaryOp::IDiv | BinaryOp::Div,
+            left,
+            right,
+        } => {
+            let divisor = match &**right {
+                ExprAst::Literal(val) => val.as_i128()?,
+                _ => return None,
+            };
+            if divisor > 0 {
+                let udiv = divisor as u128;
+                if udiv.is_power_of_two() {
+                    let bit = udiv.trailing_zeros();
+                    if bit <= 63 {
+                        if let ExprAst::Binary {
+                            op: BinaryOp::Mod,
+                            left: inner,
+                            right: mod_right,
+                        } = &**left
+                        {
+                            if let ExprAst::Literal(mod_val) = &**mod_right {
+                                if mod_val.as_i128() == Some(divisor.saturating_mul(2)) {
+                                    let target = extract_sibling_from_ast(inner)?;
+                                    return Some((target, Some(bit as u8)));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            None
+        }
 
-    refs
+        // Case: direct sibling reference without bit extraction
+        _ => {
+            let target = extract_sibling_from_ast(ast)?;
+            Some((target, None))
+        }
+    }
 }
 

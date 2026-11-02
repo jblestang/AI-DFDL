@@ -278,8 +278,29 @@ impl SchemaCompiler {
     }
 
     pub(crate) fn validate_choice_branches(options: &[XsdTerm]) -> DFDLResult<()> {
+        if options.is_empty() {
+            return Err(DFDLError::new_static(
+                DFDLErrorKind::SchemaDefinition,
+                "Schema Definition Error: A choice element must contain one or more branches (DFDL Section 15)",
+            ));
+        }
         let mut names = alloc::collections::BTreeSet::new();
         for opt in options {
+            let (opt_props, opt_name) = match opt {
+                XsdTerm::Element(elem) => (&elem.properties, elem.name.local_name.as_str()),
+                XsdTerm::Sequence(seq) => (&seq.properties, "sequence"),
+                XsdTerm::Choice(ch) => (&ch.properties, "choice"),
+                XsdTerm::GroupRef(_, props) => (props, "groupRef"),
+            };
+            if opt_props.get_property("inputValueCalc").is_some() {
+                return Err(DFDLError::new(
+                    DFDLErrorKind::SchemaDefinition,
+                    &alloc::format!(
+                        "Schema Definition Error: Branch of choice '{}' cannot have the dfdl:inputValueCalc property (DFDL §15.1)",
+                        opt_name
+                    ),
+                ));
+            }
             if let XsdTerm::Element(elem) = opt {
                 if elem.min_occurs == 0 {
                     return Err(DFDLError::new(

@@ -18,5 +18,8 @@ xmlparser = { version = "0.13", default-features = false }
 miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
 
 
+[dev-dependencies]
+dfdl-layers = { path = "../dfdl-layers" }
+
 [lints]
 workspace = true

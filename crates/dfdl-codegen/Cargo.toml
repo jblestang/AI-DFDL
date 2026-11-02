@@ -1,0 +1,21 @@
+[package]
+name = "dfdl-codegen"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Ahead-of-Time (AOT) schema compiler and Rust code generator for high-performance DFDL binary codecs"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["std"]
+std = ["dfdl-core/std"]
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core", default-features = false }
+dfdl-schema = { path = "../dfdl-schema", default-features = false }
+
+[dev-dependencies]
+dfdl-benchmark = { path = "../dfdl-benchmark" }
+
+[lints]
+workspace = true

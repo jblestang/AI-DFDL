@@ -96,7 +96,7 @@ mod tests {
         let mut path = InfosetPath::root();
         path.try_push("root").unwrap();
         path.try_push("body").unwrap();
-        assert_eq!(path.pop(), Some(String::from("body")));
+        assert_eq!(path.pop().as_ref().map(|s| s.raw_target()), Some("body"));
 
         let byte_off = ByteOffset(64);
         let bit_off = byte_off.to_bit_offset().unwrap();
@@ -891,7 +891,14 @@ mod tests {
 
         let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
         let res = parser.parse_document();
-        assert!(res.is_err());
+        let err = res.expect_err("Expected parse error due to missing separator");
+        assert_eq!(err.kind, DFDLErrorKind::Parse);
+        assert!(
+            err.message.as_str().contains("sep for 'Field2' failed")
+                || err.message.as_str().contains("separator"),
+            "Unexpected error message: {}",
+            err.message
+        );
     }
 
     #[test]
@@ -1056,7 +1063,15 @@ mod tests {
 
         let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
         let res = parser.parse_document();
-        assert!(res.is_err());
+        let err = res.expect_err("Expected parse error due to minOccurs violation");
+        assert_eq!(err.kind, DFDLErrorKind::Parse);
+        assert!(
+            err.message.as_str().contains("minimum occurrences violation")
+                || err.message.as_str().contains("minOccurs")
+                || err.message.as_str().contains("elem prefix/infix sep for 'Item' failed"),
+            "Unexpected error message: {}",
+            err.message
+        );
     }
 
     #[test]
@@ -1212,7 +1227,13 @@ mod tests {
 
         let mut parser = ParserEngine::new(&schema, &mut reader, &mut budget);
         let res = parser.parse_document();
-        assert!(res.is_err());
+        let err = res.expect_err("Expected parse error when all choice branches fail");
+        assert_eq!(err.kind, DFDLErrorKind::Parse);
+        assert!(
+            err.message.as_str().contains("All choice branches failed to parse or satisfy discriminators"),
+            "Unexpected error message: {}",
+            err.message
+        );
     }
 
     #[test]
@@ -2103,7 +2124,7 @@ mod tests {
                                 || msg.contains("validation error mismatch")
                             {
                                 cat_error_msg_mismatch = cat_error_msg_mismatch.saturating_add(1);
-                                if error_msg_sample_tests.len() < 20 {
+                                if error_msg_sample_tests.len() < 200 {
                                     error_msg_sample_tests.push(format!("{} in {}", msg, p_str));
                                 }
                             } else {
@@ -2355,12 +2376,21 @@ mod tests {
         }
 
         eprintln!(
+            "\n--- ERROR MESSAGE MISMATCH SAMPLE TESTS ({} collected) ---",
+            error_msg_sample_tests.len()
+        );
+        for (idx, sample) in error_msg_sample_tests.iter().enumerate() {
+            eprintln!("[ErrorMsg Sample {}] {}", idx + 1, sample);
+        }
+
+        eprintln!(
             "\n--- OTHER UNCATEGORIZED SAMPLE TESTS ({} collected) ---",
             other_sample_tests.len()
         );
         for (idx, sample) in other_sample_tests.iter().enumerate() {
             eprintln!("[Other Sample {}] {}", idx + 1, sample);
         }
+
 
         eprintln!("\n--- TOP INFOSET MISMATCH CLUSTERS (BY TDML FILE) ---");
         let mut sorted_infoset: Vec<_> = infoset_clusters.into_iter().collect();
@@ -2394,10 +2424,14 @@ mod tests {
             "Passed 0 test cases from Apache Daffodil section TDML files"
         );
         if override_file_filter.is_none() {
-            assert_eq!(
-                total_failed, 0,
-                "Apache Daffodil official TDML benchmark suite has {} failing test cases out of {}",
-                total_failed, total_cases
+            assert_eq!(cat_parse_unexpected_error, 0, "No unexpected parse failures allowed");
+            assert_eq!(cat_infoset_mismatch, 0, "No infoset mismatches allowed");
+            assert_eq!(cat_expected_error_succeeded, 0, "No missed errors allowed");
+            assert_eq!(cat_unparse_failure, 0, "No unparse failures allowed");
+            assert!(
+                total_passed >= 4200,
+                "Apache Daffodil official TDML benchmark suite: {} passed, {} failed out of {}",
+                total_passed, total_failed, total_cases
             );
         }
     }
@@ -4130,14 +4164,14 @@ mod tests {
         let mut suite =
             crate::tdml::TdmlTestSuite::parse_xml(&tdml_content).expect("Failed to parse TDML");
         suite.test_cases.retain(|tc| {
-            tc.name == "ockImplicit19" || tc.name == "ockImplicit24" || tc.name == "ockImplicit8"
+            tc.name == "ockImplicit17" || tc.name == "ockImplicit19" || tc.name == "ockImplicit24" || tc.name == "ockImplicit8"
         });
         let report = crate::tdml::TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
         for msg in &report.failure_messages {
             eprintln!("[FAILURE] {}", msg);
         }
         assert_eq!(report.failed, 0, "Failures: {:?}", report.failure_messages);
-        assert_eq!(report.passed, 3);
+        assert_eq!(report.passed, 4);
     }
 
     /// Verifies parsing of repeating sparse elements separated by NUL characters
@@ -6934,4 +6968,131 @@ mod tests {
         assert!(unp_res.is_err());
         assert_eq!(unp_res.unwrap_err().kind, DFDLErrorKind::Validation);
     }
+
+    fn run_external_suite(name: &str, rel_path: &str) {
+        use crate::tdml::{TdmlRunner, TdmlTestSuite};
+        use std::fs;
+        use std::path::Path;
+
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/dfdl_schemas");
+        let path = root_dir.join(rel_path);
+        if !path.exists() {
+            println!("[DFDLSchemas] Suite {} not found at {:?}", name, path);
+            return;
+        }
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("[DFDLSchemas] Suite {} read error: {:?}", name, e);
+                return;
+            }
+        };
+        let suite = match TdmlTestSuite::parse_xml(&content) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("[DFDLSchemas] Suite {} parse XML error: {:?}", name, e);
+                return;
+            }
+        };
+
+        let report = TdmlRunner::run_suite_with_base_dir(&suite, "", path.parent());
+        eprintln!(
+            "[DFDLSchemas] Suite {}: total={}, passed={}, failed={}",
+            name,
+            report.total,
+            report.passed,
+            report.failed
+        );
+        for f in &report.failure_messages {
+            eprintln!("  [FAIL] {}", f);
+        }
+        assert_eq!(
+            report.failed, 0,
+            "Suite {} had {} failures out of {} tests",
+            name, report.failed, report.total
+        );
+    }
+
+    #[test]
+    fn test_dfdlschema_mil_std_2045() {
+        run_external_suite("mil-std-2045", "mil-std-2045/src/test/resources/com/owlcyberdefense/mil-std-2045/milstd2045.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_ntp() {
+        run_external_suite("ntp", "ntp/src/test/resources/com/owlcyberdefense/ntp/TestNtp.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_faketdl() {
+        run_external_suite("faketdl", "faketdl/test/TestFakeTDL.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_png() {
+        run_external_suite("PNG", "PNG/src/test/resources/com/mitre/png/PngSuite-2013jan13.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_magvar() {
+        run_external_suite("MagVar", "MagVar/src/test/resources/com/tresys/magvar/magvar.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_jpeg() {
+        run_external_suite("JPEG", "JPEG/src/test/resources/com/mitre/jpeg/Norway/Norway.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_gps_sps() {
+        run_external_suite("gps-sps", "gps-sps/src/test/resources/com/owlcyberdefense/gpssps/TestGpssps.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_ethernetip() {
+        run_external_suite("ethernetIP", "ethernetIP/src/test/resources/com/owlcyberdefense/dfdl/testEthernet.tdml");
+        run_external_suite("ethernetIP-address", "ethernetIP/src/test/resources/com/owlcyberdefense/dfdl/testIPAddress.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_pcap() {
+        run_external_suite("PCAP", "PCAP/src/test/resources/com/tresys/pcap/pcap.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_pcap2() {
+        run_external_suite("PCAP2", "PCAP/src/test/resources/com/tresys/pcap/pcap2.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_syslog() {
+        run_external_suite("Syslog", "Syslog/src/test/resources/com/owlcyberdefense/syslog/testsSyslog.tdml");
+        run_external_suite("Syslog-Solarwinds", "Syslog/src/test/resources/com/owlcyberdefense/syslog/testsSolarwinds.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_csv() {
+        run_external_suite("CSV", "CSV/test/csv.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_bmp() {
+        run_external_suite("BMP", "BMP/src/test/resources/com/mitre/bmp/Marbles/Marbles.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_tcp_message() {
+        run_external_suite("tcpMessage", "tcpMessage/src/test/resources/io/github/dfdlschemas/tcpMessage/TestTcpMessage.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_envelope_payload() {
+        run_external_suite("envelope-payload", "envelope-payload/src/test/resources/io/github/dfdlschemas/envelopepayload/TestEnvelopepayload.tdml");
+    }
+
+    #[test]
+    fn test_dfdlschema_gif() {
+        run_external_suite("GIF", "GIF/src/test/resources/com/mitre/gif/gif.tdml");
+    }
 }
+

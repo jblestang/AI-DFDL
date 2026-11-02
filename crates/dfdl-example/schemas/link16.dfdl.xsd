@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tactical Data Link: Link 16 / STANAG 5516 (TADIL J) J-Series Schema.
+  Provides structured message definitions for:
+  - J3.2 Air Track Message (Initiator 'T' / 84)
+  - J2.2 Identification / PPLI Message (Initiator 'D' / 68)
+  - J0.0 Round Trip Time / Ack Message (Initiator 'A' / 65)
+
+  Can be used as a standalone schema or included into a transport schema
+  such as NATO STANAG 5602 (SIMPLE) via <xs:include schemaLocation="link16.dfdl.xsd"/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
+           xmlns:dfdlx="http://www.ogf.org/dfdl/dfdl-1.0/extensions">
+
+  <xs:annotation>
+    <xs:appinfo source="http://www.ogf.org/dfdl/">
+      <dfdl:format
+        alignment="1"
+        alignmentUnits="bytes"
+        byteOrder="bigEndian"
+        bitOrder="mostSignificantBitFirst"
+        encoding="ASCII"
+        representation="binary"
+        binaryNumberRep="binary"
+        binaryFloatRep="ieee"
+        lengthUnits="bytes"
+        lengthKind="implicit"
+        calendarPatternKind="explicit"
+        calendarPattern="hhmmss"
+        calendarTimeZone="UTC"
+        initiatedContent="no"
+        sequenceKind="ordered"
+        floating="no"
+        leadingSkip="0"
+        trailingSkip="0"
+        textBidi="no"
+        encodingErrorPolicy="replace"
+        truncateSpecifiedLengthString="no"/>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <!-- ========================================================================= -->
+  <!-- Top-Level Root Element for Standalone Link 16 J-Series Decoding           -->
+  <!-- ========================================================================= -->
+
+  <xs:element name="Link16Message" type="Link16PayloadType"/>
+
+  <!-- ========================================================================= -->
+  <!-- Link 16 J-Series Message Types (FakeTDL / STANAG 5516)                    -->
+  <!-- ========================================================================= -->
+
+  <!-- Polymorphic Link 16 J-Series Payload Dispatcher -->
+  <xs:complexType name="Link16PayloadType">
+    <xs:sequence>
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(dfdlx:lookAhead(0, 8)) }">
+        <!-- J3.2 Air Track Message (Initiator 'T' = 0x54 = 84) -->
+        <xs:element name="track" type="Link16TrackType" dfdl:initiator="T" dfdl:choiceBranchKey="84"/>
+        <!-- J2.2 Identification / PPLI Message (Initiator 'D' = 0x44 = 68) -->
+        <xs:element name="identity" type="Link16IdentityType" dfdl:initiator="D" dfdl:choiceBranchKey="68"/>
+        <!-- J0.0 Round Trip Time / Ack Message (Initiator 'A' = 0x41 = 65) -->
+        <xs:element name="ack" type="Link16AckType" dfdl:initiator="A" dfdl:choiceBranchKey="65"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Link 16 J3.2 Air Track Message (64 bytes wire length) -->
+  <xs:complexType name="Link16TrackType">
+    <xs:sequence>
+      <xs:element name="source" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+      <xs:element name="sendTime" type="xs:time" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:binaryCalendarRep="bcd"/>
+      <xs:element name="mustAck" type="xs:unsignedByte"/>
+      <xs:element name="messageID" type="xs:unsignedInt"/>
+      <xs:element name="sourceLat" type="xs:float"/>
+      <xs:element name="sourceLon" type="xs:float"/>
+      <xs:element name="sourceElev" type="xs:short"/>
+      <xs:element name="trackNum" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+      <xs:element name="time" type="xs:time" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:binaryCalendarRep="bcd"/>
+      <xs:element name="lat" type="xs:float"/>
+      <xs:element name="lon" type="xs:float"/>
+      <xs:element name="elev" type="xs:short"/>
+      <xs:element name="pointType" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+      <xs:element name="quality" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="1"/>
+      <xs:element name="course" type="xs:unsignedShort"/>
+      <xs:element name="speed" type="xs:unsignedShort"/>
+      <xs:element name="padding" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="16" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Link 16 J2.2 Identification / PPLI Message (64 bytes wire length) -->
+  <xs:complexType name="Link16IdentityType">
+    <xs:sequence>
+      <xs:element name="source" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+      <xs:element name="sendTime" type="xs:time" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:binaryCalendarRep="bcd"/>
+      <xs:element name="mustAck" type="xs:unsignedByte"/>
+      <xs:element name="messageID" type="xs:unsignedInt"/>
+      <xs:element name="trackNum" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+      <xs:element name="time" type="xs:time" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:binaryCalendarRep="bcd"/>
+      <xs:element name="iff" type="xs:unsignedByte"/>
+      <xs:element name="cat" type="xs:unsignedByte"/>
+      <xs:element name="type" type="xs:unsignedShort"/>
+      <xs:element name="desc" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="38"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Link 16 J0.0 Round Trip Time / Ack Message -->
+  <xs:complexType name="Link16AckType">
+    <xs:sequence>
+      <xs:element name="source" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+      <xs:element name="sendTime" type="xs:time" dfdl:lengthKind="explicit" dfdl:length="3" dfdl:binaryCalendarRep="bcd"/>
+      <xs:element name="dest" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="5"/>
+      <xs:element name="count" type="xs:unsignedShort"/>
+      <xs:element name="item" type="xs:unsignedInt" minOccurs="0" maxOccurs="100"
+                  dfdl:occursCountKind="expression"
+                  dfdl:occursCount="{ ../count }"/>
+      <xs:element name="padding" type="xs:string" dfdl:lengthKind="explicit" dfdl:length="44" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

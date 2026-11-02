@@ -15,5 +15,8 @@ dfdl-core = { path = "../dfdl-core", default-features = false }
 dfdl-xml = { path = "../dfdl-xml", default-features = false }
 regex = { version = "1.10", default-features = false, features = ["unicode-perl", "unicode-case"] }
 
+[dev-dependencies]
+dfdl-layers = { path = "../dfdl-layers" }
+
 [lints]
 workspace = true

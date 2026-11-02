@@ -1,0 +1,5 @@
+.bsp
+target/
+*.swp
+tags
+.idea/

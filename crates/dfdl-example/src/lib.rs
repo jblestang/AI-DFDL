@@ -101,7 +101,7 @@ pub const SAMPLE_CAT_034_048_PCAP: &[u8] = include_bytes!("../data/cat_034_048.p
 pub fn compile_asterix_schema(root_element: Option<&str>) -> DFDLResult<CompiledSchema> {
     let compiler = SchemaCompiler::new();
     let root = root_element.unwrap_or("AsterixRecord");
-    compiler.compile_str_with_resolver_and_root(ASTERIX_DFDL_XSD, |_| None, Some(root))
+    compiler.compile_str_with_root(ASTERIX_DFDL_XSD, Some(root))
 }
 
 /// Compiles a [`CompiledSchema`] graph into an optimized linear [`BytecodeProgram`] for `dfdl-vm`.
@@ -143,6 +143,100 @@ pub fn decode_with_vm(program: &BytecodeProgram, data: &[u8]) -> DFDLResult<Info
     let mut sink = DomBuilderSink::new(&program.symbols);
     vm.execute(program, &mut reader, &mut sink)?;
     sink.into_document()
+}
+
+/// Embedded NATO STANAG 5602 (SIMPLE) DFDL schema XML source string.
+pub const STANAG5602_SIMPLE_DFDL_XSD: &str = include_str!("../schemas/stanag5602_simple.dfdl.xsd");
+
+/// Embedded Link 16 / STANAG 5516 (TADIL J) J-Series DFDL schema XML source string.
+pub const LINK16_DFDL_XSD: &str = include_str!("../schemas/link16.dfdl.xsd");
+
+/// Embedded NATO STANAG 5602 (SIMPLE) Control & Management DFDL schema XML source string.
+pub const STANAG5602_CONTROL_DFDL_XSD: &str = include_str!("../schemas/stanag5602_control.dfdl.xsd");
+
+/// Compiles the embedded STANAG 5602 (SIMPLE) DFDL schema with an optional root element.
+///
+/// Automatically resolves external included schemas (`link16.dfdl.xsd`, `stanag5602_control.dfdl.xsd`) via schema inclusion.
+/// If `root_element` is `None`, defaults to `SimplePacket`.
+/// Other available roots include `SimpleStream`.
+///
+/// # Errors
+/// Returns [`DFDLError`] if the XML schema is malformed or violates DFDL rules.
+pub fn compile_simple_schema(root_element: Option<&str>) -> DFDLResult<CompiledSchema> {
+    let compiler = SchemaCompiler::new();
+    let root = root_element.unwrap_or("SimplePacket");
+    compiler.compile_str_with_resolver_and_root(
+        STANAG5602_SIMPLE_DFDL_XSD,
+        |loc: &str| {
+            if loc == "link16.dfdl.xsd" || loc.ends_with("/link16.dfdl.xsd") {
+                Some(String::from(LINK16_DFDL_XSD))
+            } else if loc == "stanag5602_control.dfdl.xsd"
+                || loc.ends_with("/stanag5602_control.dfdl.xsd")
+            {
+                Some(String::from(STANAG5602_CONTROL_DFDL_XSD))
+            } else {
+                None
+            }
+        },
+        Some(root),
+    )
+}
+
+/// Compiles the standalone Link 16 / STANAG 5516 (TADIL J) DFDL schema with an optional root element.
+///
+/// If `root_element` is `None`, defaults to `Link16Message`.
+///
+/// # Errors
+/// Returns [`DFDLError`] if the XML schema is malformed or violates DFDL rules.
+pub fn compile_link16_schema(root_element: Option<&str>) -> DFDLResult<CompiledSchema> {
+    let compiler = SchemaCompiler::new();
+    let root = root_element.unwrap_or("Link16Message");
+    compiler.compile_str_with_root(LINK16_DFDL_XSD, Some(root))
+}
+
+/// Compiles the standalone NATO STANAG 5602 Control schema with an optional root element.
+///
+/// If `root_element` is `None`, defaults to `SimpleTerminalStatus`.
+/// Other available roots include `SimpleTimeSync`, `SimpleRfEvent`, `SimpleFilterConfig`.
+///
+/// # Errors
+/// Returns [`DFDLError`] if the XML schema is malformed or violates DFDL rules.
+pub fn compile_control_schema(root_element: Option<&str>) -> DFDLResult<CompiledSchema> {
+    let compiler = SchemaCompiler::new();
+    let root = root_element.unwrap_or("SimpleTerminalStatus");
+    compiler.compile_str_with_root(STANAG5602_CONTROL_DFDL_XSD, Some(root))
+}
+
+/// Compiles a STANAG 5602 (SIMPLE) [`CompiledSchema`] graph into an optimized linear [`BytecodeProgram`] for `dfdl-vm`.
+///
+/// # Errors
+/// Returns [`DFDLError`] if bytecode compilation fails.
+pub fn compile_simple_vm(schema: &CompiledSchema) -> DFDLResult<BytecodeProgram> {
+    BytecodeCompiler::compile(schema)
+}
+
+/// Parses a STANAG 5602 (SIMPLE) packet using [`ParserEngine`] and returns an [`InfosetDocument`].
+///
+/// # Errors
+/// Returns [`DFDLError`] if binary parsing fails.
+pub fn parse_simple_packet(schema: &CompiledSchema, data: &[u8]) -> DFDLResult<InfosetDocument> {
+    let source = SliceByteSource::new(data);
+    let mut reader = BitReader::new(
+        source,
+        BitOrder::MostSignificantBitFirst,
+        ByteOrder::BigEndian,
+    );
+    let mut budget = WorkBudget::new(100_000);
+    let mut parser = ParserEngine::new(schema, &mut reader, &mut budget);
+    parser.parse_document()
+}
+
+/// Decodes a STANAG 5602 (SIMPLE) packet using [`VmInterpreter`] and returns an [`InfosetDocument`].
+///
+/// # Errors
+/// Returns [`DFDLError`] if bytecode execution fails.
+pub fn decode_simple_with_vm(program: &BytecodeProgram, data: &[u8]) -> DFDLResult<InfosetDocument> {
+    decode_with_vm(program, data)
 }
 
 /// Serializes an [`InfosetDocument`] into an indented XML string.
