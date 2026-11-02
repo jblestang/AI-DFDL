@@ -216,6 +216,98 @@ let raw = TransportProtocol::Raw;
 
 ---
 
+## Command-Line Interface (`dfdl-pcap-gen`)
+
+The crate provides a standalone CLI binary, `dfdl-pcap-gen`, allowing you to generate and customize PCAP captures directly from the terminal.
+
+### Usage
+
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- [OPTIONS]
+```
+
+### CLI Arguments Reference
+
+| Option | Short | Argument | Default | Description |
+| :--- | :---: | :--- | :--- | :--- |
+| `--schema` | | `<PATH>` | Built-in STANAG 5602 | Path to a DFDL XML Schema file (`.dfdl.xsd` or `.xsd`). |
+| `--root` | | `<NAME>` | Root in schema | Target root element name to compile (e.g. `SimplePacket`, `SimpleControlPayload`). |
+| `--output` | `-o` | `<PATH>` | `capture.pcap` | Output destination path for the generated Libpcap file. |
+| `--mode` | | `<MODE>` | `valid` | Generation mode: `valid`, `exhaustive`, `syntax`, or `semantic`. |
+| `--count` | `-n` | `<COUNT>` | `10` | Number of messages/packets to generate. If `0` in `valid` mode, generates the exhaustive valid branch suite. |
+| `--max-size` | | `<BYTES>` | Unlimited | Strict maximum total generated PCAP file size in bytes. Generation stops before exceeding this budget. |
+| `--max-payload-size` | | `<BYTES>` | Unlimited | Maximum allowed size in bytes for an individual payload (payloads exceeding this are capped). |
+| `--transport` | | `<PROTO>` | `udp` | Transport layer framing: `udp` (Ethernet II + IPv4 + UDP) or `raw` (raw link layer). |
+| `--port` | | `<PORT>` | `5602` | UDP source and destination transport port. |
+| `--src-ip` | | `<IPV4>` | `192.168.1.10` | Source IPv4 address. |
+| `--dst-ip` | | `<IPV4>` | `192.168.1.20` | Destination IPv4 address. |
+| `--src-mac` | | `<MAC>` | `00:1A:2B:3C:4D:5E` | Source MAC address (colon or hyphen-separated hex). |
+| `--dst-mac` | | `<MAC>` | `00:50:56:C0:00:01` | Destination MAC address (colon or hyphen-separated hex). |
+| `--seed` | | `<U64>` | `42` | PRNG seed for deterministic test reproducibility. |
+| `--help` | `-h` | | | Display CLI help documentation and exit. |
+
+---
+
+### CLI Customization Examples
+
+#### 1. Generate an Exclusively Valid PCAP with Custom Count
+Generate 25 purely valid packets:
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    -o valid_capture.pcap \
+    -n 25
+```
+
+#### 2. Generate the Exhaustive Valid Branch Matrix
+Cover every choice branch key, facet extreme, and array occurrence count (`-n 0`):
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    --mode valid \
+    -n 0 \
+    -o valid_exhaustive.pcap
+```
+
+#### 3. Enforce a Strict Capture File Size Budget
+Generate packets while ensuring the PCAP file never exceeds 50 KB (51,200 bytes):
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    -o budgeted.pcap \
+    -n 50 \
+    --max-size 51200
+```
+
+#### 4. Generate an Exhaustive Anomaly Test Suite (Wireshark / Fuzzing)
+Generate a capture containing valid nominals, syntactic corruptions (truncations, length mismatches, bit slips), and semantic corruptions (invalid enums, out-of-range facets, unmatched choice keys):
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    --mode exhaustive \
+    -o test_matrix.pcap
+```
+
+#### 5. Generate from a Custom External DFDL Schema
+Compile a user DFDL schema and generate PCAP packets for root element `RadarTrackMessage`:
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    --schema /path/to/radar_protocol.dfdl.xsd \
+    --root RadarTrackMessage \
+    -o radar_tracks.pcap \
+    -n 15
+```
+
+#### 6. Customize Network Addressing and Ports
+Configure specific MAC addresses, IP addresses, and UDP port 50000:
+```bash
+cargo run -p dfdl-payload-generator --bin dfdl-pcap-gen -- \
+    --src-mac 00:11:22:33:44:55 \
+    --dst-mac AA:BB:CC:DD:EE:FF \
+    --src-ip 10.0.0.1 \
+    --dst-ip 10.0.0.2 \
+    --port 50000 \
+    -o custom_network.pcap
+```
+
+---
+
 ## Running Examples & Verification
 
 To run the NATO STANAG 5602 (SIMPLE) PCAP generator example:
@@ -237,3 +329,4 @@ cargo run -p dfdl-payload-generator --example run_generator_tests
 ```
 
 All 17 integration and unit tests will execute and verify payload parsing, checksums, and PCAP format integrity.
+
