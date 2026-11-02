@@ -292,7 +292,18 @@ fn main() -> ExitCode {
     };
 
     // 4. Generate payloads and write PCAP
-    println!("[3/4] Generating payloads (mode: '{}', requested count: {})...", mode, count);
+    let mut details = Vec::new();
+    details.push(format!("mode: '{}'", mode));
+    if count_explicitly_set {
+        details.push(format!("requested count: {}", count));
+    }
+    if let Some(b) = max_total_size {
+        details.push(format!("max total size: {} bytes", b));
+    }
+    if let Some(p) = max_payload_size {
+        details.push(format!("max payload size: {} bytes", p));
+    }
+    println!("[3/4] Generating payloads ({})...", details.join(", "));
 
     let mut file = match File::create(&output_path) {
         Ok(f) => f,
@@ -371,7 +382,17 @@ fn main() -> ExitCode {
     println!("------------------------------------------------------------------");
     println!(" Generation Report Summary:");
     println!("   - Packets written:         {}", report.message_count);
-    println!("   - Total capture size:      {} bytes", report.total_bytes);
+    if let Some(limit_msg) = limits.max_messages {
+        println!("   - Target message limit:    {}", limit_msg);
+    }
+    if let Some(budget) = max_total_size {
+        println!("   - Total capture size:      {} bytes (budget: {} bytes)", report.total_bytes, budget);
+    } else {
+        println!("   - Total capture size:      {} bytes", report.total_bytes);
+    }
+    if let Some(p) = max_payload_size {
+        println!("   - Max payload size:        {} bytes", p);
+    }
     println!("   - Reached message limit:   {}", report.reached_message_limit);
     println!("   - Reached size limit:      {}", report.reached_size_limit);
     println!("------------------------------------------------------------------");
@@ -384,7 +405,11 @@ fn main() -> ExitCode {
         eprintln!("      1) Increase total capture size: --max-size <BYTES> (e.g. --max-size 100000)");
         eprintln!("      2) Or limit individual payload size: --max-payload-size 500 --max-size {}", budget);
     } else if report.reached_size_limit {
-        println!("[i] Info: Stopped generation upon reaching --max-size budget ({} bytes).", report.total_bytes);
+        if let Some(budget) = max_total_size {
+            println!("[i] Info: Stopped generation upon reaching --max-size budget ({} bytes written, budget: {} bytes).", report.total_bytes, budget);
+        } else {
+            println!("[i] Info: Stopped generation upon reaching size limit ({} bytes written).", report.total_bytes);
+        }
     } else if report.reached_message_limit {
         println!("[i] Info: Successfully reached requested message count ({} packets).", report.message_count);
     }
