@@ -11,7 +11,9 @@ fn create_sample_packet_full(
     tdl_type: u8,
     payload: &[u8],
 ) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(28 + payload.len());
+    let mut buf = Vec::with_capacity(30 + payload.len());
+    buf.push(0x49);                             // Sync 1: 0x49 ('I', 73)
+    buf.push(0x36);                             // Sync 2: 0x36 ('6', 54)
     buf.push(2);                                // Version 2
     buf.push(3);                                // Classification: Secret (3)
     buf.extend_from_slice(&msg_type.to_be_bytes()); // Message Type
@@ -102,12 +104,14 @@ fn test_parse_stanag5602_simple_link16_packet() {
     assert_eq!(link16_track_payload.len(), 64);
 
     let packet = create_sample_packet(42, 3, link16_track_payload);
-    assert_eq!(packet.len(), 28 + 64);
+    assert_eq!(packet.len(), 30 + 64);
 
     let doc = parse_simple_packet(&schema, &packet).expect("parse simple packet");
     let xml = infoset_to_xml(&doc);
 
     // 1. Verify Layer 1 (STANAG 5602 Transport Header)
+    assert!(xml.contains("<sync1>73</sync1>"));
+    assert!(xml.contains("<sync2>54</sync2>"));
     assert!(xml.contains("<version>2</version>"));
     assert!(xml.contains("<securityClassification>3</securityClassification>"));
     assert!(xml.contains("<messageType>1</messageType>"));
@@ -286,6 +290,14 @@ fn test_stanag5602_simple_facet_restrictions() {
                 assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("7"));
                 checked_fields += 1;
             }
+            "sync1" => {
+                assert_eq!(term.properties.facets.enumeration, vec!["73"]);
+                checked_fields += 1;
+            }
+            "sync2" => {
+                assert_eq!(term.properties.facets.enumeration, vec!["54"]);
+                checked_fields += 1;
+            }
             "payloadLength" => {
                 assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
                 assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("65507"));
@@ -294,7 +306,7 @@ fn test_stanag5602_simple_facet_restrictions() {
             _ => {}
         }
     }
-    assert_eq!(checked_fields, 6, "All 6 strict facet fields must be present and verified");
+    assert_eq!(checked_fields, 8, "All 8 strict facet fields must be present and verified");
 }
 
 #[test]
@@ -310,7 +322,7 @@ fn test_stanag5602_simple_payload_length_padding() {
     assert_eq!(padded_payload.len(), 32);
 
     let packet = create_sample_packet_full(2001, 3, 0, &padded_payload);
-    assert_eq!(packet.len(), 28 + 32);
+    assert_eq!(packet.len(), 30 + 32);
 
     let parser_doc = parse_simple_packet(&schema, &packet).expect("parse via engine with explicit length padding");
     let vm_doc = decode_simple_with_vm(&vm_prog, &packet).expect("decode via VM with PadToRegLength");

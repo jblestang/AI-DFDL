@@ -136,7 +136,11 @@ impl<'a> ValidPayloadBuilder<'a> {
 
         match elem.type_ir {
             CompiledType::Simple(simple_type) => {
-                let val = self.generate_simple_value(term, simple_type);
+                let val = if let Some(ref def) = elem.default_value {
+                    def.clone()
+                } else {
+                    self.generate_simple_value(term, simple_type)
+                };
                 Ok(InfosetElement::simple(name, ElementState::Value(val)))
             }
             CompiledType::Complex(type_term_id) => {

@@ -54,7 +54,9 @@ fn test_valid_payload_generation_stanag5602_simple() {
     let payload = generator
         .generate_valid()
         .expect("generate valid simple packet");
-    assert!(!payload.bytes.is_empty());
+    assert!(payload.bytes.len() >= 30, "Header must be at least 30 bytes");
+    assert_eq!(payload.bytes[0], 0x49, "Byte 0 must be 0x49 ('I') for Wireshark SIMPLE sync");
+    assert_eq!(payload.bytes[1], 0x36, "Byte 1 must be 0x36 ('6') for Wireshark SIMPLE sync");
     assert_eq!(payload.mode, PayloadMode::Valid);
 }
 

@@ -28,7 +28,10 @@ fn build_simple_packet(
     rx_id: u32,
     payload: &[u8],
 ) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(28 + payload.len());
+    let mut buf = Vec::with_capacity(30 + payload.len());
+    // 0. Synchronization Header (2 bytes: 0x49 = 'I', 0x36 = '6')
+    buf.push(0x49);
+    buf.push(0x36);
     // 1. Version (1 byte)
     buf.push(version);
     // 2. Security Classification (1 byte: 0=Unclass, 1=Restricted, 2=Confidential, 3=Secret, 4=TopSecret)

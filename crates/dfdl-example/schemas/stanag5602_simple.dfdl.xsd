@@ -42,6 +42,32 @@
   <!-- Strict Simple Types with NATO Constraints and Numerical Facets            -->
   <!-- ========================================================================= -->
 
+  <!-- NATO STANAG 5602 Framing Synchronization Byte 1: Strict 0x49 ('I', 73 decimal) -->
+  <xs:simpleType name="SyncByte1Type">
+    <xs:annotation>
+      <xs:documentation>
+        NATO STANAG 5602 Network Synchronization Byte 1:
+        Strictly 0x49 (ASCII 'I', 73 decimal) framing byte for Wireshark and hardware decoders.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:enumeration value="73"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- NATO STANAG 5602 Framing Synchronization Byte 2: Strict 0x36 ('6', 54 decimal) -->
+  <xs:simpleType name="SyncByte2Type">
+    <xs:annotation>
+      <xs:documentation>
+        NATO STANAG 5602 Network Synchronization Byte 2:
+        Strictly 0x36 (ASCII '6', 54 decimal) framing byte for Wireshark and hardware decoders.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:enumeration value="54"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- STANAG 5602 Edition / Protocol Version: 1 = Edition 1, 2 = Edition 2 -->
   <xs:simpleType name="SimpleVersionType">
     <xs:annotation>
@@ -196,7 +222,9 @@
   <!-- Standard STANAG 5602 (SIMPLE) Packet Structure with Layered Payload -->
   <xs:complexType name="SimplePacketType">
     <xs:sequence>
-      <!-- Layer 1: STANAG 5602 Transport Header (Strict 28 octets) -->
+      <!-- Layer 1: STANAG 5602 Transport Header (Strict 30 octets with framing sync) -->
+      <xs:element name="sync1" type="SyncByte1Type" default="73"/>
+      <xs:element name="sync2" type="SyncByte2Type" default="54"/>
       <xs:element name="version" type="SimpleVersionType"/>
       <xs:element name="securityClassification" type="SecurityClassificationType"/>
       <xs:element name="messageType" type="SimpleMessageType"/>
