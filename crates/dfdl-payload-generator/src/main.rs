@@ -43,8 +43,8 @@ OPTIONS:
     --count, -n <COUNT>        Number of packets to generate (default: 10 for 'valid',
                                full suite for 'exhaustive'/'syntax'/'semantic').
                                In 'exhaustive' mode, cycles the test matrix up to COUNT.
-    --max-size <BYTES>         Strict maximum total generated PCAP file size in bytes.
-    --max-payload-size <BYTES> Maximum allowed size in bytes for an individual payload.
+    --max-size <SIZE>          Strict maximum total generated PCAP file size in bytes (e.g. 102400, 1.5MB, 500KB).
+    --max-payload-size <SIZE>  Maximum allowed size in bytes for an individual payload (e.g. 200, 1KB).
     --seed <SEED>              PRNG seed for deterministic reproducibility (default: 42).
     --transport <PROTO>        Transport encapsulation: 'udp' (default) or 'raw'.
     --port <PORT>              UDP source and destination port (default: 5602).
@@ -91,6 +91,29 @@ fn parse_mac(s: &str) -> Option<[u8; 6]> {
 fn parse_ip(s: &str) -> Option<[u8; 4]> {
     let ip: Ipv4Addr = s.parse().ok()?;
     Some(ip.octets())
+}
+
+/// Parses a human-readable size string (e.g. "1200", "500KB", "1.5MB", "2GB") into bytes.
+fn parse_byte_size(s: &str) -> Option<usize> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let lower = trimmed.to_lowercase();
+    if let Some(num_str) = lower.strip_suffix("kb").or_else(|| lower.strip_suffix('k')) {
+        let val: f64 = num_str.trim().parse().ok()?;
+        Some((val * 1024.0) as usize)
+    } else if let Some(num_str) = lower.strip_suffix("mb").or_else(|| lower.strip_suffix('m')) {
+        let val: f64 = num_str.trim().parse().ok()?;
+        Some((val * 1024.0 * 1024.0) as usize)
+    } else if let Some(num_str) = lower.strip_suffix("gb").or_else(|| lower.strip_suffix('g')) {
+        let val: f64 = num_str.trim().parse().ok()?;
+        Some((val * 1024.0 * 1024.0 * 1024.0) as usize)
+    } else if let Some(num_str) = lower.strip_suffix('b') {
+        num_str.trim().parse::<usize>().ok()
+    } else {
+        trimmed.parse::<usize>().ok()
+    }
 }
 
 fn main() -> ExitCode {
@@ -155,13 +178,13 @@ fn main() -> ExitCode {
             "--max-size" => {
                 i += 1;
                 if i < args.len() {
-                    max_total_size = args[i].parse::<usize>().ok();
+                    max_total_size = parse_byte_size(&args[i]);
                 }
             }
             "--max-payload-size" => {
                 i += 1;
                 if i < args.len() {
-                    max_payload_size = args[i].parse::<usize>().ok();
+                    max_payload_size = parse_byte_size(&args[i]);
                 }
             }
             "--seed" => {
