@@ -55,14 +55,14 @@
 
   <xs:complexType name="SimpleControlPayloadType">
     <xs:sequence>
-      <xs:choice dfdl:choiceDispatchKey="{ xs:string(../messageType) }">
-        <!-- Message Type 2: Time Synchronization & RTT -->
-        <xs:element name="timeSync" type="SimpleTimeSyncType" dfdl:choiceBranchKey="2"/>
-        <!-- Message Type 3: Platform / Radio Terminal Status (Keep-Alive) -->
-        <xs:element name="status" type="SimpleTerminalStatusType" dfdl:choiceBranchKey="3"/>
-        <!-- Message Type 4: RF Transmission Event Notification -->
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(../sourceSubnode) }">
+        <!-- Subnode 7 (or legacy 2): Time Synchronization & RTT -->
+        <xs:element name="timeSync" type="SimpleTimeSyncType" dfdl:choiceBranchKey="7" dfdlx:choiceBranchKeyRanges="2 2"/>
+        <!-- Subnode 6 (or legacy 3): Platform / Radio Terminal Status (Keep-Alive) -->
+        <xs:element name="status" type="SimpleTerminalStatusType" dfdl:choiceBranchKey="6" dfdlx:choiceBranchKeyRanges="3 3"/>
+        <!-- Subnode 4: RF Transmission Event Notification -->
         <xs:element name="rfEvent" type="SimpleRfEventType" dfdl:choiceBranchKey="4"/>
-        <!-- Message Type 5: Connection and Message Filter Configuration -->
+        <!-- Subnode 5: Connection and Message Filter Configuration -->
         <xs:element name="filterConfig" type="SimpleFilterConfigType" dfdl:choiceBranchKey="5"/>
       </xs:choice>
     </xs:sequence>

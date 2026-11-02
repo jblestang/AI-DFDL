@@ -116,6 +116,21 @@ impl<'a> ValidPayloadBuilder<'a> {
                 bytes.truncate(max_len);
             }
         }
+
+        // STANAG 5602 wire framing reconciliation for Wireshark packet-simple dissector
+        if bytes.len() >= 16 && bytes[0] == 0x49 && bytes[1] == 0x36 {
+            let total_len = bytes.len() as u16;
+            bytes[2..4].copy_from_slice(&total_len.to_le_bytes());
+            let packet_words = ((bytes.len().saturating_sub(8)) / 2) as u8;
+            bytes[10] = packet_words.max(4);
+            let csum_offset = bytes.len() - 2;
+            let mut sum: u16 = 0;
+            for &b in &bytes[..csum_offset] {
+                sum = sum.wrapping_add(b as u16);
+            }
+            bytes[csum_offset..].copy_from_slice(&sum.to_le_bytes());
+        }
+
         Ok(bytes)
     }
 
@@ -123,6 +138,55 @@ impl<'a> ValidPayloadBuilder<'a> {
     pub fn generate_bytes(&mut self) -> DFDLResult<Vec<u8>> {
         let doc = self.build_infoset()?;
         self.unparse_to_bytes(&doc)
+    }
+
+    /// Reconciles consistency between child elements (e.g. STANAG 5602 packetType, subnode, and payload dispatch).
+    fn reconcile_element_consistency(elem: &mut InfosetElement) {
+        if elem.name.local_name == "SimplePacket" {
+            let mut has_link16 = false;
+            let mut has_control = false;
+            let mut subnode_val = None;
+
+            for child in &elem.children {
+                let InfosetNode::Element(ref child_elem) = child;
+                if child_elem.name.local_name == "link16" {
+                    has_link16 = true;
+                } else if child_elem.name.local_name == "control" {
+                    has_control = true;
+                    for grand in &child_elem.children {
+                        let InfosetNode::Element(ref grand_elem) = grand;
+                        match grand_elem.name.local_name.as_str() {
+                            "status" => subnode_val = Some(6u8),
+                            "timeSync" => subnode_val = Some(7u8),
+                            "rfEvent" => subnode_val = Some(4u8),
+                            "filterConfig" => subnode_val = Some(5u8),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            if has_link16 {
+                Self::update_child_value(elem, "packetType", DfdlValue::UnsignedByte(1));
+                Self::update_child_value(elem, "sourceSubnode", DfdlValue::UnsignedByte(206));
+            } else if has_control {
+                Self::update_child_value(elem, "packetType", DfdlValue::UnsignedByte(61));
+                if let Some(sn) = subnode_val {
+                    Self::update_child_value(elem, "sourceSubnode", DfdlValue::UnsignedByte(sn));
+                }
+            }
+        }
+    }
+
+    /// Updates the scalar value of a named child element inside a complex element container.
+    fn update_child_value(parent: &mut InfosetElement, name: &str, new_val: DfdlValue) {
+        for child in &mut parent.children {
+            let InfosetNode::Element(ref mut child_elem) = child;
+            if child_elem.name.local_name == name {
+                child_elem.state = ElementState::Value(new_val);
+                return;
+            }
+        }
     }
 
     /// Builds an InfosetElement from a compiled schema element.
@@ -148,6 +212,7 @@ impl<'a> ValidPayloadBuilder<'a> {
                 if let Some(child_term) = self.schema.get_term(type_term_id) {
                     self.populate_complex_children(child_term, &mut complex_elem, visited)?;
                 }
+                Self::reconcile_element_consistency(&mut complex_elem);
                 Ok(complex_elem)
             }
         }

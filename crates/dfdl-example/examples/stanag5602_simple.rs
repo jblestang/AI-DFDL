@@ -17,44 +17,44 @@ use dfdl_example::{
 
 /// Builds a binary STANAG 5602 SIMPLE packet given header fields and payload.
 fn build_simple_packet(
-    version: u8,
-    security_class: u8,
-    msg_type: u16,
-    tdl_type: u8,
-    flags: u8,
-    seq: u32,
-    timestamp_nanos: u64,
-    tx_id: u32,
-    rx_id: u32,
+    seq: u16,
+    src_node: u8,
+    src_subnode: u8,
+    dst_node: u8,
+    dst_subnode: u8,
+    packet_type: u8,
+    transit_time: u16,
     payload: &[u8],
 ) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(30 + payload.len());
+    let total_len = (16 + payload.len()) as u16;
+    let packet_size = (((8 + payload.len()) / 2) as u8).max(4);
+    let mut buf = Vec::with_capacity(total_len as usize);
     // 0. Synchronization Header (2 bytes: 0x49 = 'I', 0x36 = '6')
     buf.push(0x49);
     buf.push(0x36);
-    // 1. Version (1 byte)
-    buf.push(version);
-    // 2. Security Classification (1 byte: 0=Unclass, 1=Restricted, 2=Confidential, 3=Secret, 4=TopSecret)
-    buf.push(security_class);
-    // 3. Message Type (2 bytes BE: 1=TDL Data, 2=Time Sync, 3=Status)
-    buf.extend_from_slice(&msg_type.to_be_bytes());
-    // 4. TDL Type (1 byte: 1=Link 11, 3=Link 16, 4=Link 22, 5=VMF)
-    buf.push(tdl_type);
-    // 5. Control Flags (1 byte: bit 0=simulated, bit 1=loopback, bit 2=test)
-    buf.push(flags);
-    // 6. Sequence Number (4 bytes BE)
-    buf.extend_from_slice(&seq.to_be_bytes());
-    // 7. Transmit Timestamp (8 bytes BE nanos)
-    buf.extend_from_slice(&timestamp_nanos.to_be_bytes());
-    // 8. Transmitter ID (4 bytes BE)
-    buf.extend_from_slice(&tx_id.to_be_bytes());
-    // 9. Receiver ID (4 bytes BE: 0xFFFFFFFF = Broadcast)
-    buf.extend_from_slice(&rx_id.to_be_bytes());
-    // 10. Payload Length (2 bytes BE)
-    let payload_len = payload.len() as u16;
-    buf.extend_from_slice(&payload_len.to_be_bytes());
-    // 11. Encapsulated TDL Payload Data
+    // 1. Frame Length (2 bytes LE)
+    buf.extend_from_slice(&total_len.to_le_bytes());
+    // 2. Sequence Number (2 bytes LE)
+    buf.extend_from_slice(&seq.to_le_bytes());
+    // 3. Source and Destination Nodes/Subnodes (4 bytes)
+    buf.push(src_node);
+    buf.push(src_subnode);
+    buf.push(dst_node);
+    buf.push(dst_subnode);
+    // 4. Packet Size in 16-bit words (1 byte)
+    buf.push(packet_size);
+    // 5. Packet Type (1 byte: 1=Link 16, 61=Control/Status)
+    buf.push(packet_type);
+    // 6. Transit Time (2 bytes LE)
+    buf.extend_from_slice(&transit_time.to_le_bytes());
+    // 7. Encapsulated TDL Payload Data
     buf.extend_from_slice(payload);
+    // 8. Frame Checksum (2 bytes LE)
+    let mut csum: u16 = 0;
+    for &b in &buf {
+        csum = csum.wrapping_add(b as u16);
+    }
+    buf.extend_from_slice(&csum.to_le_bytes());
     buf
 }
 
@@ -78,23 +78,21 @@ fn main() -> DFDLResult<()> {
     // 2. Synthesize authentic NATO Tactical Data Link & SIMPLE Control sample packets
     println!("[2/5] Generating authentic Tactical Data Link & SIMPLE Control sample packets...");
 
-    // Sample A: Link 16 J3.2 Air Track message encapsulated in STANAG 5602 (tdlType = 3, msgType = 1)
+    // Sample A: Link 16 J3.2 Air Track message encapsulated in STANAG 5602 (packetType = 1)
     let link16_j32_air_track_payload = dfdl_benchmark::data::TEST_MSG_01_DAT;
     let packet_air_track = build_simple_packet(
-        2,                                // Version 2
-        3,                                // Classification: Secret
-        1,                                // Message Type: TDL Data
-        3,                                // TDL Type: Link 16 (STANAG 5516 / FakeTDL)
-        0,                                // Flags: Operational Live
         1001,                             // Sequence #1001
-        1_700_000_000_123_456_789,        // Timestamp UTC nanos
-        0x0001_0042,                      // Source Platform ID: C2 Frigate
-        0xFFFF_FFFF,                      // Destination: Broadcast
+        1,                                // Source Node: C2 Frigate
+        206,                              // Source Subnode: Link 16 standard
+        129,                              // Destination: Broadcast
+        0,                                // Destination Subnode
+        1,                                // Packet Type: Link 16 (STANAG 5516 / FakeTDL)
+        10,                               // Transit Time: 10 ms
         link16_j32_air_track_payload,
     );
-    println!("      Packet A: Link 16 J3.2 Air Track         (tdlType = 3, msgType = 1, {} bytes)", packet_air_track.len());
+    println!("      Packet A: Link 16 J3.2 Air Track         (packetType = 1, {} bytes)", packet_air_track.len());
 
-    // Sample B: Native SIMPLE Radio Terminal Status / Keep-Alive (tdlType = 0, msgType = 3)
+    // Sample B: Native SIMPLE Radio Terminal Status / Keep-Alive (packetType = 61, subnode = 6)
     let mut status_payload = Vec::new();
     status_payload.push(3);                                    // terminalState = Synchronized
     status_payload.push(12);                                   // syncQuality = 12
@@ -106,33 +104,29 @@ fn main() -> DFDLResult<()> {
     status_payload.extend_from_slice(&1200.0f32.to_be_bytes()); // altitudeMeters = 1200.0
     status_payload.extend_from_slice(&0u32.to_be_bytes());     // biteStatus = 0 (Operational)
     let packet_status = build_simple_packet(
-        2,
-        2,                                // Classification: Confidential
-        3,                                // Message Type: Platform / Radio Terminal Status
-        0,                                // TDL Type: Native SIMPLE Control (0)
-        0,
         1002,
-        1_700_000_000_200_000_000,
-        0x0001_0042,
-        0xFFFF_FFFF,
+        1,
+        6,                                // Subnode: Status (6)
+        129,
+        0,
+        61,                               // Packet Type: Native SIMPLE Control (61)
+        5,
         &status_payload,
     );
-    println!("      Packet B: Native SIMPLE Terminal Status (tdlType = 0, msgType = 3, {} bytes)", packet_status.len());
+    println!("      Packet B: Native SIMPLE Terminal Status (packetType = 61, {} bytes)", packet_status.len());
 
-    // Sample C: Unsupported Link 11A Frame (tdlType = 1) -> Must be rejected cleanly
+    // Sample C: Unsupported Frame (packetType = 99) -> Must be rejected cleanly
     let packet_invalid_tdl = build_simple_packet(
-        2,
-        0,
-        1,
-        1,                                // TDL Type: Link 11A (Unsupported by this profile)
-        0,
         1003,
-        1_700_000_000_300_000_000,
-        0x0000_0001,
-        0xFFFF_FFFF,
+        1,
+        0,
+        129,
+        0,
+        99,                               // Packet Type: Unsupported
+        5,
         &[0xAA, 0xBB, 0xCC, 0xDD],
     );
-    println!("      Packet C: Unsupported Link 11A Frame     (tdlType = 1, {} bytes)", packet_invalid_tdl.len());
+    println!("      Packet C: Unsupported Frame              (packetType = 99, {} bytes)", packet_invalid_tdl.len());
 
     // 3. Parse with ParserEngine and Print XML Infosets
     println!("\n[3/5] Parsing packets with DFDL ParserEngine and generating XML infosets...");

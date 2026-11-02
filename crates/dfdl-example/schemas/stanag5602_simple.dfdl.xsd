@@ -68,124 +68,89 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- STANAG 5602 Edition / Protocol Version: 1 = Edition 1, 2 = Edition 2 -->
-  <xs:simpleType name="SimpleVersionType">
+  <!-- STANAG 5602 Total Frame Length in octets (16 to 517 octets, Little-Endian) -->
+  <xs:simpleType name="SimpleLengthType">
     <xs:annotation>
       <xs:documentation>
-        NATO STANAG 5602 Protocol Version / Edition:
-        - 1: Edition 1 (Legacy SIMPLE)
-        - 2: Edition 2 (Current NATO Operational Standard)
-      </xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:unsignedByte">
-      <xs:minInclusive value="1"/>
-      <xs:maxInclusive value="2"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <!-- NATO Security Classification Level (0 to 4) -->
-  <xs:simpleType name="SecurityClassificationType">
-    <xs:annotation>
-      <xs:documentation>
-        NATO Security Classification:
-        - 0: Unclassified
-        - 1: NATO Restricted
-        - 2: NATO Confidential
-        - 3: NATO Secret
-        - 4: Cosmic Top Secret
-      </xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:unsignedByte">
-      <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="4"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <!-- STANAG 5602 Message Type (1 to 5) -->
-  <xs:simpleType name="SimpleMessageType">
-    <xs:annotation>
-      <xs:documentation>
-        STANAG 5602 Functional Message Types:
-        - 1: Tactical Data Link (TDL) Data Packet (Link 16, Link 11, Link 22, VMF)
-        - 2: Time Synchronization Packet
-        - 3: Platform / Radio Terminal Status (Keep-Alive)
-        - 4: RF Transmission Event (RF Emission / Reception Notification)
-        - 5: Connection and Filter Configuration Control
+        Total length of the STANAG 5602 frame in octets (14-byte header + payload + 2-byte checksum).
+        Wireshark packet-simple.c requires 16 &lt;= length &lt; 518.
       </xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:unsignedShort">
-      <xs:minInclusive value="1"/>
-      <xs:maxInclusive value="5"/>
+      <xs:minInclusive value="16"/>
+      <xs:maxInclusive value="517"/>
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- Tactical Data Link Standard Identifier (Strictly 0 = SIMPLE Control, 3 = Link 16) -->
-  <xs:simpleType name="TdlType">
-    <xs:annotation>
-      <xs:documentation>
-        Tactical Data Link Identifier:
-        - 0: Native STANAG 5602 SIMPLE Control / Management Messages
-        - 3: Link 16 (STANAG 5516 / TADIL J - J-Series messages)
-        Only SIMPLE Control (0) and Link 16 (3) are accepted; any other value is rejected.
-      </xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:unsignedByte">
-      <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="3"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <!-- Control and Simulation Status Flags (0 to 7) -->
-  <xs:simpleType name="SimpleFlagsType">
-    <xs:annotation>
-      <xs:documentation>
-        Control Flags bitmask:
-        - Bit 0 (0x01): 1 = Simulated Data, 0 = Live Operational
-        - Bit 1 (0x02): 1 = Loopback / Echo Test
-        - Bit 2 (0x04): 1 = Diagnostic / Engineering Test Data
-        - Bits 3..7: Reserved (Must be 0)
-        Valid integer range: 0 to 7.
-      </xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:unsignedByte">
-      <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="7"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <!-- Monotonic Sequence Counter (0 to 4294967295) -->
+  <!-- Monotonic Sequence Counter (0 to 65535, Little-Endian) -->
   <xs:simpleType name="SequenceNumberType">
     <xs:annotation>
-      <xs:documentation>Monotonic 32-bit sequence counter for packet loss detection.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:unsignedInt">
-      <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="4294967295"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <!-- Node / Platform Identifier (0 to 4294967295, 0xFFFFFFFF = Broadcast) -->
-  <xs:simpleType name="NodeIdType">
-    <xs:annotation>
-      <xs:documentation>Platform, terminal or radio node identifier. 4294967295 (0xFFFFFFFF) indicates Broadcast.</xs:documentation>
-    </xs:annotation>
-    <xs:restriction base="xs:unsignedInt">
-      <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="4294967295"/>
-    </xs:restriction>
-  </xs:simpleType>
-
-  <!-- Length in bytes of the encapsulated TDL payload (0 to 65507 bytes) -->
-  <xs:simpleType name="PayloadLengthType">
-    <xs:annotation>
-      <xs:documentation>
-        Length in octets of the encapsulated TDL payload.
-        Range: 0 bytes (header-only status/heartbeat) up to 65507 octets (maximum UDP payload size).
-      </xs:documentation>
+      <xs:documentation>Monotonic 16-bit sequence counter (Little-Endian).</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:unsignedShort">
       <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="65507"/>
+      <xs:maxInclusive value="65535"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Node Identifier (0 to 255) -->
+  <xs:simpleType name="NodeType">
+    <xs:annotation>
+      <xs:documentation>Platform, terminal or radio node identifier (0 to 255, 129 = Broadcast).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Subnode Identifier (0 to 255) -->
+  <xs:simpleType name="SubnodeType">
+    <xs:annotation>
+      <xs:documentation>Subnode identifier (0 to 255, e.g. 206 for Link 16, 6 for Status, 7 for TimeSync).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Packet Size in 16-bit words (min 4 words = 8 bytes) -->
+  <xs:simpleType name="PacketSizeType">
+    <xs:annotation>
+      <xs:documentation>
+        Packet size in 16-bit words. Wireshark expects packet_size * 2 &gt;= 8, so packetSize &gt;= 4.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="4"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Packet Type (1 = Link 16, 61 = Status/Control) -->
+  <xs:simpleType name="PacketTypeType">
+    <xs:annotation>
+      <xs:documentation>
+        STANAG 5602 Packet Type:
+        - 1: Link 16 (STANAG 5516 / TADIL J)
+        - 61: SIMPLE Status / Control Management
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedByte">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="255"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Transit Time (0 to 65535, Little-Endian) -->
+  <xs:simpleType name="TransitTimeType">
+    <xs:annotation>
+      <xs:documentation>Packet transit time in milliseconds or units specified by protocol (Little-Endian).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="65535"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -193,10 +158,10 @@
   <!-- Layer 2: Tactical Data Link Included Sub-Schemas                          -->
   <!-- ========================================================================= -->
 
-  <!-- Include NATO STANAG 5602 Native Control & Management Schemas (tdlType = 0) -->
+  <!-- Include NATO STANAG 5602 Native Control & Management Schemas (packetType = 61) -->
   <xs:include schemaLocation="stanag5602_control.dfdl.xsd"/>
 
-  <!-- Include Link 16 (STANAG 5516 / TADIL J) J-Series Message Definitions (tdlType = 3) -->
+  <!-- Include Link 16 (STANAG 5516 / TADIL J) J-Series Message Definitions (packetType = 1) -->
   <xs:include schemaLocation="link16.dfdl.xsd"/>
 
   <!-- ========================================================================= -->
@@ -219,38 +184,34 @@
     </xs:sequence>
   </xs:complexType>
 
-  <!-- Standard STANAG 5602 (SIMPLE) Packet Structure with Layered Payload -->
+  <!-- Standard STANAG 5602 (SIMPLE) Packet Structure matching Wireshark packet-simple.c -->
   <xs:complexType name="SimplePacketType">
     <xs:sequence>
-      <!-- Layer 1: STANAG 5602 Transport Header (Strict 30 octets with framing sync) -->
+      <!-- Network Header (6 octets) -->
       <xs:element name="sync1" type="SyncByte1Type" default="73"/>
       <xs:element name="sync2" type="SyncByte2Type" default="54"/>
-      <xs:element name="version" type="SimpleVersionType"/>
-      <xs:element name="securityClassification" type="SecurityClassificationType"/>
-      <xs:element name="messageType" type="SimpleMessageType"/>
-      <xs:element name="tdlType" type="TdlType">
-        <xs:annotation>
-          <xs:appinfo source="http://www.ogf.org/dfdl/">
-            <dfdl:assert test="{ . eq 0 or . eq 3 }" message="Unsupported TDL type: only SIMPLE Control (tdlType = 0) and Link 16 (tdlType = 3) are accepted"/>
-          </xs:appinfo>
-        </xs:annotation>
-      </xs:element>
-      <xs:element name="flags" type="SimpleFlagsType"/>
-      <xs:element name="sequenceNumber" type="SequenceNumberType"/>
-      <xs:element name="timestampNanos" type="xs:unsignedLong"/>
-      <xs:element name="transmitterId" type="NodeIdType"/>
-      <xs:element name="receiverId" type="NodeIdType"/>
-      <xs:element name="payloadLength" type="PayloadLengthType"/>
+      <xs:element name="length" type="SimpleLengthType" dfdl:byteOrder="littleEndian"/>
+      <xs:element name="sequenceNumber" type="SequenceNumberType" dfdl:byteOrder="littleEndian"/>
 
-      <!-- Layer 2: Polymorphic Dispatch on tdlType (0 = Native SIMPLE Control, 3 = Link 16) -->
-      <xs:choice dfdl:choiceDispatchKey="{ xs:string(tdlType) }">
-        <!-- Native STANAG 5602 Management & Control Payload bounded by header payloadLength -->
-        <xs:element name="control" type="SimpleControlPayloadType" dfdl:choiceBranchKey="0"
-                    dfdl:lengthKind="explicit" dfdl:length="{ ../payloadLength }"/>
-        <!-- Link 16 J-Series Tactical Data Link Payload bounded by header payloadLength -->
-        <xs:element name="link16" type="Link16PayloadType" dfdl:choiceBranchKey="3"
-                    dfdl:lengthKind="explicit" dfdl:length="{ ../payloadLength }"/>
+      <!-- Packet Header (8 octets) -->
+      <xs:element name="sourceNode" type="NodeType"/>
+      <xs:element name="sourceSubnode" type="SubnodeType"/>
+      <xs:element name="destinationNode" type="NodeType"/>
+      <xs:element name="destinationSubnode" type="SubnodeType"/>
+      <xs:element name="packetSize" type="PacketSizeType"/>
+      <xs:element name="packetType" type="PacketTypeType"/>
+      <xs:element name="transitTime" type="TransitTimeType" dfdl:byteOrder="littleEndian"/>
+
+      <!-- Layer 2 Payload: Polymorphic Dispatch on packetType (1 = Link 16, 61 = SIMPLE Control) -->
+      <xs:choice dfdl:choiceDispatchKey="{ xs:string(packetType) }">
+        <!-- Link 16 J-Series Tactical Data Link Payload (Wireshark packetType = 1, legacy = 3) -->
+        <xs:element name="link16" type="Link16PayloadType" dfdl:choiceBranchKey="1" dfdlx:choiceBranchKeyRanges="3 3"/>
+        <!-- Native STANAG 5602 Management & Control Payload (Wireshark packetType = 61, legacy = 0) -->
+        <xs:element name="control" type="SimpleControlPayloadType" dfdl:choiceBranchKey="61" dfdlx:choiceBranchKeyRanges="0 0"/>
       </xs:choice>
+
+      <!-- Frame Checksum (2 octets, Little-Endian additive sum of octets 0..length-2) -->
+      <xs:element name="checksum" type="xs:unsignedShort" dfdl:byteOrder="littleEndian"/>
     </xs:sequence>
   </xs:complexType>
 

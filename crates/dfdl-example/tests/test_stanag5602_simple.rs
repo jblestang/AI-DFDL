@@ -6,30 +6,41 @@ use dfdl_example::{
 };
 
 fn create_sample_packet_full(
-    seq: u32,
-    msg_type: u16,
-    tdl_type: u8,
+    seq: u16,
+    src_node: u8,
+    src_subnode: u8,
+    dst_node: u8,
+    dst_subnode: u8,
+    packet_type: u8,
+    transit_time: u16,
     payload: &[u8],
 ) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(30 + payload.len());
-    buf.push(0x49);                             // Sync 1: 0x49 ('I', 73)
-    buf.push(0x36);                             // Sync 2: 0x36 ('6', 54)
-    buf.push(2);                                // Version 2
-    buf.push(3);                                // Classification: Secret (3)
-    buf.extend_from_slice(&msg_type.to_be_bytes()); // Message Type
-    buf.push(tdl_type);                         // TDL Type: 0 = SIMPLE Control, 3 = Link 16
-    buf.push(0);                                // Flags: Live (0)
-    buf.extend_from_slice(&seq.to_be_bytes());
-    buf.extend_from_slice(&1_700_000_000_000_000_000u64.to_be_bytes()); // Timestamp
-    buf.extend_from_slice(&0x0001_0042u32.to_be_bytes()); // Transmitter ID
-    buf.extend_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // Receiver ID: Broadcast
-    buf.extend_from_slice(&(payload.len() as u16).to_be_bytes());
-    buf.extend_from_slice(payload);
+    let total_len = (16 + payload.len()) as u16;
+    let packet_size = (((8 + payload.len()) / 2) as u8).max(4);
+    let mut buf = Vec::with_capacity(total_len as usize);
+    buf.push(0x49); // Sync 1 (0x49 = 'I', 73)
+    buf.push(0x36); // Sync 2 (0x36 = '6', 54)
+    buf.extend_from_slice(&total_len.to_le_bytes()); // Frame Length LE
+    buf.extend_from_slice(&seq.to_le_bytes()); // Sequence Number LE
+    buf.push(src_node); // Source Node ID
+    buf.push(src_subnode); // Source Subnode ID
+    buf.push(dst_node); // Destination Node ID
+    buf.push(dst_subnode); // Destination Subnode ID
+    buf.push(packet_size); // Packet Size in 16-bit words
+    buf.push(packet_type); // Packet Type (1 = Link 16, 61 = Control)
+    buf.extend_from_slice(&transit_time.to_le_bytes()); // Transit Time LE
+    buf.extend_from_slice(payload); // Encapsulated TDL Payload
+    let mut csum: u16 = 0;
+    for &b in &buf {
+        csum = csum.wrapping_add(b as u16);
+    }
+    buf.extend_from_slice(&csum.to_le_bytes()); // Frame Checksum LE
     buf
 }
 
-fn create_sample_packet(seq: u32, tdl_type: u8, payload: &[u8]) -> Vec<u8> {
-    create_sample_packet_full(seq, 1, tdl_type, payload)
+fn create_sample_packet(seq: u16, packet_type: u8, payload: &[u8]) -> Vec<u8> {
+    let subnode = if packet_type == 1 || packet_type == 3 { 206 } else { 6 };
+    create_sample_packet_full(seq, 1, subnode, 129, 0, packet_type, 10, payload)
 }
 
 fn create_sample_status_payload() -> Vec<u8> {
@@ -99,12 +110,12 @@ fn test_compile_and_parse_standalone_control_schema() {
 fn test_parse_stanag5602_simple_link16_packet() {
     let schema = compile_simple_schema(Some("SimplePacket")).expect("compile schema");
 
-    // Authentic Link 16 J3.2 Air Track Message (64 bytes) encapsulated in STANAG 5602 (tdlType = 3)
+    // Authentic Link 16 J3.2 Air Track Message (64 bytes) encapsulated in STANAG 5602 (packetType = 1)
     let link16_track_payload = dfdl_benchmark::data::TEST_MSG_01_DAT;
     assert_eq!(link16_track_payload.len(), 64);
 
-    let packet = create_sample_packet(42, 3, link16_track_payload);
-    assert_eq!(packet.len(), 30 + 64);
+    let packet = create_sample_packet(42, 1, link16_track_payload);
+    assert_eq!(packet.len(), 16 + 64);
 
     let doc = parse_simple_packet(&schema, &packet).expect("parse simple packet");
     let xml = infoset_to_xml(&doc);
@@ -112,14 +123,14 @@ fn test_parse_stanag5602_simple_link16_packet() {
     // 1. Verify Layer 1 (STANAG 5602 Transport Header)
     assert!(xml.contains("<sync1>73</sync1>"));
     assert!(xml.contains("<sync2>54</sync2>"));
-    assert!(xml.contains("<version>2</version>"));
-    assert!(xml.contains("<securityClassification>3</securityClassification>"));
-    assert!(xml.contains("<messageType>1</messageType>"));
-    assert!(xml.contains("<tdlType>3</tdlType>"));
+    assert!(xml.contains("<length>80</length>"));
     assert!(xml.contains("<sequenceNumber>42</sequenceNumber>"));
-    assert!(xml.contains("<transmitterId>65602</transmitterId>"));
-    assert!(xml.contains("<receiverId>4294967295</receiverId>"));
-    assert!(xml.contains("<payloadLength>64</payloadLength>"));
+    assert!(xml.contains("<sourceNode>1</sourceNode>"));
+    assert!(xml.contains("<sourceSubnode>206</sourceSubnode>"));
+    assert!(xml.contains("<destinationNode>129</destinationNode>"));
+    assert!(xml.contains("<packetSize>36</packetSize>"));
+    assert!(xml.contains("<packetType>1</packetType>"));
+    assert!(xml.contains("<transitTime>10</transitTime>"));
 
     // 2. Verify Layer 2 (Link 16 J3.2 Air Track Message)
     assert!(xml.contains("<link16>"));
@@ -138,15 +149,15 @@ fn test_parse_stanag5602_simple_control_status_packet() {
     let vm_prog = compile_simple_vm(&schema).expect("compile VM");
 
     let status_payload = create_sample_status_payload();
-    // messageType = 3 (Platform / Terminal Status), tdlType = 0 (SIMPLE Control)
-    let packet = create_sample_packet_full(1001, 3, 0, &status_payload);
+    // packetType = 61 (SIMPLE Control), subnode = 6 (Status)
+    let packet = create_sample_packet_full(1001, 1, 6, 129, 0, 61, 5, &status_payload);
 
     let doc = parse_simple_packet(&schema, &packet).expect("parse simple control status");
     let xml = infoset_to_xml(&doc);
 
     // Verify Layer 1 Header
-    assert!(xml.contains("<messageType>3</messageType>"));
-    assert!(xml.contains("<tdlType>0</tdlType>"));
+    assert!(xml.contains("<packetType>61</packetType>"));
+    assert!(xml.contains("<sourceSubnode>6</sourceSubnode>"));
     assert!(xml.contains("<sequenceNumber>1001</sequenceNumber>"));
 
     // Verify Layer 2 Control Status Payload
@@ -174,14 +185,14 @@ fn test_parse_stanag5602_simple_control_timesync_packet() {
     let vm_prog = compile_simple_vm(&schema).expect("compile VM");
 
     let time_sync_payload = create_sample_time_sync_payload();
-    // messageType = 2 (Time Synchronization), tdlType = 0 (SIMPLE Control)
-    let packet = create_sample_packet_full(1002, 2, 0, &time_sync_payload);
+    // packetType = 61 (SIMPLE Control), subnode = 7 (TimeSync)
+    let packet = create_sample_packet_full(1002, 1, 7, 129, 0, 61, 5, &time_sync_payload);
 
     let doc = parse_simple_packet(&schema, &packet).expect("parse simple control time sync");
     let xml = infoset_to_xml(&doc);
 
-    assert!(xml.contains("<messageType>2</messageType>"));
-    assert!(xml.contains("<tdlType>0</tdlType>"));
+    assert!(xml.contains("<packetType>61</packetType>"));
+    assert!(xml.contains("<sourceSubnode>7</sourceSubnode>"));
     assert!(xml.contains("<control>"));
     assert!(xml.contains("<timeSync>"));
     assert!(xml.contains("<t1TransmitTime>1700000000000000000</t1TransmitTime>"));
@@ -199,9 +210,9 @@ fn test_stanag5602_simple_vm_execution() {
     let schema = compile_simple_schema(Some("SimplePacket")).expect("compile schema");
     let vm_prog = compile_simple_vm(&schema).expect("compile VM");
 
-    // Link 16 J3.2 track message (tdlType = 3)
+    // Link 16 J3.2 track message (packetType = 1)
     let payload = dfdl_benchmark::data::TEST_MSG_01_DAT;
-    let packet = create_sample_packet(101, 3, payload);
+    let packet = create_sample_packet(101, 1, payload);
 
     let parser_doc = parse_simple_packet(&schema, &packet).expect("parse via engine");
     let vm_doc = decode_simple_with_vm(&vm_prog, &packet).expect("decode via VM");
@@ -210,7 +221,7 @@ fn test_stanag5602_simple_vm_execution() {
     let vm_xml = infoset_to_xml(&vm_doc);
 
     assert_eq!(parser_xml, vm_xml, "VM output must match ParserEngine output for Link 16 packet");
-    assert!(parser_xml.contains("<tdlType>3</tdlType>"));
+    assert!(parser_xml.contains("<packetType>1</packetType>"));
     assert!(parser_xml.contains("<source>AG123</source>"));
 }
 
@@ -218,10 +229,10 @@ fn test_stanag5602_simple_vm_execution() {
 fn test_stanag5602_simple_stream_parsing() {
     let schema = compile_simple_schema(Some("SimpleStream")).expect("compile stream schema");
 
-    // Packet 1: SIMPLE Native Status Keep-Alive (tdlType = 0, msgType = 3)
-    let p1 = create_sample_packet_full(1, 3, 0, &create_sample_status_payload());
-    // Packet 2: Link 16 J3.2 Track message (tdlType = 3, msgType = 1)
-    let p2 = create_sample_packet_full(2, 1, 3, dfdl_benchmark::data::TEST_MSG_01_DAT);
+    // Packet 1: SIMPLE Native Status Keep-Alive (packetType = 61, subnode = 6)
+    let p1 = create_sample_packet_full(1, 1, 6, 129, 0, 61, 5, &create_sample_status_payload());
+    // Packet 2: Link 16 J3.2 Track message (packetType = 1, subnode = 206)
+    let p2 = create_sample_packet_full(2, 1, 206, 129, 0, 1, 10, dfdl_benchmark::data::TEST_MSG_01_DAT);
 
     let mut stream_bytes = Vec::new();
     stream_bytes.extend_from_slice(&p1);
@@ -241,20 +252,20 @@ fn test_stanag5602_simple_reject_unsupported_tdl() {
     let schema = compile_simple_schema(Some("SimplePacket")).expect("compile schema");
     let payload = [0xDE, 0xAD, 0xBE, 0xEF];
 
-    // Test rejection with tdlType = 1 (Link 11A - unsupported in this profile)
-    let packet_tdl_1 = create_sample_packet(102, 1, &payload);
-    let result_1 = parse_simple_packet(&schema, &packet_tdl_1);
+    // Test rejection with packetType = 99 (unsupported)
+    let packet_invalid = create_sample_packet(102, 99, &payload);
+    let result_1 = parse_simple_packet(&schema, &packet_invalid);
     assert!(
         result_1.is_err(),
-        "STANAG 5602 packet with tdlType = 1 must be rejected"
+        "STANAG 5602 packet with packetType = 99 must be rejected"
     );
 
-    // Test rejection with tdlType = 4 (Link 22 - unsupported in this profile)
+    // Test rejection with packetType = 4 (unsupported in this profile)
     let packet_tdl_4 = create_sample_packet(103, 4, &payload);
     let result_4 = parse_simple_packet(&schema, &packet_tdl_4);
     assert!(
         result_4.is_err(),
-        "STANAG 5602 packet with tdlType = 4 must be rejected"
+        "STANAG 5602 packet with packetType = 4 must be rejected"
     );
 }
 
@@ -265,31 +276,6 @@ fn test_stanag5602_simple_facet_restrictions() {
     let mut checked_fields = 0;
     for term in &schema.terms {
         match term.name.local_name.as_str() {
-            "version" => {
-                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("1"));
-                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("2"));
-                checked_fields += 1;
-            }
-            "securityClassification" => {
-                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
-                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("4"));
-                checked_fields += 1;
-            }
-            "messageType" => {
-                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("1"));
-                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("5"));
-                checked_fields += 1;
-            }
-            "tdlType" => {
-                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
-                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("3"));
-                checked_fields += 1;
-            }
-            "flags" => {
-                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
-                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("7"));
-                checked_fields += 1;
-            }
             "sync1" => {
                 assert_eq!(term.properties.facets.enumeration, vec!["73"]);
                 checked_fields += 1;
@@ -298,9 +284,34 @@ fn test_stanag5602_simple_facet_restrictions() {
                 assert_eq!(term.properties.facets.enumeration, vec!["54"]);
                 checked_fields += 1;
             }
-            "payloadLength" => {
+            "length" => {
+                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("16"));
+                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("517"));
+                checked_fields += 1;
+            }
+            "sequenceNumber" => {
                 assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
-                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("65507"));
+                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("65535"));
+                checked_fields += 1;
+            }
+            "sourceNode" => {
+                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
+                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("255"));
+                checked_fields += 1;
+            }
+            "sourceSubnode" => {
+                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
+                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("255"));
+                checked_fields += 1;
+            }
+            "packetSize" => {
+                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("4"));
+                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("255"));
+                checked_fields += 1;
+            }
+            "transitTime" => {
+                assert_eq!(term.properties.facets.min_inclusive.as_deref(), Some("0"));
+                assert_eq!(term.properties.facets.max_inclusive.as_deref(), Some("65535"));
                 checked_fields += 1;
             }
             _ => {}
@@ -310,28 +321,20 @@ fn test_stanag5602_simple_facet_restrictions() {
 }
 
 #[test]
-fn test_stanag5602_simple_payload_length_padding() {
+fn test_stanag5602_simple_payload_execution() {
     let schema = compile_simple_schema(Some("SimplePacket")).expect("compile schema");
     let vm_prog = compile_simple_vm(&schema).expect("compile VM");
 
-    // Status payload is 25 bytes. We declare payloadLength = 32 in the header,
-    // appending 7 bytes of zero padding at the end of the payload.
-    let mut padded_payload = create_sample_status_payload();
-    assert_eq!(padded_payload.len(), 25);
-    padded_payload.extend_from_slice(&[0xAA; 7]); // 7 bytes of trailing padding
-    assert_eq!(padded_payload.len(), 32);
+    let status_payload = create_sample_status_payload();
+    let packet = create_sample_packet_full(2001, 1, 6, 129, 0, 61, 5, &status_payload);
 
-    let packet = create_sample_packet_full(2001, 3, 0, &padded_payload);
-    assert_eq!(packet.len(), 30 + 32);
-
-    let parser_doc = parse_simple_packet(&schema, &packet).expect("parse via engine with explicit length padding");
-    let vm_doc = decode_simple_with_vm(&vm_prog, &packet).expect("decode via VM with PadToRegLength");
+    let parser_doc = parse_simple_packet(&schema, &packet).expect("parse via engine");
+    let vm_doc = decode_simple_with_vm(&vm_prog, &packet).expect("decode via VM");
 
     let parser_xml = infoset_to_xml(&parser_doc);
     let vm_xml = infoset_to_xml(&vm_doc);
 
-    assert_eq!(parser_xml, vm_xml, "VM output must match ParserEngine output for padded payload");
-    assert!(parser_xml.contains("<payloadLength>32</payloadLength>"));
+    assert_eq!(parser_xml, vm_xml, "VM output must match ParserEngine output");
     assert!(parser_xml.contains("<terminalState>3</terminalState>"));
     assert!(parser_xml.contains("<netNumber>127</netNumber>"));
 }

@@ -54,9 +54,27 @@ fn test_valid_payload_generation_stanag5602_simple() {
     let payload = generator
         .generate_valid()
         .expect("generate valid simple packet");
-    assert!(payload.bytes.len() >= 30, "Header must be at least 30 bytes");
+    assert!(payload.bytes.len() >= 16, "Frame must be at least 16 bytes (14 header + 2 checksum)");
     assert_eq!(payload.bytes[0], 0x49, "Byte 0 must be 0x49 ('I') for Wireshark SIMPLE sync");
     assert_eq!(payload.bytes[1], 0x36, "Byte 1 must be 0x36 ('6') for Wireshark SIMPLE sync");
+
+    // Wireshark length field check: bytes[2..4] (uint16 LE) == total frame length
+    let frame_len = u16::from_le_bytes([payload.bytes[2], payload.bytes[3]]);
+    assert_eq!(frame_len as usize, payload.bytes.len(), "Frame length field must match total frame length");
+
+    // Wireshark packet_size check: byte 10 >= 4 (words)
+    let packet_size_words = payload.bytes[10];
+    assert!(packet_size_words >= 4, "Packet size words must be >= 4 (>= 8 bytes)");
+
+    // Wireshark checksum check: last 2 bytes LE == sum of previous bytes
+    let csum_offset = payload.bytes.len() - 2;
+    let expected_csum = u16::from_le_bytes([payload.bytes[csum_offset], payload.bytes[csum_offset + 1]]);
+    let mut actual_csum: u16 = 0;
+    for &b in &payload.bytes[..csum_offset] {
+        actual_csum = actual_csum.wrapping_add(b as u16);
+    }
+    assert_eq!(expected_csum, actual_csum, "Frame checksum must equal additive sum of previous bytes");
+
     assert_eq!(payload.mode, PayloadMode::Valid);
 }
 
