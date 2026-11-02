@@ -36,14 +36,14 @@
   - Fully passes `cargo check --all-targets` with zero warnings.
   - Adheres to workspace-level strict clippy and compiler warning policies.
 
-### 1.4 DFDL Exhaustiveness
+### 1.4 DFDL Exhaustiveness & Schema-Agnostic Design
 - **Strengths:**
-  - `SchemaAnalysis` graph walk introspects:
-    - Choice branch keys and dispatch keys across all choice constructs.
-    - Simple and complex elements, minOccurs / maxOccurs constraints.
-    - Numeric facets (`minInclusive`, `maxInclusive`).
-    - Enumeration facets (`xs:enumeration`).
-    - Framing properties (`initiator`, `terminator`, `separator`).
+  - `SchemaAnalysis` graph walk is **100% schema-agnostic**:
+    - Choice branch keys and dispatch keys across all choice constructs are dynamically analyzed.
+    - XPath expressions in `dfdl:choiceDispatchKey` (e.g. `{ xs:string(../messageType) }`, `{ ./type }`) are parsed generically using `extract_target_element_from_expr` to identify the discriminator element without any hardcoded names.
+    - Field offsets and widths for length headers are dynamically computed across the schema graph via `find_length_field()`.
+    - Enumeration and bounded facet mutations compute numeric boundaries (`max + 99` / `min - 10`) dynamically from the discovered values.
+    - Zero hardcoded protocol identifiers (`"tdlType"`, `"messageType"`, `"type"`, or magic offsets like `26`).
   - `generate_exhaustive_suite()` emits valid payloads for each choice variant and systematically exercises each discovered boundary and syntax defect.
 
 ---
@@ -52,8 +52,8 @@
 - **Crate:** `dfdl-payload-generator`
 - **Unit & Integration Tests:**
   - Valid SimpleControl and SimplePacket generation
-  - Syntactic truncation, trailing garbage, length mismatch, bit misalignment
-  - Semantic enum mutation, facet out-of-bounds, invalid dispatch key
-  - PCAP serialization, RFC checksum verification, and `PcapParser` roundtrip
+  - Syntactic truncation, trailing garbage, dynamic length mismatch, bit misalignment
+  - Semantic enum mutation, facet out-of-bounds, dynamic choice dispatch key corruption
+  - PCAP serialization, RFC checksum verification, and `PcapFile` roundtrip
   - Exhaustive test suite generation
 - **Result:** Compliant with Karpathy behavioral guidelines and all requirements.

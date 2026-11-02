@@ -25,7 +25,7 @@ pub enum SyntaxAnomaly {
     },
     /// Declared length header or prefix modified to disagree with actual payload length.
     DeclaredLengthMismatch {
-        /// Offset in payload where length field is stored (e.g. byte 26 for SIMPLE header).
+        /// Byte offset in payload where length field is located.
         field_offset: usize,
         /// Field width in bytes (e.g. 2 for u16).
         field_width: usize,

@@ -30,7 +30,7 @@ pub enum SemanticAnomaly {
     },
     /// Injects a choice dispatch key that does not match any valid branch in the schema.
     WrongDispatchKey {
-        /// Discriminator element name (e.g. "tdlType" or "messageType").
+        /// Discriminator element local name.
         discriminator_name: String,
         /// Invalid key value (e.g. 4 or 99).
         invalid_key: DfdlValue,

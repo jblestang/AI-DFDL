@@ -173,14 +173,19 @@ impl<'a> PayloadGenerator<'a> {
         suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::TrailingGarbage { garbage_bytes: 8 })?);
 
         // 6. Syntactic Anomalies: Declared Header / Prefix Length Mismatches
+        let (len_offset, len_width) = if let Some(len_field) = self.analysis.find_length_field() {
+            (len_field.estimated_offset, len_field.estimated_width.max(1))
+        } else {
+            (0, 2)
+        };
         suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
-            field_offset: 26, // SIMPLE packet payloadLength field offset
-            field_width: 2,
+            field_offset: len_offset,
+            field_width: len_width,
             delta: 16,
         })?);
         suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
-            field_offset: 26,
-            field_width: 2,
+            field_offset: len_offset,
+            field_width: len_width,
             delta: -10,
         })?);
 
@@ -189,9 +194,20 @@ impl<'a> PayloadGenerator<'a> {
 
         // 8. Semantic Anomalies: Wrong Enum Values
         for field in &enum_fields {
+            let invalid_enum = if field.enumerations.iter().all(|s| s.chars().all(|c| c.is_ascii_digit())) {
+                let max_val = field
+                    .enumerations
+                    .iter()
+                    .filter_map(|s| s.parse::<u64>().ok())
+                    .max()
+                    .unwrap_or(0);
+                (max_val.saturating_add(99)).to_string()
+            } else {
+                "INVALID_ENUM_ANOMALY".to_string()
+            };
             let anomaly = SemanticAnomaly::WrongEnum {
                 target_name: field.name.clone(),
-                invalid_value: "INVALID_ENUM_99".to_string(),
+                invalid_value: invalid_enum,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
                 suite.push(payload);
@@ -226,32 +242,37 @@ impl<'a> PayloadGenerator<'a> {
         }
 
         // 10. Semantic Anomalies: Unmatched Choice Dispatch Key
-        for branch in &choice_branches {
-            if let Some(ref key_expr) = branch.parent_dispatch_key_expr {
-                // If dispatch key references a sibling, corrupt it with non-matching key
-                let target_field = if key_expr.contains("tdlType") {
-                    "tdlType"
-                } else if key_expr.contains("messageType") {
-                    "messageType"
-                } else {
-                    "type"
-                };
+        for (discriminator_name, valid_keys) in self.analysis.find_choice_discriminators() {
+            let invalid_key = if valid_keys.iter().all(|s| s.chars().all(|c| c.is_ascii_digit())) {
+                let max_key = valid_keys
+                    .iter()
+                    .filter_map(|s| s.parse::<u64>().ok())
+                    .max()
+                    .unwrap_or(0);
+                DfdlValue::UnsignedInt((max_key.saturating_add(99)) as u32)
+            } else {
+                DfdlValue::String("__INVALID_DISPATCH_KEY__".to_string())
+            };
 
-                let anomaly = SemanticAnomaly::WrongDispatchKey {
-                    discriminator_name: target_field.to_string(),
-                    invalid_key: DfdlValue::UnsignedByte(99),
-                };
-                if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                    suite.push(payload);
-                    break;
-                }
+            let anomaly = SemanticAnomaly::WrongDispatchKey {
+                discriminator_name,
+                invalid_key,
+            };
+            if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
+                suite.push(payload);
             }
         }
 
         // 11. Ensure at least one semantic anomaly is present in the exhaustive suite
         if !suite.iter().any(|p| matches!(p.mode, PayloadMode::SemanticAnomaly(_))) {
+            let target_name = self
+                .analysis
+                .all_elements
+                .first()
+                .map(|e| e.name.clone())
+                .unwrap_or_else(|| "element".to_string());
             let anomaly = SemanticAnomaly::FacetOutOfBounds {
-                target_name: "payload".to_string(),
+                target_name,
                 invalid_value: DfdlValue::UnsignedByte(255),
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {

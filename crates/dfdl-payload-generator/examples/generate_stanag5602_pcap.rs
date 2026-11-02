@@ -4,11 +4,9 @@
 //! Run with:
 //! `cargo run -p dfdl-payload-generator --example generate_stanag5602_pcap`
 
-use dfdl_core::infoset::value::DfdlValue;
 use dfdl_example::compile_simple_schema;
 use dfdl_payload_generator::{
-    NetworkConfig, PayloadGenerator, PayloadMode, PcapFile, SemanticAnomaly,
-    SyntaxAnomaly, TransportProtocol,
+    NetworkConfig, PayloadGenerator, PayloadMode, PcapFile, TransportProtocol,
 };
 use std::fs;
 
@@ -47,57 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Generate test suite
     println!("\n[3/5] Generating test payloads (valid + syntactic anomalies + semantic anomalies)...");
-    let mut suite = Vec::new();
-
-    // Valid payloads
-    let valid1 = generator.generate_valid().map_err(|e| format!("{:?}", e))?;
-    suite.push(valid1);
-
-    // Syntactic anomalies
-    let truncated = generator.generate_syntax_anomaly(SyntaxAnomaly::Truncated {
-        cut_bytes: 4,
-    }).map_err(|e| format!("{:?}", e))?;
-    suite.push(truncated);
-
-    let garbage = generator.generate_syntax_anomaly(SyntaxAnomaly::TrailingGarbage {
-        garbage_bytes: 4,
-    }).map_err(|e| format!("{:?}", e))?;
-    suite.push(garbage);
-
-    let length_mismatch = generator.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
-        field_offset: 26, // SIMPLE header payloadLength field offset
-        field_width: 2,
-        delta: 20,
-    }).map_err(|e| format!("{:?}", e))?;
-    suite.push(length_mismatch);
-
-    let bit_misaligned = generator.generate_syntax_anomaly(SyntaxAnomaly::BitMisaligned {
-        extra_bits: 5,
-    }).map_err(|e| format!("{:?}", e))?;
-    suite.push(bit_misaligned);
-
-    // Semantic anomalies
-    if let Some(en) = generator.analysis().enum_fields.first() {
-        let wrong_enum = generator.generate_semantic_anomaly(SemanticAnomaly::WrongEnum {
-            target_name: en.name.clone(),
-            invalid_value: "99".to_string(), // Invalid classification/TDLType
-        }).map_err(|e| format!("{:?}", e))?;
-        suite.push(wrong_enum);
-    }
-
-    if let Some(bound) = generator.analysis().bounded_fields.first() {
-        let out_of_bounds = generator.generate_semantic_anomaly(SemanticAnomaly::FacetOutOfBounds {
-            target_name: bound.name.clone(),
-            invalid_value: DfdlValue::UnsignedByte(250),
-        }).map_err(|e| format!("{:?}", e))?;
-        suite.push(out_of_bounds);
-    }
-
-    let wrong_dispatch = generator.generate_semantic_anomaly(SemanticAnomaly::WrongDispatchKey {
-        discriminator_name: "tdlType".to_string(),
-        invalid_key: DfdlValue::UnsignedByte(99),
-    }).map_err(|e| format!("{:?}", e))?;
-    suite.push(wrong_dispatch);
+    let suite = generator.generate_exhaustive_suite()
+        .map_err(|e| format!("{:?}", e))?;
 
     // 4. Summarize generated suite
     println!("\n[4/5] Generated payload summary:");

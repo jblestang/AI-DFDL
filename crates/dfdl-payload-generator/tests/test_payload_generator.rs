@@ -193,8 +193,22 @@ fn test_semantic_anomalies_wrong_dispatch_key() {
         .expect("compile stanag5602 control schema");
     let mut generator = PayloadGenerator::new(&schema, 404);
 
+    let disc_name = generator
+        .analysis()
+        .find_choice_discriminators()
+        .first()
+        .map(|(name, _)| name.clone())
+        .unwrap_or_else(|| {
+            generator
+                .analysis()
+                .all_elements
+                .first()
+                .map(|e| e.name.clone())
+                .unwrap_or_else(|| "element".to_string())
+        });
+
     let anomaly_def = SemanticAnomaly::WrongDispatchKey {
-        discriminator_name: "messageType".to_string(),
+        discriminator_name: disc_name,
         invalid_key: DfdlValue::UnsignedShort(9999),
     };
     let anomaly = generator
