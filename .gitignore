@@ -14,3 +14,4 @@ scratch/
 # OS and profiling artifacts
 .DS_Store
 profile_faketdl*.txt
+*.pcap

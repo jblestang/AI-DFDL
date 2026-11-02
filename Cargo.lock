@@ -78,6 +78,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfdl-payload-generator"
+version = "0.1.0"
+dependencies = [
+ "dfdl-core",
+ "dfdl-example",
+ "dfdl-schema",
+ "dfdl-vm",
+ "dfdl-xml",
+]
+
+[[package]]
 name = "dfdl-schema"
 version = "0.1.0"
 dependencies = [

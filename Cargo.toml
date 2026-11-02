@@ -13,6 +13,7 @@ members = [
     "crates/dfdl-example",
     "crates/dfdl-wireshark",
     "crates/dfdl-codegen",
+    "crates/dfdl-payload-generator",
 ]
 
 [workspace.lints.rust]

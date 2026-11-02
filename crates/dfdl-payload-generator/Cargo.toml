@@ -1,0 +1,19 @@
+[package]
+name = "dfdl-payload-generator"
+version = "0.1.0"
+edition = "2021"
+authors = ["DFDL Engine Developers"]
+description = "Exhaustive DFDL-driven payload and PCAP generator supporting syntactic and semantic anomaly injection"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dfdl-core = { path = "../dfdl-core" }
+dfdl-schema = { path = "../dfdl-schema" }
+dfdl-xml = { path = "../dfdl-xml" }
+
+[dev-dependencies]
+dfdl-example = { path = "../dfdl-example" }
+dfdl-vm = { path = "../dfdl-vm" }
+
+[lints]
+workspace = true
