@@ -351,7 +351,78 @@ fn main() -> Result<(), String> {
     }
     println!("ok");
 
-    println!("\nAll 14 tests passed successfully!");
+    // Test 15: Generation limits on message count
+    print!("test test_generation_limits_message_count ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let mut generator = PayloadGenerator::new(&schema, 1001)
+            .with_max_messages(3);
+
+        let seq = generator.generate_valid_sequence(10).map_err(|e| format!("{:?}", e))?;
+        assert_eq!(seq.len(), 3, "Message count must be strictly capped at 3");
+
+        let net_cfg = NetworkConfig::default();
+        let transport = TransportProtocol::default();
+        let mut pcap_buf = Vec::new();
+        let report = generator
+            .write_valid_pcap(&mut pcap_buf, 10, &net_cfg, &transport)
+            .map_err(|e| format!("{:?}", e))?;
+
+        assert_eq!(report.message_count, 3);
+        assert!(report.reached_message_limit);
+
+        let parsed = PcapFile::parse(&pcap_buf).map_err(|e| e.to_string())?;
+        assert_eq!(parsed.packets.len(), 3);
+    }
+    println!("ok");
+
+    // Test 16: Generation limits on max total size
+    print!("test test_generation_limits_max_total_size ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let max_budget = 250;
+        let mut generator = PayloadGenerator::new(&schema, 1002)
+            .with_max_total_size(max_budget);
+
+        let net_cfg = NetworkConfig::default();
+        let transport = TransportProtocol::default();
+        let mut pcap_buf = Vec::new();
+        let report = generator
+            .write_valid_pcap(&mut pcap_buf, 100, &net_cfg, &transport)
+            .map_err(|e| format!("{:?}", e))?;
+
+        assert!(pcap_buf.len() <= max_budget, "PCAP size {} must be <= max budget {}", pcap_buf.len(), max_budget);
+        assert!(report.total_bytes <= max_budget);
+        assert!(report.reached_size_limit);
+        assert!(report.message_count > 0, "At least one packet should fit within 250 bytes");
+
+        let parsed = PcapFile::parse(&pcap_buf).map_err(|e| e.to_string())?;
+        assert_eq!(parsed.packets.len(), report.message_count);
+    }
+    println!("ok");
+
+    // Test 17: Generation limits on max payload size
+    print!("test test_generation_limits_max_payload_size ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let max_len = 12;
+        let mut generator = PayloadGenerator::new(&schema, 1003)
+            .with_max_payload_size(max_len);
+
+        let payload = generator.generate_valid().map_err(|e| format!("{:?}", e))?;
+        assert!(
+            payload.bytes.len() <= max_len,
+            "Payload length {} must be <= {}",
+            payload.bytes.len(),
+            max_len
+        );
+    }
+    println!("ok");
+
+    println!("\nAll 17 tests passed successfully!");
     Ok(())
 }
 

@@ -15,7 +15,9 @@ pub mod semantic;
 pub mod syntax;
 pub mod valid;
 
-pub use generator::{GeneratedPayload, PayloadGenerator, PayloadMode};
+pub use generator::{
+    GeneratedPayload, GenerationLimits, GenerationReport, PayloadGenerator, PayloadMode,
+};
 pub use pcap::{LinkType, NetworkConfig, PcapFile, PcapPacket, PcapWriter, TransportProtocol};
 pub use prng::FastPrng;
 pub use schema_walk::{ChoiceBranchTarget, ElementFieldInfo, SchemaAnalysis};

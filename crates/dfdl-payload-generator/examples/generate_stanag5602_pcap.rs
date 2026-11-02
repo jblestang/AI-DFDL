@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // 6. Export full test suite PCAP file (valid + syntactic + semantic anomalies)
-    println!("\n[6/6] Exporting full anomaly test suite PCAP capture...");
+    println!("\n[6/7] Exporting full anomaly test suite PCAP capture...");
     let pcap_filename = "stanag5602_test_suite.pcap";
     let mut pcap_file = fs::File::create(pcap_filename)?;
     generator.write_pcap(&mut pcap_file, &suite, &net_cfg, &transport)?;
@@ -118,6 +118,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         parsed_pcap.magic
     );
 
-    println!("\nDone! Valid and anomaly PCAPs are ready for Wireshark and DFDL dissector verification.");
+    // 7. Demonstrate configuration of message count and maximum generated size budget
+    println!("\n[7/7] Demonstrating generation limits configuration:");
+
+    // 7a. Message count limit: request 50 packets, capped at 5
+    println!("      [A] Configuring message count limit: max 5 messages...");
+    generator.set_max_messages(Some(5));
+    generator.set_max_total_size(None);
+
+    let count_pcap_filename = "stanag5602_count_capped.pcap";
+    let mut count_file = fs::File::create(count_pcap_filename)?;
+    let count_report = generator.write_valid_pcap(&mut count_file, 50, &net_cfg, &transport)
+        .map_err(|e| format!("{:?}", e))?;
+    let count_data = fs::read(count_pcap_filename)?;
+    println!("          - Packets written: {} (requested: 50, capped at: 5)", count_report.message_count);
+    println!("          - Total size: {} bytes", count_report.total_bytes);
+    println!("          - Reached message limit: {}", count_report.reached_message_limit);
+    assert_eq!(count_report.message_count, 5);
+    assert!(count_report.reached_message_limit);
+    assert_eq!(count_data.len(), count_report.total_bytes);
+
+    // 7b. Size budget limit: request 50 packets, capped at 60,000 bytes max
+    println!("      [B] Configuring maximum generated size: max 60,000 bytes...");
+    generator.set_max_messages(None);
+    generator.set_max_total_size(Some(60_000));
+
+    let budget_pcap_filename = "stanag5602_budget_constrained.pcap";
+    let mut budget_file = fs::File::create(budget_pcap_filename)?;
+    let budget_report = generator.write_valid_pcap(&mut budget_file, 50, &net_cfg, &transport)
+        .map_err(|e| format!("{:?}", e))?;
+    let budget_data = fs::read(budget_pcap_filename)?;
+    println!("          - Packets written: {} (requested: 50, each packet ~25.7 KB)", budget_report.message_count);
+    println!("          - Total size: {} bytes (strictly <= 60,000 bytes max budget)", budget_report.total_bytes);
+    println!("          - Reached size limit: {}", budget_report.reached_size_limit);
+    assert!(budget_report.total_bytes <= 60_000);
+    assert!(budget_data.len() <= 60_000);
+    assert!(budget_report.reached_size_limit);
+
+    println!("\nDone! Valid, anomaly, and budget-constrained PCAPs are ready for verification.");
     Ok(())
 }

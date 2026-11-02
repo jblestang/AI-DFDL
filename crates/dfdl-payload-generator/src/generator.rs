@@ -40,12 +40,103 @@ pub struct GeneratedPayload {
     pub bytes: Vec<u8>,
 }
 
+/// Configuration for controlling generation volume and data size budgets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GenerationLimits {
+    /// Maximum number of messages/packets to generate.
+    /// `None` indicates no explicit message count limit.
+    pub max_messages: Option<usize>,
+    /// Maximum cumulative size in bytes (for PCAP file or payload stream).
+    /// Once this threshold would be exceeded, generation terminates.
+    pub max_total_size: Option<usize>,
+    /// Maximum allowed size in bytes for an individual payload.
+    /// Payloads exceeding this size will be truncated to fit.
+    pub max_payload_size: Option<usize>,
+}
+
+impl Default for GenerationLimits {
+    fn default() -> Self {
+        Self {
+            max_messages: None,
+            max_total_size: None,
+            max_payload_size: None,
+        }
+    }
+}
+
+impl GenerationLimits {
+    /// Creates a new unconstrained limits specification.
+    #[inline]
+    #[must_use]
+    pub fn unlimited() -> Self {
+        Self::default()
+    }
+
+    /// Creates limits specifying a maximum number of messages.
+    #[inline]
+    #[must_use]
+    pub fn with_message_count(count: usize) -> Self {
+        Self {
+            max_messages: Some(count),
+            ..Default::default()
+        }
+    }
+
+    /// Creates limits specifying a maximum total generated size in bytes.
+    #[inline]
+    #[must_use]
+    pub fn with_max_size(max_bytes: usize) -> Self {
+        Self {
+            max_total_size: Some(max_bytes),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the maximum number of messages.
+    #[inline]
+    #[must_use]
+    pub fn max_messages(mut self, count: usize) -> Self {
+        self.max_messages = Some(count);
+        self
+    }
+
+    /// Sets the maximum total generated size in bytes.
+    #[inline]
+    #[must_use]
+    pub fn max_total_size(mut self, max_bytes: usize) -> Self {
+        self.max_total_size = Some(max_bytes);
+        self
+    }
+
+    /// Sets the maximum size for an individual payload in bytes.
+    #[inline]
+    #[must_use]
+    pub fn max_payload_size(mut self, max_bytes: usize) -> Self {
+        self.max_payload_size = Some(max_bytes);
+        self
+    }
+}
+
+/// Execution report providing metrics on generated messages and data volume.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GenerationReport {
+    /// Number of messages/packets successfully written or emitted.
+    pub message_count: usize,
+    /// Total bytes generated (including headers if PCAP).
+    pub total_bytes: usize,
+    /// Indicates whether generation stopped due to reaching `max_messages`.
+    pub reached_message_limit: bool,
+    /// Indicates whether generation stopped due to reaching `max_total_size`.
+    pub reached_size_limit: bool,
+}
+
 /// Unified DFDL payload generator.
 pub struct PayloadGenerator<'a> {
     schema: &'a CompiledSchema,
     analysis: SchemaAnalysis,
     prng: FastPrng,
     pcap_writer: PcapWriter,
+    limits: GenerationLimits,
 }
 
 impl<'a> PayloadGenerator<'a> {
@@ -59,7 +150,77 @@ impl<'a> PayloadGenerator<'a> {
             analysis,
             prng,
             pcap_writer,
+            limits: GenerationLimits::default(),
         }
+    }
+
+    /// Configures generation limits for controlling message count and data size.
+    #[inline]
+    #[must_use]
+    pub fn with_limits(mut self, limits: GenerationLimits) -> Self {
+        self.limits = limits;
+        self
+    }
+
+    /// Configures the maximum number of messages to generate.
+    #[inline]
+    #[must_use]
+    pub fn with_max_messages(mut self, count: usize) -> Self {
+        self.limits.max_messages = Some(count);
+        self
+    }
+
+    /// Configures the maximum total cumulative generated size in bytes.
+    #[inline]
+    #[must_use]
+    pub fn with_max_total_size(mut self, max_bytes: usize) -> Self {
+        self.limits.max_total_size = Some(max_bytes);
+        self
+    }
+
+    /// Configures the maximum individual payload size in bytes.
+    #[inline]
+    #[must_use]
+    pub fn with_max_payload_size(mut self, max_bytes: usize) -> Self {
+        self.limits.max_payload_size = Some(max_bytes);
+        self
+    }
+
+    /// Mutably configures generation limits.
+    #[inline]
+    pub fn set_limits(&mut self, limits: GenerationLimits) {
+        self.limits = limits;
+    }
+
+    /// Mutably sets the maximum message count limit.
+    #[inline]
+    pub fn set_max_messages(&mut self, count: Option<usize>) {
+        self.limits.max_messages = count;
+    }
+
+    /// Mutably sets the maximum total size limit in bytes.
+    #[inline]
+    pub fn set_max_total_size(&mut self, max_bytes: Option<usize>) {
+        self.limits.max_total_size = max_bytes;
+    }
+
+    /// Mutably sets the maximum individual payload size limit in bytes.
+    #[inline]
+    pub fn set_max_payload_size(&mut self, max_bytes: Option<usize>) {
+        self.limits.max_payload_size = max_bytes;
+    }
+
+    /// Returns the currently configured generation limits.
+    #[inline]
+    #[must_use]
+    pub fn limits(&self) -> GenerationLimits {
+        self.limits
+    }
+
+    /// Returns a mutable reference to the generation limits.
+    #[inline]
+    pub fn limits_mut(&mut self) -> &mut GenerationLimits {
+        &mut self.limits
     }
 
     /// Accesses schema analysis results.
@@ -75,12 +236,20 @@ impl<'a> PayloadGenerator<'a> {
     /// Generates a valid payload with specified configuration.
     pub fn generate_valid_with_config(
         &mut self,
-        config: GenerationConfig,
+        mut config: GenerationConfig,
         name: &str,
         description: &str,
     ) -> DFDLResult<GeneratedPayload> {
+        if config.max_payload_size.is_none() {
+            config.max_payload_size = self.limits.max_payload_size;
+        }
         let mut builder = ValidPayloadBuilder::new(self.schema, &self.analysis, self.prng, config);
-        let bytes = builder.generate_bytes()?;
+        let mut bytes = builder.generate_bytes()?;
+        if let Some(max_p) = self.limits.max_payload_size {
+            if bytes.len() > max_p {
+                bytes.truncate(max_p);
+            }
+        }
         Ok(GeneratedPayload {
             name: name.to_string(),
             description: description.to_string(),
@@ -92,7 +261,12 @@ impl<'a> PayloadGenerator<'a> {
     /// Generates a syntactically invalid payload by corrupting a valid base payload.
     pub fn generate_syntax_anomaly(&mut self, anomaly: SyntaxAnomaly) -> DFDLResult<GeneratedPayload> {
         let valid_payload = self.generate_valid()?;
-        let corrupted_bytes = SyntaxAnomalyInjector::apply(&valid_payload.bytes, &anomaly, &mut self.prng);
+        let mut corrupted_bytes = SyntaxAnomalyInjector::apply(&valid_payload.bytes, &anomaly, &mut self.prng);
+        if let Some(max_p) = self.limits.max_payload_size {
+            if corrupted_bytes.len() > max_p {
+                corrupted_bytes.truncate(max_p);
+            }
+        }
 
         let desc = format!("Syntactic anomaly: {:?}", anomaly);
         Ok(GeneratedPayload {
@@ -105,15 +279,24 @@ impl<'a> PayloadGenerator<'a> {
 
     /// Generates a semantically invalid payload by mutating an Infoset DOM before serialization.
     pub fn generate_semantic_anomaly(&mut self, anomaly: SemanticAnomaly) -> DFDLResult<GeneratedPayload> {
+        let mut config = GenerationConfig::default();
+        if config.max_payload_size.is_none() {
+            config.max_payload_size = self.limits.max_payload_size;
+        }
         let mut builder = ValidPayloadBuilder::new(
             self.schema,
             &self.analysis,
             self.prng,
-            GenerationConfig::default(),
+            config,
         );
         let mut doc = builder.build_infoset()?;
         let _ = SemanticAnomalyInjector::apply(&mut doc, &anomaly);
-        let bytes = builder.unparse_to_bytes(&doc)?;
+        let mut bytes = builder.unparse_to_bytes(&doc)?;
+        if let Some(max_p) = self.limits.max_payload_size {
+            if bytes.len() > max_p {
+                bytes.truncate(max_p);
+            }
+        }
 
         let desc = format!("Semantic anomaly: {:?}", anomaly);
         Ok(GeneratedPayload {
@@ -131,9 +314,27 @@ impl<'a> PayloadGenerator<'a> {
     /// - Semantic corruptions (invalid enums, out-of-range facets, unmatched dispatch keys)
     pub fn generate_exhaustive_suite(&mut self) -> DFDLResult<Vec<GeneratedPayload>> {
         let mut suite = Vec::new();
+        let mut cumulative_bytes = 0usize;
         let choice_branches = self.analysis.choice_branches.clone();
         let enum_fields = self.analysis.enum_fields.clone();
         let bounded_fields = self.analysis.bounded_fields.clone();
+        let limits = self.limits;
+
+        let try_push = |suite: &mut Vec<GeneratedPayload>, payload: GeneratedPayload, cumulative: &mut usize| -> bool {
+            if let Some(max_m) = limits.max_messages {
+                if suite.len() >= max_m {
+                    return false;
+                }
+            }
+            if let Some(max_s) = limits.max_total_size {
+                if cumulative.saturating_add(payload.bytes.len()) > max_s {
+                    return false;
+                }
+            }
+            *cumulative = cumulative.saturating_add(payload.bytes.len());
+            suite.push(payload);
+            true
+        };
 
         // 1. Valid Payloads covering EVERY Choice Branch
         for branch in &choice_branches {
@@ -145,13 +346,18 @@ impl<'a> PayloadGenerator<'a> {
                 branch.branch_index, branch.branch_key
             );
             if let Ok(payload) = self.generate_valid_with_config(cfg, &name, &desc) {
-                suite.push(payload);
+                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                    return Ok(suite);
+                }
             }
         }
 
         // 2. Valid Nominal Payload if no choice branches exist
         if suite.is_empty() {
-            suite.push(self.generate_valid()?);
+            let nominal = self.generate_valid()?;
+            if !try_push(&mut suite, nominal, &mut cumulative_bytes) {
+                return Ok(suite);
+            }
         }
 
         // 3. Valid Boundary Values (min/max facets)
@@ -162,15 +368,26 @@ impl<'a> PayloadGenerator<'a> {
             "VALID_FACET_BOUNDARIES",
             "Valid payload testing facet boundary extremes",
         ) {
-            suite.push(payload);
+            if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                return Ok(suite);
+            }
         }
 
         // 4. Syntactic Anomalies: Truncations
-        suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::Truncated { cut_bytes: 4 })?);
-        suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::Truncated { cut_bytes: 1 })?);
+        let p_trunc4 = self.generate_syntax_anomaly(SyntaxAnomaly::Truncated { cut_bytes: 4 })?;
+        if !try_push(&mut suite, p_trunc4, &mut cumulative_bytes) {
+            return Ok(suite);
+        }
+        let p_trunc1 = self.generate_syntax_anomaly(SyntaxAnomaly::Truncated { cut_bytes: 1 })?;
+        if !try_push(&mut suite, p_trunc1, &mut cumulative_bytes) {
+            return Ok(suite);
+        }
 
         // 5. Syntactic Anomalies: Trailing Garbage / Overflow
-        suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::TrailingGarbage { garbage_bytes: 8 })?);
+        let p_garbage = self.generate_syntax_anomaly(SyntaxAnomaly::TrailingGarbage { garbage_bytes: 8 })?;
+        if !try_push(&mut suite, p_garbage, &mut cumulative_bytes) {
+            return Ok(suite);
+        }
 
         // 6. Syntactic Anomalies: Declared Header / Prefix Length Mismatches
         let (len_offset, len_width) = if let Some(len_field) = self.analysis.find_length_field() {
@@ -178,19 +395,28 @@ impl<'a> PayloadGenerator<'a> {
         } else {
             (0, 2)
         };
-        suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
+        let p_len1 = self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
             field_offset: len_offset,
             field_width: len_width,
             delta: 16,
-        })?);
-        suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
+        })?;
+        if !try_push(&mut suite, p_len1, &mut cumulative_bytes) {
+            return Ok(suite);
+        }
+        let p_len2 = self.generate_syntax_anomaly(SyntaxAnomaly::DeclaredLengthMismatch {
             field_offset: len_offset,
             field_width: len_width,
             delta: -10,
-        })?);
+        })?;
+        if !try_push(&mut suite, p_len2, &mut cumulative_bytes) {
+            return Ok(suite);
+        }
 
         // 7. Syntactic Anomalies: Bitstream Misalignment
-        suite.push(self.generate_syntax_anomaly(SyntaxAnomaly::BitMisaligned { extra_bits: 3 })?);
+        let p_bit = self.generate_syntax_anomaly(SyntaxAnomaly::BitMisaligned { extra_bits: 3 })?;
+        if !try_push(&mut suite, p_bit, &mut cumulative_bytes) {
+            return Ok(suite);
+        }
 
         // 8. Semantic Anomalies: Wrong Enum Values
         for field in &enum_fields {
@@ -210,7 +436,9 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_value: invalid_enum,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                suite.push(payload);
+                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                    return Ok(suite);
+                }
             }
         }
 
@@ -237,7 +465,9 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_value: invalid_val,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                suite.push(payload);
+                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                    return Ok(suite);
+                }
             }
         }
 
@@ -259,11 +489,13 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_key,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                suite.push(payload);
+                if !try_push(&mut suite, payload, &mut cumulative_bytes) {
+                    return Ok(suite);
+                }
             }
         }
 
-        // 11. Ensure at least one semantic anomaly is present in the exhaustive suite
+        // 11. Ensure at least one semantic anomaly is present in the exhaustive suite (if limits allow)
         if !suite.iter().any(|p| matches!(p.mode, PayloadMode::SemanticAnomaly(_))) {
             let target_name = self
                 .analysis
@@ -276,27 +508,59 @@ impl<'a> PayloadGenerator<'a> {
                 invalid_value: DfdlValue::UnsignedByte(255),
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
-                suite.push(payload);
+                let _ = try_push(&mut suite, payload, &mut cumulative_bytes);
             }
         }
 
         Ok(suite)
     }
 
-    /// Writes all payloads to a PCAP stream with network encapsulation.
+    /// Writes all payloads to a PCAP stream with network encapsulation, strictly respecting
+    /// configured message count and total size limits.
     pub fn write_pcap<W: Write>(
         &self,
         w: &mut W,
         payloads: &[GeneratedPayload],
         config: &NetworkConfig,
         transport: &TransportProtocol,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<GenerationReport> {
+        let mut report = GenerationReport::default();
+        const PCAP_GLOBAL_HEADER_LEN: usize = 24;
+
+        if let Some(max_bytes) = self.limits.max_total_size {
+            if max_bytes < PCAP_GLOBAL_HEADER_LEN {
+                report.reached_size_limit = true;
+                return Ok(report);
+            }
+        }
+
         self.pcap_writer.write_header(w)?;
+        report.total_bytes = PCAP_GLOBAL_HEADER_LEN;
 
         let mut sec = 1_700_000_000u32;
         let mut usec = 0u32;
 
         for payload in payloads {
+            if let Some(max_msg) = self.limits.max_messages {
+                if report.message_count >= max_msg {
+                    report.reached_message_limit = true;
+                    break;
+                }
+            }
+
+            let frame_len = match transport {
+                TransportProtocol::Raw => payload.bytes.len(),
+                TransportProtocol::Udp { .. } => payload.bytes.len() + 42,
+            };
+            let packet_record_len = 16 + frame_len.min(self.pcap_writer.snaplen as usize);
+
+            if let Some(max_bytes) = self.limits.max_total_size {
+                if report.total_bytes.saturating_add(packet_record_len) > max_bytes {
+                    report.reached_size_limit = true;
+                    break;
+                }
+            }
+
             self.pcap_writer.write_encapsulated_packet(
                 w,
                 sec,
@@ -305,6 +569,17 @@ impl<'a> PayloadGenerator<'a> {
                 transport,
                 &payload.bytes,
             )?;
+
+            report.total_bytes = report.total_bytes.saturating_add(packet_record_len);
+            report.message_count += 1;
+
+            if let Some(max_msg) = self.limits.max_messages {
+                if report.message_count >= max_msg {
+                    report.reached_message_limit = true;
+                    break;
+                }
+            }
+
             usec = usec.saturating_add(10_000);
             if usec >= 1_000_000 {
                 sec = sec.saturating_add(1);
@@ -312,7 +587,13 @@ impl<'a> PayloadGenerator<'a> {
             }
         }
 
-        Ok(())
+        if let Some(max_msg) = self.limits.max_messages {
+            if report.message_count >= max_msg {
+                report.reached_message_limit = true;
+            }
+        }
+
+        Ok(report)
     }
 
     /// Converts generated payloads into a standalone PCAP file byte vector.
@@ -327,17 +608,37 @@ impl<'a> PayloadGenerator<'a> {
         Ok(bytes)
     }
 
+    /// Converts generated payloads into a standalone PCAP file byte vector along with its generation report.
+    pub fn export_pcap_with_report(
+        &self,
+        payloads: &[GeneratedPayload],
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> std::io::Result<(Vec<u8>, GenerationReport)> {
+        let mut bytes = Vec::new();
+        let report = self.write_pcap(&mut bytes, payloads, config, transport)?;
+        Ok((bytes, report))
+    }
+
     /// Generates a suite of exclusively valid payloads covering the schema exhaustively:
     /// - Every choice branch discovered in the schema
     /// - Nominal payloads
     /// - Range boundaries (min/max facet values)
     /// - Array occurrence variations (min_occurs, nominal, max_occurs)
+    ///
+    /// Respects `max_messages` and `max_total_size` limits if configured.
     pub fn generate_valid_suite(&mut self) -> DFDLResult<Vec<GeneratedPayload>> {
         let mut suite = Vec::new();
+        let mut cumulative_bytes = 0usize;
         let choice_branches = self.analysis.choice_branches.clone();
 
         // 1. Valid Payloads covering EVERY Choice Branch
         for branch in &choice_branches {
+            if let Some(max_m) = self.limits.max_messages {
+                if suite.len() >= max_m {
+                    return Ok(suite);
+                }
+            }
             let mut cfg = GenerationConfig::default();
             cfg.preferred_branch_index = Some(branch.branch_index);
             let name = format!("VALID_CHOICE_BRANCH_{}", branch.branch_index);
@@ -346,31 +647,60 @@ impl<'a> PayloadGenerator<'a> {
                 branch.branch_index, branch.branch_name, branch.branch_key
             );
             if let Ok(payload) = self.generate_valid_with_config(cfg, &name, &desc) {
+                if let Some(max_s) = self.limits.max_total_size {
+                    if cumulative_bytes.saturating_add(payload.bytes.len()) > max_s {
+                        return Ok(suite);
+                    }
+                }
+                cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
                 suite.push(payload);
             }
         }
 
         // 2. Valid Nominal Payload
-        suite.push(self.generate_valid()?);
+        if self.limits.max_messages.map_or(true, |m| suite.len() < m) {
+            if let Ok(nominal) = self.generate_valid() {
+                if self.limits.max_total_size.map_or(true, |s| cumulative_bytes.saturating_add(nominal.bytes.len()) <= s) {
+                    cumulative_bytes = cumulative_bytes.saturating_add(nominal.bytes.len());
+                    suite.push(nominal);
+                }
+            }
+        }
 
         // 3. Valid Boundary Values (min/max facets)
-        let mut boundary_cfg = GenerationConfig::default();
-        boundary_cfg.use_boundary_values = true;
-        if let Ok(payload) = self.generate_valid_with_config(
-            boundary_cfg,
-            "VALID_FACET_BOUNDARIES",
-            "Valid payload testing facet boundary extremes",
-        ) {
-            suite.push(payload);
+        if self.limits.max_messages.map_or(true, |m| suite.len() < m) {
+            let mut boundary_cfg = GenerationConfig::default();
+            boundary_cfg.use_boundary_values = true;
+            if let Ok(payload) = self.generate_valid_with_config(
+                boundary_cfg,
+                "VALID_FACET_BOUNDARIES",
+                "Valid payload testing facet boundary extremes",
+            ) {
+                if self.limits.max_total_size.map_or(true, |s| cumulative_bytes.saturating_add(payload.bytes.len()) <= s) {
+                    cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
+                    suite.push(payload);
+                }
+            }
         }
 
         // 4. Valid Array Occurrences Variations
         for count in [1, 2, 3] {
+            if let Some(max_m) = self.limits.max_messages {
+                if suite.len() >= max_m {
+                    return Ok(suite);
+                }
+            }
             let mut arr_cfg = GenerationConfig::default();
             arr_cfg.array_occurrences = count;
             let name = format!("VALID_ARRAY_OCCURRENCES_{}", count);
             let desc = format!("Valid payload with {} array occurrences", count);
             if let Ok(payload) = self.generate_valid_with_config(arr_cfg, &name, &desc) {
+                if let Some(max_s) = self.limits.max_total_size {
+                    if cumulative_bytes.saturating_add(payload.bytes.len()) > max_s {
+                        return Ok(suite);
+                    }
+                }
+                cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
                 suite.push(payload);
             }
         }
@@ -378,33 +708,69 @@ impl<'a> PayloadGenerator<'a> {
         Ok(suite)
     }
 
-    /// Generates a sequence of `count` valid payloads.
+    /// Generates a sequence of valid payloads respecting configured message and size limits.
     pub fn generate_valid_sequence(&mut self, count: usize) -> DFDLResult<Vec<GeneratedPayload>> {
-        let mut suite = Vec::with_capacity(count);
-        for i in 0..count {
+        let target_count = match self.limits.max_messages {
+            Some(m) => count.min(m),
+            None => count,
+        };
+        let mut suite = Vec::with_capacity(target_count);
+        let mut cumulative_bytes = 0usize;
+
+        for i in 0..target_count {
             let name = format!("VALID_PACKET_{}", i);
             let desc = format!("Valid payload sequence packet #{}", i);
             let payload = self.generate_valid_with_config(GenerationConfig::default(), &name, &desc)?;
+
+            if let Some(max_total) = self.limits.max_total_size {
+                if cumulative_bytes.saturating_add(payload.bytes.len()) > max_total {
+                    break;
+                }
+            }
+            cumulative_bytes = cumulative_bytes.saturating_add(payload.bytes.len());
             suite.push(payload);
         }
         Ok(suite)
     }
 
-    /// Generates a valid PCAP capture containing exclusively valid, schema-compliant packets.
+    /// Generates a valid PCAP capture containing exclusively valid, schema-compliant packets,
+    /// respecting configured message count and total size limits.
     ///
-    /// If `count == 0`, generates the exhaustive valid suite (all choice branches, boundaries, and occurrences).
-    /// If `count > 0`, generates `count` valid sequence packets.
+    /// If `count == 0` and `limits.max_messages` is None, generates the exhaustive valid suite.
+    /// If `count > 0` or `limits.max_messages` is Some, generates up to `count` (or `max_messages`) valid packets.
+    /// In all cases, generation stops immediately once `max_total_size` is reached.
     pub fn write_valid_pcap<W: Write>(
         &mut self,
         w: &mut W,
         count: usize,
         config: &NetworkConfig,
         transport: &TransportProtocol,
-    ) -> DFDLResult<()> {
-        let payloads = if count == 0 {
+    ) -> DFDLResult<GenerationReport> {
+        let payloads = if count == 0 && self.limits.max_messages.is_none() {
             self.generate_valid_suite()?
         } else {
-            self.generate_valid_sequence(count)?
+            let target_count = if count > 0 {
+                count
+            } else {
+                self.limits.max_messages.unwrap_or(10)
+            };
+            let mut seq = Vec::with_capacity(target_count);
+            for i in 0..target_count {
+                let name = format!("VALID_PACKET_{}", i);
+                let desc = format!("Valid payload sequence packet #{}", i);
+                let p = self.generate_valid_with_config(GenerationConfig::default(), &name, &desc)?;
+                let p_len = p.bytes.len();
+                seq.push(p);
+
+                // Early exit optimization if size limit is far exceeded
+                if let Some(max_s) = self.limits.max_total_size {
+                    let approx_pcap_size = 24 + seq.len() * (p_len + 58);
+                    if approx_pcap_size > max_s.saturating_add(p_len + 58) {
+                        break;
+                    }
+                }
+            }
+            seq
         };
         self.write_pcap(w, &payloads, config, transport)
             .map_err(|e| dfdl_core::error::DFDLError::new(
@@ -423,5 +789,17 @@ impl<'a> PayloadGenerator<'a> {
         let mut buf = Vec::new();
         self.write_valid_pcap(&mut buf, count, config, transport)?;
         Ok(buf)
+    }
+
+    /// Exports an exclusively valid PCAP capture directly as a byte vector along with its generation report.
+    pub fn export_valid_pcap_with_report(
+        &mut self,
+        count: usize,
+        config: &NetworkConfig,
+        transport: &TransportProtocol,
+    ) -> DFDLResult<(Vec<u8>, GenerationReport)> {
+        let mut buf = Vec::new();
+        let report = self.write_valid_pcap(&mut buf, count, config, transport)?;
+        Ok((buf, report))
     }
 }

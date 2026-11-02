@@ -387,3 +387,74 @@ fn test_export_valid_pcap_bytes() {
         );
     }
 }
+
+#[test]
+fn test_generation_limits_message_count() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+    let mut generator = PayloadGenerator::new(&schema, 1001)
+        .with_max_messages(3);
+
+    // Sequence request for 10 packets should be capped at 3
+    let seq = generator.generate_valid_sequence(10).expect("generate sequence");
+    assert_eq!(seq.len(), 3, "Message count must be strictly capped at 3");
+
+    // PCAP capture request should also respect message limit
+    let net_cfg = NetworkConfig::default();
+    let transport = TransportProtocol::default();
+    let mut pcap_buf = Vec::new();
+    let report = generator
+        .write_valid_pcap(&mut pcap_buf, 10, &net_cfg, &transport)
+        .expect("write valid PCAP");
+
+    assert_eq!(report.message_count, 3);
+    assert!(report.reached_message_limit);
+
+    let parsed = PcapFile::parse(&pcap_buf).expect("parse capped PCAP");
+    assert_eq!(parsed.packets.len(), 3);
+}
+
+#[test]
+fn test_generation_limits_max_total_size() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+    
+    // Set a strict max size budget of 250 bytes
+    // (PCAP header = 24 bytes, per packet ~ 16 + 42 + 28 = 86 bytes, so ~2 packets should fit)
+    let max_budget = 250;
+    let mut generator = PayloadGenerator::new(&schema, 1002)
+        .with_max_total_size(max_budget);
+
+    let net_cfg = NetworkConfig::default();
+    let transport = TransportProtocol::default();
+    let mut pcap_buf = Vec::new();
+    let report = generator
+        .write_valid_pcap(&mut pcap_buf, 100, &net_cfg, &transport)
+        .expect("write constrained PCAP");
+
+    assert!(pcap_buf.len() <= max_budget, "PCAP size {} must be <= max budget {}", pcap_buf.len(), max_budget);
+    assert!(report.total_bytes <= max_budget);
+    assert!(report.reached_size_limit);
+    assert!(report.message_count > 0, "At least one packet should fit within 250 bytes");
+
+    let parsed = PcapFile::parse(&pcap_buf).expect("parse size-constrained PCAP");
+    assert_eq!(parsed.packets.len(), report.message_count);
+}
+
+#[test]
+fn test_generation_limits_max_payload_size() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+    
+    let max_len = 12;
+    let mut generator = PayloadGenerator::new(&schema, 1003)
+        .with_max_payload_size(max_len);
+
+    let payload = generator.generate_valid().expect("generate payload");
+    assert!(
+        payload.bytes.len() <= max_len,
+        "Payload length {} must be <= {}",
+        payload.bytes.len(),
+        max_len
+    );
+}

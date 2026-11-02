@@ -30,6 +30,8 @@ pub struct GenerationConfig {
     pub array_occurrences: usize,
     /// Whether to generate boundary values (min/max) instead of nominal values.
     pub use_boundary_values: bool,
+    /// Maximum allowed payload size in bytes (payload will be capped if exceeded).
+    pub max_payload_size: Option<usize>,
 }
 
 impl Default for GenerationConfig {
@@ -38,6 +40,7 @@ impl Default for GenerationConfig {
             preferred_branch_index: None,
             array_occurrences: 1,
             use_boundary_values: false,
+            max_payload_size: None,
         }
     }
 }
@@ -107,7 +110,13 @@ impl<'a> ValidPayloadBuilder<'a> {
 
         unparser.unparse_document(doc)?;
         let _ = writer.flush();
-        Ok(writer.into_sink().into_vec())
+        let mut bytes = writer.into_sink().into_vec();
+        if let Some(max_len) = self.config.max_payload_size {
+            if bytes.len() > max_len {
+                bytes.truncate(max_len);
+            }
+        }
+        Ok(bytes)
     }
 
     /// Generates raw binary payload bytes directly for the schema root.
