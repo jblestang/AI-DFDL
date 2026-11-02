@@ -18,10 +18,11 @@ Schema-driven DFDL binary payload synthesizer and PCAP capture generator.
   - Trailing garbage and buffer overflow (`garbage_bytes`).
   - Dynamic declared header/prefix length mismatches (`field_offset`, `field_width`, `delta`).
   - Bitstream misalignment ($1 \dots 7$ extra bits).
+  - Unmatched choice dispatch key (`WrongDispatchKey` causing syntactic branch resolution failure).
 - **Semantic Anomaly Injection**:
   - Facet boundary violations (values exceeding min/max ranges).
   - Enumeration violations (values outside `xs:enumeration` restrictions).
-  - Choice dispatch key corruption (unmatched keys triggering deserializer rejection).
+  - Wrong constant / fixed field values (`WrongConstantValue` violating fixed values or schema defaults).
 - **Network Encapsulation & PCAP Export**:
   - Standard Libpcap file format (v2.4, microsecond precision, magic `0xa1b2c3d4`).
   - IEEE 802.3 Ethernet II + IETF RFC 791 IPv4 + RFC 768 UDP framing with valid checksums.

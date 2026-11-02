@@ -188,7 +188,7 @@ fn test_semantic_anomalies_facet_out_of_bounds() {
 }
 
 #[test]
-fn test_semantic_anomalies_wrong_dispatch_key() {
+fn test_syntactic_anomalies_wrong_dispatch_key() {
     let schema = compile_control_schema(Some("SimpleControlPayload"))
         .expect("compile stanag5602 control schema");
     let mut generator = PayloadGenerator::new(&schema, 404);
@@ -207,13 +207,47 @@ fn test_semantic_anomalies_wrong_dispatch_key() {
                 .unwrap_or_else(|| "element".to_string())
         });
 
-    let anomaly_def = SemanticAnomaly::WrongDispatchKey {
+    let anomaly_def = SyntaxAnomaly::WrongDispatchKey {
         discriminator_name: disc_name,
         invalid_key: DfdlValue::UnsignedShort(9999),
     };
     let anomaly = generator
-        .generate_semantic_anomaly(anomaly_def.clone())
+        .generate_syntax_anomaly(anomaly_def.clone())
         .expect("generate wrong dispatch key anomaly");
+
+    assert!(!anomaly.bytes.is_empty());
+    assert_eq!(
+        anomaly.mode,
+        PayloadMode::SyntaxAnomaly(anomaly_def)
+    );
+}
+
+#[test]
+fn test_semantic_anomalies_wrong_constant_value() {
+    let schema = compile_control_schema(Some("SimpleControlPayload"))
+        .expect("compile stanag5602 control schema");
+    let mut generator = PayloadGenerator::new(&schema, 405);
+
+    let (field, expected_val) = generator
+        .analysis()
+        .find_constant_fields()
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| {
+            (
+                generator.analysis().all_elements.first().cloned().unwrap(),
+                DfdlValue::UnsignedByte(1),
+            )
+        });
+
+    let anomaly_def = SemanticAnomaly::WrongConstantValue {
+        target_name: field.name,
+        expected_value: expected_val,
+        invalid_value: DfdlValue::UnsignedByte(254),
+    };
+    let anomaly = generator
+        .generate_semantic_anomaly(anomaly_def.clone())
+        .expect("generate wrong constant value anomaly");
 
     assert!(!anomaly.bytes.is_empty());
     assert_eq!(

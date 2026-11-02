@@ -3,6 +3,14 @@
 //! Command-line tool to synthesize valid and anomalous PCAP captures
 //! from any compiled DFDL schema.
 
+#![allow(
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic
+)]
+
 use std::env;
 use std::fs::{self, File};
 use std::net::Ipv4Addr;
@@ -69,7 +77,7 @@ EXAMPLES:
 }
 
 fn parse_mac(s: &str) -> Option<[u8; 6]> {
-    let parts: Vec<&str> = s.split(|c| c == ':' || c == '-').collect();
+    let parts: Vec<&str> = s.split([':', '-']).collect();
     if parts.len() != 6 {
         return None;
     }
@@ -341,6 +349,24 @@ fn main() -> ExitCode {
             }
             if let Ok(p) = generator.generate_syntax_anomaly(SyntaxAnomaly::BitMisaligned { extra_bits: 3 }) {
                 syntax_payloads.push(p);
+            }
+            for (discriminator_name, valid_keys) in generator.analysis().find_choice_discriminators() {
+                let invalid_key = if valid_keys.iter().all(|s| s.chars().all(|c| c.is_ascii_digit())) {
+                    let max_key = valid_keys
+                        .iter()
+                        .filter_map(|s| s.parse::<u64>().ok())
+                        .max()
+                        .unwrap_or(0);
+                    dfdl_core::infoset::value::DfdlValue::UnsignedInt((max_key.saturating_add(99)) as u32)
+                } else {
+                    dfdl_core::infoset::value::DfdlValue::String("__INVALID_DISPATCH_KEY__".to_string())
+                };
+                if let Ok(p) = generator.generate_syntax_anomaly(SyntaxAnomaly::WrongDispatchKey {
+                    discriminator_name,
+                    invalid_key,
+                }) {
+                    syntax_payloads.push(p);
+                }
             }
             let target_count = if count_explicitly_set { count } else { 0 };
             generator

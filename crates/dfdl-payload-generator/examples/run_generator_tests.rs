@@ -172,8 +172,8 @@ fn main() -> Result<(), String> {
     }
     println!("ok");
 
-    // Test 9: Semantic anomaly - wrong dispatch key
-    print!("test test_semantic_anomalies_wrong_dispatch_key ... ");
+    // Test 9: Syntactic anomaly - wrong dispatch key (syntactic branch resolution failure)
+    print!("test test_syntactic_anomalies_wrong_dispatch_key ... ");
     {
         let schema = compile_control_schema(Some("SimpleControlPayload"))
             .map_err(|e| format!("{:?}", e))?;
@@ -192,9 +192,40 @@ fn main() -> Result<(), String> {
                     .unwrap_or_else(|| "element".to_string())
             });
 
-        let anomaly_def = SemanticAnomaly::WrongDispatchKey {
+        let anomaly_def = SyntaxAnomaly::WrongDispatchKey {
             discriminator_name: disc_name,
             invalid_key: DfdlValue::UnsignedShort(9999),
+        };
+        let anomaly = generator
+            .generate_syntax_anomaly(anomaly_def.clone())
+            .map_err(|e| format!("{:?}", e))?;
+        assert!(!anomaly.bytes.is_empty());
+        assert_eq!(anomaly.mode, PayloadMode::SyntaxAnomaly(anomaly_def));
+    }
+    println!("ok");
+
+    // Test 10: Semantic anomaly - wrong constant / fixed value
+    print!("test test_semantic_anomalies_wrong_constant_value ... ");
+    {
+        let schema = compile_control_schema(Some("SimpleControlPayload"))
+            .map_err(|e| format!("{:?}", e))?;
+        let mut generator = PayloadGenerator::new(&schema, 405);
+        let (field, expected_val) = generator
+            .analysis()
+            .find_constant_fields()
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| {
+                (
+                    generator.analysis().all_elements.first().cloned().unwrap(),
+                    DfdlValue::UnsignedByte(1),
+                )
+            });
+
+        let anomaly_def = SemanticAnomaly::WrongConstantValue {
+            target_name: field.name,
+            expected_value: expected_val,
+            invalid_value: DfdlValue::UnsignedByte(254),
         };
         let anomaly = generator
             .generate_semantic_anomaly(anomaly_def.clone())
@@ -467,7 +498,7 @@ fn main() -> Result<(), String> {
     }
     println!("ok");
 
-    println!("\nAll 19 tests passed successfully!");
+    println!("\nAll 20 tests passed successfully!");
     Ok(())
 }
 

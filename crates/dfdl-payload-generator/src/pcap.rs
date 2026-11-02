@@ -300,12 +300,12 @@ impl PcapWriter {
         let mut sum = 0u32;
 
         // Pseudo-header: Source IP (2 words)
-        let s1 = ((*src_ip.get(0).unwrap_or(&0) as u32) << 8) | (*src_ip.get(1).unwrap_or(&0) as u32);
+        let s1 = ((*src_ip.first().unwrap_or(&0) as u32) << 8) | (*src_ip.get(1).unwrap_or(&0) as u32);
         let s2 = ((*src_ip.get(2).unwrap_or(&0) as u32) << 8) | (*src_ip.get(3).unwrap_or(&0) as u32);
         sum = sum.saturating_add(s1).saturating_add(s2);
 
         // Pseudo-header: Destination IP (2 words)
-        let d1 = ((*dst_ip.get(0).unwrap_or(&0) as u32) << 8) | (*dst_ip.get(1).unwrap_or(&0) as u32);
+        let d1 = ((*dst_ip.first().unwrap_or(&0) as u32) << 8) | (*dst_ip.get(1).unwrap_or(&0) as u32);
         let d2 = ((*dst_ip.get(2).unwrap_or(&0) as u32) << 8) | (*dst_ip.get(3).unwrap_or(&0) as u32);
         sum = sum.saturating_add(d1).saturating_add(d2);
 

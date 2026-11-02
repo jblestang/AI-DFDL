@@ -41,7 +41,7 @@ pub struct GeneratedPayload {
 }
 
 /// Configuration for controlling generation volume and data size budgets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct GenerationLimits {
     /// Maximum number of messages/packets to generate.
     /// `None` indicates no explicit message count limit.
@@ -52,16 +52,6 @@ pub struct GenerationLimits {
     /// Maximum allowed size in bytes for an individual payload.
     /// Payloads exceeding this size will be truncated to fit.
     pub max_payload_size: Option<usize>,
-}
-
-impl Default for GenerationLimits {
-    fn default() -> Self {
-        Self {
-            max_messages: None,
-            max_total_size: None,
-            max_payload_size: None,
-        }
-    }
 }
 
 impl GenerationLimits {
@@ -265,23 +255,68 @@ impl<'a> PayloadGenerator<'a> {
         })
     }
 
-    /// Generates a syntactically invalid payload by corrupting a valid base payload.
+    /// Generates a syntactically invalid payload by corrupting a valid base payload or dispatch key.
     pub fn generate_syntax_anomaly(&mut self, anomaly: SyntaxAnomaly) -> DFDLResult<GeneratedPayload> {
-        let valid_payload = self.generate_valid()?;
-        let mut corrupted_bytes = SyntaxAnomalyInjector::apply(&valid_payload.bytes, &anomaly, &mut self.prng);
-        if let Some(max_p) = self.limits.max_payload_size {
-            if corrupted_bytes.len() > max_p {
-                corrupted_bytes.truncate(max_p);
+        match anomaly {
+            SyntaxAnomaly::WrongDispatchKey {
+                ref discriminator_name,
+                ref invalid_key,
+            } => {
+                let mut config = GenerationConfig::default();
+                if config.max_payload_size.is_none() {
+                    config.max_payload_size = self.limits.max_payload_size;
+                }
+                let mut builder = ValidPayloadBuilder::new(
+                    self.schema,
+                    &self.analysis,
+                    self.prng,
+                    config,
+                );
+                let mut doc = builder.build_infoset()?;
+                if let Some(ref mut root) = doc.root {
+                    let _ = SemanticAnomalyInjector::mutate_element_value(
+                        root,
+                        discriminator_name,
+                        invalid_key.clone(),
+                    );
+                }
+                let mut bytes = builder.unparse_to_bytes(&doc)?;
+                if let Some(max_p) = self.limits.max_payload_size {
+                    if bytes.len() > max_p {
+                        bytes.truncate(max_p);
+                    }
+                }
+
+                let desc = format!(
+                    "Syntactic anomaly: invalid choice dispatch key {:?} for discriminator '{}'",
+                    invalid_key, discriminator_name
+                );
+                Ok(GeneratedPayload {
+                    name: format!("SYNTAX_DISPATCH_KEY_{}", discriminator_name),
+                    description: desc,
+                    mode: PayloadMode::SyntaxAnomaly(anomaly),
+                    bytes,
+                })
+            }
+            _ => {
+                let valid_payload = self.generate_valid()?;
+                let mut corrupted_bytes =
+                    SyntaxAnomalyInjector::apply(&valid_payload.bytes, &anomaly, &mut self.prng);
+                if let Some(max_p) = self.limits.max_payload_size {
+                    if corrupted_bytes.len() > max_p {
+                        corrupted_bytes.truncate(max_p);
+                    }
+                }
+
+                let desc = format!("Syntactic anomaly: {:?}", anomaly);
+                Ok(GeneratedPayload {
+                    name: format!("SYNTAX_{:?}", anomaly),
+                    description: desc,
+                    mode: PayloadMode::SyntaxAnomaly(anomaly),
+                    bytes: corrupted_bytes,
+                })
             }
         }
-
-        let desc = format!("Syntactic anomaly: {:?}", anomaly);
-        Ok(GeneratedPayload {
-            name: format!("SYNTAX_{:?}", anomaly),
-            description: desc,
-            mode: PayloadMode::SyntaxAnomaly(anomaly),
-            bytes: corrupted_bytes,
-        })
     }
 
     /// Generates a semantically invalid payload by mutating an Infoset DOM before serialization.
@@ -338,8 +373,10 @@ impl<'a> PayloadGenerator<'a> {
 
         // 1. Valid Payloads covering EVERY Choice Branch
         for branch in &choice_branches {
-            let mut cfg = GenerationConfig::default();
-            cfg.preferred_branch_index = Some(branch.branch_index);
+            let cfg = GenerationConfig {
+                preferred_branch_index: Some(branch.branch_index),
+                ..Default::default()
+            };
             let name = format!("VALID_CHOICE_BRANCH_{}", branch.branch_index);
             let desc = format!(
                 "Valid payload exercising choice branch {} (key: {:?})",
@@ -361,8 +398,10 @@ impl<'a> PayloadGenerator<'a> {
         }
 
         // 3. Valid Boundary Values (min/max facets)
-        let mut boundary_cfg = GenerationConfig::default();
-        boundary_cfg.use_boundary_values = true;
+        let boundary_cfg = GenerationConfig {
+            use_boundary_values: true,
+            ..Default::default()
+        };
         if let Ok(payload) = self.generate_valid_with_config(
             boundary_cfg,
             "VALID_FACET_BOUNDARIES",
@@ -418,7 +457,31 @@ impl<'a> PayloadGenerator<'a> {
             return Ok(suite);
         }
 
-        // 8. Semantic Anomalies: Wrong Enum Values
+        // 8. Syntactic Anomalies: Unmatched Choice Dispatch Key (Syntactic branch resolution failure)
+        for (discriminator_name, valid_keys) in self.analysis.find_choice_discriminators() {
+            let invalid_key = if valid_keys.iter().all(|s| s.chars().all(|c| c.is_ascii_digit())) {
+                let max_key = valid_keys
+                    .iter()
+                    .filter_map(|s| s.parse::<u64>().ok())
+                    .max()
+                    .unwrap_or(0);
+                DfdlValue::UnsignedInt((max_key.saturating_add(99)) as u32)
+            } else {
+                DfdlValue::String("__INVALID_DISPATCH_KEY__".to_string())
+            };
+
+            let anomaly = SyntaxAnomaly::WrongDispatchKey {
+                discriminator_name,
+                invalid_key,
+            };
+            if let Ok(payload) = self.generate_syntax_anomaly(anomaly) {
+                if !try_push(&mut suite, payload) {
+                    return Ok(suite);
+                }
+            }
+        }
+
+        // 9. Semantic Anomalies: Wrong Enum Values
         for field in &enum_fields {
             let invalid_enum = if field.enumerations.iter().all(|s| s.chars().all(|c| c.is_ascii_digit())) {
                 let max_val = field
@@ -442,7 +505,7 @@ impl<'a> PayloadGenerator<'a> {
             }
         }
 
-        // 9. Semantic Anomalies: Out-of-bounds Facets
+        // 10. Semantic Anomalies: Out-of-bounds Facets
         for field in &bounded_fields {
             let invalid_val = if let Some(ref max_s) = field.max_inclusive {
                 if let Ok(max_num) = max_s.parse::<i64>() {
@@ -471,22 +534,25 @@ impl<'a> PayloadGenerator<'a> {
             }
         }
 
-        // 10. Semantic Anomalies: Unmatched Choice Dispatch Key
-        for (discriminator_name, valid_keys) in self.analysis.find_choice_discriminators() {
-            let invalid_key = if valid_keys.iter().all(|s| s.chars().all(|c| c.is_ascii_digit())) {
-                let max_key = valid_keys
-                    .iter()
-                    .filter_map(|s| s.parse::<u64>().ok())
-                    .max()
-                    .unwrap_or(0);
-                DfdlValue::UnsignedInt((max_key.saturating_add(99)) as u32)
-            } else {
-                DfdlValue::String("__INVALID_DISPATCH_KEY__".to_string())
+        // 11. Semantic Anomalies: Wrong Constant / Fixed Values
+        for (field, expected_val) in self.analysis.find_constant_fields() {
+            let invalid_val = match &expected_val {
+                DfdlValue::UnsignedByte(b) => DfdlValue::UnsignedByte(b.wrapping_add(99)),
+                DfdlValue::UnsignedShort(s) => DfdlValue::UnsignedShort(s.wrapping_add(99)),
+                DfdlValue::UnsignedInt(i) => DfdlValue::UnsignedInt(i.wrapping_add(99)),
+                DfdlValue::UnsignedLong(l) => DfdlValue::UnsignedLong(l.wrapping_add(99)),
+                DfdlValue::Byte(b) => DfdlValue::Byte(b.wrapping_add(99)),
+                DfdlValue::Short(s) => DfdlValue::Short(s.wrapping_add(99)),
+                DfdlValue::Int(i) => DfdlValue::Int(i.wrapping_add(99)),
+                DfdlValue::Long(l) => DfdlValue::Long(l.wrapping_add(99)),
+                DfdlValue::String(s) => DfdlValue::String(format!("{}_INVALID_CONST", s)),
+                _ => DfdlValue::UnsignedByte(255),
             };
 
-            let anomaly = SemanticAnomaly::WrongDispatchKey {
-                discriminator_name,
-                invalid_key,
+            let anomaly = SemanticAnomaly::WrongConstantValue {
+                target_name: field.name.clone(),
+                expected_value: expected_val,
+                invalid_value: invalid_val,
             };
             if let Ok(payload) = self.generate_semantic_anomaly(anomaly) {
                 if !try_push(&mut suite, payload) {
@@ -495,7 +561,7 @@ impl<'a> PayloadGenerator<'a> {
             }
         }
 
-        // 11. Ensure at least one semantic anomaly is present in the exhaustive suite (if limits allow)
+        // 12. Ensure at least one semantic anomaly is present in the exhaustive suite (if limits allow)
         if !suite.iter().any(|p| matches!(p.mode, PayloadMode::SemanticAnomaly(_))) {
             let target_name = self
                 .analysis
@@ -607,7 +673,7 @@ impl<'a> PayloadGenerator<'a> {
         }
 
         if (count > 0 && report.message_count >= count)
-            || self.limits.max_messages.map_or(false, |m| report.message_count >= m)
+            || self.limits.max_messages.is_some_and(|m| report.message_count >= m)
         {
             report.reached_message_limit = true;
         }
@@ -669,8 +735,10 @@ impl<'a> PayloadGenerator<'a> {
                     return Ok(suite);
                 }
             }
-            let mut cfg = GenerationConfig::default();
-            cfg.preferred_branch_index = Some(branch.branch_index);
+            let cfg = GenerationConfig {
+                preferred_branch_index: Some(branch.branch_index),
+                ..Default::default()
+            };
             let name = format!("VALID_CHOICE_BRANCH_{}", branch.branch_index);
             let desc = format!(
                 "Valid payload exercising choice branch {} (name: '{}', key: {:?})",
@@ -682,16 +750,18 @@ impl<'a> PayloadGenerator<'a> {
         }
 
         // 2. Valid Nominal Payload
-        if self.limits.max_messages.map_or(true, |m| suite.len() < m) {
+        if self.limits.max_messages.is_none_or(|m| suite.len() < m) {
             if let Ok(nominal) = self.generate_valid() {
                 suite.push(nominal);
             }
         }
 
         // 3. Valid Boundary Values (min/max facets)
-        if self.limits.max_messages.map_or(true, |m| suite.len() < m) {
-            let mut boundary_cfg = GenerationConfig::default();
-            boundary_cfg.use_boundary_values = true;
+        if self.limits.max_messages.is_none_or(|m| suite.len() < m) {
+            let boundary_cfg = GenerationConfig {
+                use_boundary_values: true,
+                ..Default::default()
+            };
             if let Ok(payload) = self.generate_valid_with_config(
                 boundary_cfg,
                 "VALID_FACET_BOUNDARIES",
@@ -708,8 +778,10 @@ impl<'a> PayloadGenerator<'a> {
                     return Ok(suite);
                 }
             }
-            let mut arr_cfg = GenerationConfig::default();
-            arr_cfg.array_occurrences = count;
+            let arr_cfg = GenerationConfig {
+                array_occurrences: count,
+                ..Default::default()
+            };
             let name = format!("VALID_ARRAY_OCCURRENCES_{}", count);
             let desc = format!("Valid payload with {} array occurrences", count);
             if let Ok(payload) = self.generate_valid_with_config(arr_cfg, &name, &desc) {

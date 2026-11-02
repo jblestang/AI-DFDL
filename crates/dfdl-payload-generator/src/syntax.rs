@@ -9,9 +9,10 @@
 //! - Encoding character code unit violations
 
 use crate::prng::FastPrng;
+use dfdl_core::infoset::value::DfdlValue;
 
 /// Specific category of syntactic mutation to apply to a payload.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SyntaxAnomaly {
     /// Payload truncated by `cut_bytes` octets (causing premature EOF).
     Truncated {
@@ -47,6 +48,14 @@ pub enum SyntaxAnomaly {
         /// Offset where invalid bytes should be injected.
         offset: usize,
     },
+    /// Injects a choice dispatch key that does not match any valid branch in the schema.
+    /// This causes syntactic branch resolution failure during parsing.
+    WrongDispatchKey {
+        /// Discriminator element local name.
+        discriminator_name: String,
+        /// Invalid key value.
+        invalid_key: DfdlValue,
+    },
 }
 
 /// Applies syntactic mutations to binary payloads.
@@ -63,7 +72,7 @@ impl SyntaxAnomalyInjector {
                 corrupted.truncate(corrupted.len().saturating_sub(cut));
             }
             SyntaxAnomaly::TrailingGarbage { garbage_bytes } => {
-                let count = (*garbage_bytes).max(1).min(1024);
+                let count = (*garbage_bytes).clamp(1, 1024);
                 let mut garbage = vec![0u8; count];
                 prng.fill_bytes(&mut garbage);
                 corrupted.extend_from_slice(&garbage);
@@ -119,6 +128,9 @@ impl SyntaxAnomalyInjector {
                 if let Some(b) = corrupted.get_mut(*offset) {
                     *b = 0xFF; // Non-ASCII / illegal code point
                 }
+            }
+            SyntaxAnomaly::WrongDispatchKey { .. } => {
+                // WrongDispatchKey is injected at the infoset / unparsing level.
             }
         }
 

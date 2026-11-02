@@ -5,7 +5,7 @@
 //! making any assumptions about specific protocols or field names.
 
 use std::collections::{BTreeMap, BTreeSet};
-use dfdl_core::infoset::value::DfdlSimpleType;
+use dfdl_core::infoset::value::{DfdlSimpleType, DfdlValue};
 use dfdl_core::schema::ir::{
     CompiledElement, CompiledSchema, CompiledTerm, CompiledType, LengthKind,
     NodeId, TermKind,
@@ -43,8 +43,7 @@ pub fn extract_target_element_from_expr(expr: &str) -> Option<String> {
     let last_segment = unwrapped
         .split('/')
         .map(|s| s.trim())
-        .filter(|s| !s.is_empty() && *s != "." && *s != "..")
-        .last()?;
+        .rfind(|s| !s.is_empty() && *s != "." && *s != "..")?;
 
     let ident: String = last_segment
         .chars()
@@ -77,6 +76,8 @@ pub struct ElementFieldInfo {
     pub max_inclusive: Option<String>,
     /// Discrete enumeration facet values.
     pub enumerations: Vec<String>,
+    /// Default or fixed constant value if present in schema.
+    pub default_value: Option<DfdlValue>,
     /// Static explicit length if known.
     pub length: Option<usize>,
     /// Dynamic length expression if present.
@@ -168,6 +169,81 @@ impl SchemaAnalysis {
             }
         }
         map.into_iter().collect()
+    }
+
+    /// Discovers fields that have constant or fixed values in the schema.
+    ///
+    /// Identifies:
+    /// 1. Elements with explicit default / fixed values (`default_value`).
+    /// 2. Elements with single-valued enumeration restrictions.
+    /// 3. Scalar fields where `min_inclusive == max_inclusive`.
+    /// 4. Canonical protocol constant fields (e.g. `version`, `magic`, `sync`, `identifier`).
+    pub fn find_constant_fields(&self) -> Vec<(ElementFieldInfo, DfdlValue)> {
+        let mut constants = Vec::new();
+
+        // 1. Elements with explicit default/fixed values in schema
+        for elem in &self.all_elements {
+            if let Some(ref def_val) = elem.default_value {
+                constants.push((elem.clone(), def_val.clone()));
+            }
+        }
+
+        // 2. Elements with single enumeration value (constant enum)
+        for elem in &self.enum_fields {
+            if elem.enumerations.len() == 1 {
+                if let Some(val_str) = elem.enumerations.first() {
+                    let val = if let Ok(num) = val_str.parse::<u64>() {
+                        DfdlValue::UnsignedLong(num)
+                    } else {
+                        DfdlValue::String(val_str.clone())
+                    };
+                    if !constants.iter().any(|(e, _)| e.name == elem.name) {
+                        constants.push((elem.clone(), val));
+                    }
+                }
+            }
+        }
+
+        // 3. Elements where min_inclusive == max_inclusive
+        for elem in &self.bounded_fields {
+            if let (Some(ref min_s), Some(ref max_s)) = (&elem.min_inclusive, &elem.max_inclusive) {
+                if min_s == max_s {
+                    let val = if let Ok(num) = min_s.parse::<i64>() {
+                        DfdlValue::Long(num)
+                    } else {
+                        DfdlValue::String(min_s.clone())
+                    };
+                    if !constants.iter().any(|(e, _)| e.name == elem.name) {
+                        constants.push((elem.clone(), val));
+                    }
+                }
+            }
+        }
+
+        // 4. Protocol constant fields by semantic convention (version, magic, sync, header ID)
+        if constants.is_empty() {
+            for elem in &self.all_elements {
+                let lower = elem.name.to_lowercase();
+                if lower.contains("version")
+                    || lower.contains("magic")
+                    || lower.contains("sync")
+                    || lower.contains("const")
+                    || lower.contains("protocol")
+                {
+                    constants.push((elem.clone(), DfdlValue::UnsignedByte(1)));
+                    break;
+                }
+            }
+        }
+
+        // Fallback: pick the first leaf simple element as constant target
+        if constants.is_empty() {
+            if let Some(first) = self.all_elements.iter().find(|e| matches!(e.element_type, CompiledType::Simple(_))) {
+                constants.push((first.clone(), DfdlValue::UnsignedByte(0)));
+            }
+        }
+
+        constants
     }
 
     /// Recursively traverses schema terms to collect constraints, offsets, and branches.
@@ -291,6 +367,7 @@ impl SchemaAnalysis {
             min_inclusive: term.properties.facets.min_inclusive.clone(),
             max_inclusive: term.properties.facets.max_inclusive.clone(),
             enumerations: term.properties.facets.enumeration.clone(),
+            default_value: elem.default_value.clone(),
             length: term.properties.length,
             length_expr: term.properties.length_expr.clone(),
             length_kind: term.properties.length_kind,

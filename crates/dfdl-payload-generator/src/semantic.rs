@@ -28,12 +28,14 @@ pub enum SemanticAnomaly {
         /// Out-of-bounds value.
         invalid_value: DfdlValue,
     },
-    /// Injects a choice dispatch key that does not match any valid branch in the schema.
-    WrongDispatchKey {
-        /// Discriminator element local name.
-        discriminator_name: String,
-        /// Invalid key value (e.g. 4 or 99).
-        invalid_key: DfdlValue,
+    /// Injects an invalid value for an expected constant or fixed field.
+    WrongConstantValue {
+        /// Target element name.
+        target_name: String,
+        /// Expected constant value according to schema.
+        expected_value: DfdlValue,
+        /// Corrupted value violating the constant constraint.
+        invalid_value: DfdlValue,
     },
     /// Injects a value that triggers a DFDL assertion failure.
     FailedAssert {
@@ -65,10 +67,11 @@ impl SemanticAnomalyInjector {
                 invalid_value,
             } => Self::mutate_element_value(root, target_name, invalid_value.clone()),
 
-            SemanticAnomaly::WrongDispatchKey {
-                discriminator_name,
-                invalid_key,
-            } => Self::mutate_element_value(root, discriminator_name, invalid_key.clone()),
+            SemanticAnomaly::WrongConstantValue {
+                target_name,
+                invalid_value,
+                ..
+            } => Self::mutate_element_value(root, target_name, invalid_value.clone()),
 
             SemanticAnomaly::FailedAssert {
                 target_name,
@@ -110,7 +113,7 @@ impl SemanticAnomalyInjector {
     }
 
     /// Recursively searches for an element by local name and updates its value.
-    fn mutate_element_value(element: &mut InfosetElement, target_name: &str, new_val: DfdlValue) -> bool {
+    pub fn mutate_element_value(element: &mut InfosetElement, target_name: &str, new_val: DfdlValue) -> bool {
         if element.name.local_name == target_name {
             if let ElementState::Value(ref existing) = element.state {
                 let adapted = match (existing, &new_val) {

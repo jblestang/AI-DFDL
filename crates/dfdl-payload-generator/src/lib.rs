@@ -7,6 +7,15 @@
 //! - Semantically invalid payloads (out-of-bounds facets, wrong enums, unmatched dispatch keys, failed asserts)
 //! - Direct export to PCAP capture format with Ethernet, IPv4, and UDP encapsulation.
 
+#![allow(
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::chunks_exact_to_as_chunks
+)]
+
 pub mod generator;
 pub mod pcap;
 pub mod prng;
