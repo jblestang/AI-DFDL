@@ -65,6 +65,13 @@ impl Default for GenerationLimits {
 }
 
 impl GenerationLimits {
+    /// Creates a new default (unconstrained) limits specification.
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Creates a new unconstrained limits specification.
     #[inline]
     #[must_use]
